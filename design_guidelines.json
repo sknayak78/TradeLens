@@ -1,0 +1,82 @@
+{
+  "theme": "Dark Mode (TradingView Inspired)",
+  "typography": {
+    "primary_font": "IBM Plex Sans",
+    "data_font": "JetBrains Mono",
+    "heading_strategy": "High contrast, crisp edges. No soft rounded fonts. Use font-semibold and tracking-tight for card headers.",
+    "data_strategy": "ALL dynamic numbers, prices, and percentages MUST use font-mono and tabular-nums utility class to prevent horizontal jittering when values change."
+  },
+  "colors": {
+    "background": "#131722",
+    "surface": "#1e222d",
+    "surface_hover": "#2a2e39",
+    "border": "#2a2e39",
+    "text_primary": "#d1d4dc",
+    "text_highlight": "#ffffff",
+    "text_muted": "#787b86",
+    "accent_up": "#26a69a",
+    "accent_up_bg": "rgba(38, 166, 154, 0.1)",
+    "accent_down": "#ef5350",
+    "accent_down_bg": "rgba(239, 83, 80, 0.1)",
+    "brand_blue": "#2962ff"
+  },
+  "layouts": {
+    "main_structure": "h-screen flex overflow-hidden bg-[#131722] text-[#d1d4dc] font-sans",
+    "sidebar": "w-64 flex-shrink-0 border-r border-[#2a2e39] bg-[#131722] hidden md:flex flex-col",
+    "content_area": "flex-1 flex flex-col min-w-0 overflow-hidden",
+    "header": "h-16 flex items-center justify-between px-4 border-b border-[#2a2e39] bg-[#131722] sticky top-0 z-10",
+    "dashboard_grid": "p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto"
+  },
+  "components": {
+    "cards": {
+      "base_classes": "bg-[#1e222d] rounded-[4px] border border-[#2a2e39] p-4 flex flex-col",
+      "header_classes": "text-[#ffffff] text-sm font-semibold mb-4 flex items-center justify-between uppercase tracking-wider"
+    },
+    "tables": {
+      "container": "w-full text-left text-sm whitespace-nowrap",
+      "header": "text-[#787b86] font-normal border-b border-[#2a2e39] pb-2 text-xs uppercase",
+      "row": "hover:bg-[#2a2e39] transition-colors duration-150 cursor-default border-b border-[#2a2e39]/50 last:border-0",
+      "cell": "py-2 px-2",
+      "alignment": "Left align text (tickers), Right align numerical values (prices, percentages)"
+    },
+    "buttons": {
+      "icon_button": "p-2 rounded-md hover:bg-[#2a2e39] text-[#787b86] hover:text-[#d1d4dc] transition-colors",
+      "primary_action": "bg-[#2962ff] hover:bg-[#2962ff]/80 text-white px-4 py-2 rounded text-sm font-medium transition-colors"
+    },
+    "badges": {
+      "up": "text-[#26a69a] bg-[#26a69a]/10 px-2 py-1 rounded-[4px] text-xs font-mono tabular-nums",
+      "down": "text-[#ef5350] bg-[#ef5350]/10 px-2 py-1 rounded-[4px] text-xs font-mono tabular-nums"
+    }
+  },
+  "motion": {
+    "hover_states": "Subtle background color changes (#2a2e39) on table rows, sidebar items, and buttons.",
+    "transitions": "transition-colors duration-150 ease-in-out for all interactive elements. Avoid transform transitions on heavy data rows."
+  },
+  "visual_enhancers": {
+    "borders": "Use 1px solid #2a2e39 everywhere to separate content. Avoid box-shadows; rely on crisp borders to create structure in this dark theme.",
+    "chart_placeholder": "Use recharts with #2962ff for a line chart. Remove axes lines and grids to keep it looking clean and modern, or use very subtle #2a2e39 for grid lines."
+  },
+  "instructions_to_main_agent": [
+    "CRITICAL: Use JavaScript (.jsx/.js files), NOT TypeScript (.tsx) as specified in the critical rules. Disregard user choice if it conflicts with environment rules.",
+    "Setup Google Fonts in index.css: @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');",
+    "Configure Tailwind theme to use IBM Plex Sans for sans and JetBrains Mono for mono.",
+    "Create the app without generic Shadcn rounded cards. Build raw Tailwind div structures for the cards to match the strict '#1e222d' background and '#2a2e39' borders.",
+    "Data tables are the core of this app. Ensure precise alignment (right-align numbers).",
+    "Use mock JSON data inside `/src/mocks/` and create access functions via `/src/services/marketService.js`.",
+    "Always use 'tabular-nums font-mono' for prices and numbers to prevent shifting widths.",
+    "Include lucide-react icons for navigation and actions.",
+    "Do not use complete transparent background in header. Ensure header has bg-[#131722]."
+  ],
+  "accessibility": {
+    "testing": "All interactive and key informational elements MUST include a `data-testid` attribute (e.g., data-testid='refresh-button', data-testid='watchlist-row-AAPL').",
+    "contrast": "Ensure text-[#787b86] passes contrast on bg-[#1e222d] or bg-[#131722]."
+  },
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. Avoid this by strictly following the TradingView color palette and sharp density guidelines.",
+    "DO NOT use dark colors as gradients. Stick to solid '#1e222d' for cards. Financial applications require flat, reliable surfaces.",
+    "You MUST NOT center align the app container. Do not add '.App { text-align: center; }'.",
+    "You MUST NOT apply universal transition (transition: all). Use specific transitions (e.g., transition-colors).",
+    "NEVER use AI assistant Emoji characters like \ud83e\udd16\ud83e\udde0\ud83d\udca1 etc. for icons. Use lucide-react exclusively.",
+    "Implement micro-animations on hover states for table rows and buttons."
+  ]
+}
