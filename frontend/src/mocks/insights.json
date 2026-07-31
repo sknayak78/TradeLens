@@ -1,0 +1,92 @@
+{
+  "insights": [
+    {
+      "symbol": "RELIANCE",
+      "trend": "bullish",
+      "support": 2890,
+      "resistance": 2985,
+      "aiInsight": "Reliance is trading above its 20-EMA with expanding volume. Momentum indicators align bullish; look for continuation above 2940 for a swing to 2985. Manage risk with a stop below 2890 VWAP support.",
+      "series": [
+        { "t": "09:15", "v": 2905.2 },
+        { "t": "09:45", "v": 2912.5 },
+        { "t": "10:15", "v": 2908.9 },
+        { "t": "10:45", "v": 2918.6 },
+        { "t": "11:15", "v": 2921.1 },
+        { "t": "11:45", "v": 2915.4 },
+        { "t": "12:15", "v": 2920.8 },
+        { "t": "12:45", "v": 2927.3 },
+        { "t": "13:15", "v": 2925.6 },
+        { "t": "13:45", "v": 2931.2 },
+        { "t": "14:15", "v": 2929.4 },
+        { "t": "14:45", "v": 2933.9 },
+        { "t": "15:15", "v": 2934.55 }
+      ]
+    },
+    {
+      "symbol": "TATAMOTORS",
+      "trend": "bullish",
+      "support": 940,
+      "resistance": 985,
+      "aiInsight": "Tata Motors is in a strong up-trend with RSI at 72. Rising volume confirms conviction. Watch for a shallow pullback to 960 as re-entry; invalidation below 940.",
+      "series": [
+        { "t": "09:15", "v": 942.5 },
+        { "t": "09:45", "v": 948.2 },
+        { "t": "10:15", "v": 955.6 },
+        { "t": "10:45", "v": 951.4 },
+        { "t": "11:15", "v": 958.9 },
+        { "t": "11:45", "v": 963.1 },
+        { "t": "12:15", "v": 960.7 },
+        { "t": "12:45", "v": 966.3 },
+        { "t": "13:15", "v": 969.8 },
+        { "t": "13:45", "v": 968.4 },
+        { "t": "14:15", "v": 971.2 },
+        { "t": "14:45", "v": 972.9 },
+        { "t": "15:15", "v": 972.65 }
+      ]
+    },
+    {
+      "symbol": "ADANIENT",
+      "trend": "bullish",
+      "support": 2820,
+      "resistance": 2920,
+      "aiInsight": "ADANIENT is testing multi-month resistance at 2920 with expanding range. A decisive close above 2920 opens 3050. Below 2820 the setup invalidates.",
+      "series": [
+        { "t": "09:15", "v": 2782.1 },
+        { "t": "09:45", "v": 2801.4 },
+        { "t": "10:15", "v": 2818.6 },
+        { "t": "10:45", "v": 2832.2 },
+        { "t": "11:15", "v": 2841.8 },
+        { "t": "11:45", "v": 2855.6 },
+        { "t": "12:15", "v": 2864.3 },
+        { "t": "12:45", "v": 2872.5 },
+        { "t": "13:15", "v": 2880.9 },
+        { "t": "13:45", "v": 2885.7 },
+        { "t": "14:15", "v": 2891.4 },
+        { "t": "14:45", "v": 2894.2 },
+        { "t": "15:15", "v": 2895.40 }
+      ]
+    },
+    {
+      "symbol": "ASIANPAINT",
+      "trend": "bearish",
+      "support": 2790,
+      "resistance": 2870,
+      "aiInsight": "ASIANPAINT lost its 20-EMA with RSI at 38. Rally attempts into 2870 are selling opportunities. Below 2790 the next demand zone sits at 2710.",
+      "series": [
+        { "t": "09:15", "v": 2865.4 },
+        { "t": "09:45", "v": 2858.2 },
+        { "t": "10:15", "v": 2851.6 },
+        { "t": "10:45", "v": 2844.9 },
+        { "t": "11:15", "v": 2836.3 },
+        { "t": "11:45", "v": 2828.7 },
+        { "t": "12:15", "v": 2831.2 },
+        { "t": "12:45", "v": 2824.5 },
+        { "t": "13:15", "v": 2819.1 },
+        { "t": "13:45", "v": 2822.8 },
+        { "t": "14:15", "v": 2817.4 },
+        { "t": "14:45", "v": 2815.6 },
+        { "t": "15:15", "v": 2814.55 }
+      ]
+    }
+  ]
+}

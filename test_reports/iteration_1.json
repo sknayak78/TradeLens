@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend-only E2E testing of TradeLens dashboard. All 12 requested features verified via Playwright against the public URL. Core functionality works: 4 dashboard cards render, Today's Focus shows 4 items with symbols (RELIANCE/TATAMOTORS/ADANIENT/ASIANPAINT), Top Opportunities shows 10 rows with score bar + trend badge, Watchlist shows 10 rows with 7 columns (STOCK/PRICE/RSI/EMA20/VWAP/SCORE/TREND), Chart+AI Insight renders recharts line chart with trend/support/resistance tiles and AI text, timeframe chips (1D/1W/1M/3M/1Y) and symbol chips (RELIANCE/TATAMOTORS/ADANIENT/ASIANPAINT) are clickable and change chart, header search filters on 'REL' and shows dropdown that closes on selection, refresh button updates timestamp (08:21:39 -> 08:21:42), settings icon navigates to /settings, sidebar nav (Dashboard/Watchlist/Journal/Settings) navigates correctly, Trading Journal shows stat cards + 4 rows, Settings toggles/theme buttons/tf chips clickable without crash, mobile viewport 390x844 shows mobile-nav-toggle and drawer open/close works. No JS errors observed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ChartCard/WatchlistPanel", "issue": "Clicking a watchlist row for a symbol that has no chart mock data (e.g. HDFCBANK, TCS, INFY, BHARTIARTL, SBIN, ITC, MARUTI) silently keeps the previous symbol (falls back to RELIANCE) instead of updating the chart to that symbol. Only the 4 supported symbols (RELIANCE/TATAMOTORS/ADANIENT/ASIANPAINT) update the chart. Requirement states 'clicking a watchlist row updates the chart card to show that symbol'.", "selector": "[data-testid^=\"watchlist-row-\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "ChartCard", "issues": ["Recharts console warning: 'The width(-1) and height(-1) of chart should be greater than 0'. Chart renders visually but the ResponsiveContainer parent likely has no explicit min-height at mount, so recharts logs a warning. Add minWidth/minHeight or fixed height to the chart wrapper."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Chart card: extend chart mock data / fallback so that clicking any watchlist row (not just the 4 primary symbols) either updates the chart to that symbol OR provide clear UX feedback that chart is unavailable. Currently the click silently no-ops for 7 of 10 watchlist symbols.",
+    "Chart card: fix recharts width/height warning by giving the chart container explicit min-height (e.g. min-h-[280px]) to avoid width(-1)/height(-1) warning on first paint."
+  ],
+  "critical_code_review_comments": [
+    "ChartCard should guard against selecting a symbol that has no chart series and either fetch a generic series or display 'Chart data unavailable for {SYMBOL}' instead of silently keeping the previous symbol.",
+    "Recharts ResponsiveContainer needs a sized parent; consider aspect ratio or explicit min-height to remove the width(-1)/height(-1) warning that shows on every route mount that includes the chart."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped by request)", "frontend": "~95% (11/12 requirements fully pass; watchlist->chart integration partial)"},
+  "seed_data_creation": "None (all data served from local mock JSON).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "App is 100% client-side (React + TS + Tailwind, CRA/craco). Public URL: https://lens-trading-2.preview.emergentagent.com. All data-testid selectors listed in the review request are present and working. Only known gap: watchlist row click for non-primary symbols (HDFCBANK/TCS/INFY/BHARTIARTL/SBIN/ITC/MARUTI/DIVISLAB/AXISBANK) does not update the chart. Recharts logs a benign width/height warning on mount."
+}

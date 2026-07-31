@@ -1,0 +1,36 @@
+{
+  "todaysFocus": [
+    {
+      "key": "bestSetup",
+      "label": "Best Setup",
+      "symbol": "RELIANCE",
+      "name": "Reliance Industries",
+      "note": "Cup & handle confirmed. Entry above 2940 with tight stop at 2905.",
+      "changePct": 1.24
+    },
+    {
+      "key": "momentum",
+      "label": "Momentum Stock",
+      "symbol": "TATAMOTORS",
+      "name": "Tata Motors",
+      "note": "RSI 72 with sustained volume. Momentum leader in auto sector.",
+      "changePct": 3.24
+    },
+    {
+      "key": "breakout",
+      "label": "Watch for Breakout",
+      "symbol": "ADANIENT",
+      "name": "Adani Enterprises",
+      "note": "Pressing against 2900 resistance. Break with volume targets 3050.",
+      "changePct": 4.12
+    },
+    {
+      "key": "avoid",
+      "label": "Avoid Today",
+      "symbol": "ASIANPAINT",
+      "name": "Asian Paints",
+      "note": "Breakdown below 20-EMA. RSI 38 signals continued weakness.",
+      "changePct": -1.68
+    }
+  ]
+}
