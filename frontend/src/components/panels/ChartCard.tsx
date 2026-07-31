@@ -9,7 +9,7 @@ import {
   ReferenceLine,
   CartesianGrid,
 } from "recharts";
-import { getInsight, getAllInsights } from "@/services/marketService";
+import { getInsight, getWatchlist } from "@/services/marketService";
 import type { Insight } from "@/types";
 import PanelCard from "@/components/panels/PanelCard";
 import TrendBadge from "@/components/panels/TrendBadge";
@@ -28,7 +28,7 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
   const [timeframe, setTimeframe] = useState("1D");
 
   useEffect(() => {
-    getAllInsights().then((all) => setAvailable(all.map((i) => i.symbol)));
+    getWatchlist().then((list) => setAvailable(list.map((w) => w.symbol)));
   }, []);
 
   useEffect(() => {
@@ -76,7 +76,10 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
       {insight && stats && (
         <div className="flex flex-col gap-4">
           {/* Symbol selector chips */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div
+            className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1"
+            data-testid="chart-symbol-chips"
+          >
             {available.map((s) => (
               <button
                 key={s}
@@ -137,7 +140,7 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
 
           {/* Chart */}
           <div
-            className="h-56 md:h-64 -mx-2 relative"
+            className="h-56 md:h-64 min-h-[224px] -mx-2 relative"
             data-testid="chart-container"
           >
             <ResponsiveContainer width="100%" height="100%">

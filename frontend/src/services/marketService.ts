@@ -36,9 +36,38 @@ export function getOpportunities(): Promise<Opportunity[]> {
   return delay(opportunitiesData.opportunities as Opportunity[]);
 }
 
-export function getInsight(symbol: string): Promise<Insight | undefined> {
+function synthesizeInsight(symbol: string): Insight {
+  const stock = (stocksData.stocks as Stock[]).find((s) => s.symbol === symbol);
+  const basePrice = stock?.price ?? 1000;
+  const trend = (stock?.trend ?? "neutral") as Insight["trend"];
+  const support = +(basePrice * 0.985).toFixed(2);
+  const resistance = +(basePrice * 1.02).toFixed(2);
+  const start = basePrice * 0.99;
+  const times = [
+    "09:15", "09:45", "10:15", "10:45", "11:15", "11:45",
+    "12:15", "12:45", "13:15", "13:45", "14:15", "14:45", "15:15",
+  ];
+  const series = times.map((t, i) => {
+    const progress = i / (times.length - 1);
+    const drift = (basePrice - start) * progress;
+    const noise = Math.sin(i * 1.3 + symbol.length) * basePrice * 0.0025;
+    return { t, v: +(start + drift + noise).toFixed(2) };
+  });
+  const trendLabel =
+    trend === "bullish" ? "constructive" : trend === "bearish" ? "weak" : "range-bound";
+  return {
+    symbol,
+    trend,
+    support,
+    resistance,
+    aiInsight: `${symbol} is currently ${trendLabel}. Price is trading near ${basePrice.toLocaleString("en-IN")} with support at ${support.toLocaleString("en-IN")} and resistance at ${resistance.toLocaleString("en-IN")}. Wait for confirmation before initiating a position.`,
+    series,
+  };
+}
+
+export function getInsight(symbol: string): Promise<Insight> {
   const list = insightsData.insights as Insight[];
-  const match = list.find((i) => i.symbol === symbol) ?? list[0];
+  const match = list.find((i) => i.symbol === symbol) ?? synthesizeInsight(symbol);
   return delay(match);
 }
 
