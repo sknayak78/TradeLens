@@ -1,0 +1,140 @@
+"""Pydantic schemas for TradeLens API."""
+from datetime import datetime
+from typing import Optional, List, Literal
+from pydantic import BaseModel, ConfigDict, Field
+
+
+# ---------- Watchlist ----------
+
+class WatchlistCreate(BaseModel):
+    symbol: str = Field(..., min_length=1, max_length=32)
+
+
+class WatchlistItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    symbol: str
+    created_at: datetime
+
+
+class WatchlistEnriched(BaseModel):
+    """Watchlist row enriched with market data for the UI table."""
+    symbol: str
+    name: str
+    price: float
+    rsi: float
+    ema20: float
+    vwap: float
+    score: int
+    trend: Literal["bullish", "bearish", "neutral"]
+    changePct: float
+
+
+# ---------- Trades ----------
+
+class TradeCreate(BaseModel):
+    trade_date: datetime
+    symbol: str = Field(..., min_length=1, max_length=32)
+    entry_price: float = Field(..., gt=0)
+    exit_price: float = Field(..., gt=0)
+    quantity: int = Field(..., gt=0)
+    notes: str = ""
+
+
+class TradeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    trade_date: datetime
+    symbol: str
+    entry_price: float
+    exit_price: float
+    quantity: int
+    notes: str
+    pnl: float = 0.0
+    side: Literal["LONG", "SHORT"] = "LONG"
+
+
+# ---------- Settings ----------
+
+class SettingsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    capital: float
+    risk_per_trade: float
+    preferred_timeframe: str
+
+
+class SettingsUpdate(BaseModel):
+    capital: Optional[float] = Field(default=None, gt=0)
+    risk_per_trade: Optional[float] = Field(default=None, ge=0, le=100)
+    preferred_timeframe: Optional[str] = Field(default=None, min_length=1, max_length=8)
+
+
+# ---------- Market ----------
+
+class IndexItem(BaseModel):
+    name: str
+    symbol: str
+    value: float
+    changePct: float
+
+
+class TodaysFocusItem(BaseModel):
+    key: Literal["bestSetup", "momentum", "breakout", "avoid"]
+    label: str
+    symbol: str
+    name: str
+    note: str
+    changePct: float
+
+
+class MarketSummary(BaseModel):
+    indices: List[IndexItem]
+    todaysFocus: List[TodaysFocusItem]
+    status: Literal["open", "closed"] = "open"
+    asOf: datetime
+
+
+class Opportunity(BaseModel):
+    symbol: str
+    name: str
+    score: int
+    trend: Literal["bullish", "bearish", "neutral"]
+    price: float
+    changePct: float
+    reason: str
+
+
+class SeriesPoint(BaseModel):
+    t: str
+    v: float
+
+
+class StockSummary(BaseModel):
+    symbol: str
+    name: str
+    price: float
+    changePct: float
+    trend: Literal["bullish", "bearish", "neutral"]
+    sector: str
+
+
+class StockDetail(BaseModel):
+    symbol: str
+    name: str
+    price: float
+    changePct: float
+    score: int
+    trend: Literal["bullish", "bearish", "neutral"]
+    rsi: float
+    ema20: float
+    vwap: float
+    volume: int
+    sector: str
+    support: float
+    resistance: float
+    aiInsight: str
+    series: List[SeriesPoint]

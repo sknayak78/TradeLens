@@ -1,118 +1,176 @@
 import { useEffect, useState } from "react";
-import { getSettings } from "@/services/marketService";
-import type { Settings } from "@/types";
 import PanelCard from "@/components/panels/PanelCard";
-import { Info } from "lucide-react";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
+import { useAppSettings } from "@/context/SettingsContext";
+import { Info, Check } from "lucide-react";
 
 const TIMEFRAMES = ["1D", "1W", "1M", "3M", "1Y"];
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<Settings | null>(null);
+  const { settings, isLoading, isError, error, refetch, update, isUpdating } =
+    useAppSettings();
+
+  const [capital, setCapital] = useState<string>("");
+  const [risk, setRisk] = useState<string>("");
+  const [timeframe, setTimeframe] = useState<string>("1D");
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
 
   useEffect(() => {
-    getSettings().then(setSettings);
-  }, []);
+    if (settings) {
+      setCapital(settings.capital.toString());
+      setRisk(settings.risk_per_trade.toString());
+      setTimeframe(settings.preferred_timeframe);
+    }
+  }, [settings]);
 
-  if (!settings) return null;
+  const handleSave = () => {
+    const capNum = parseFloat(capital);
+    const riskNum = parseFloat(risk);
+    update({
+      capital: Number.isFinite(capNum) && capNum > 0 ? capNum : undefined,
+      risk_per_trade:
+        Number.isFinite(riskNum) && riskNum >= 0 && riskNum <= 100
+          ? riskNum
+          : undefined,
+      preferred_timeframe: timeframe,
+    });
+    setSavedAt(new Date());
+  };
 
-  const update = <K extends keyof Settings>(k: K, v: Settings[K]) =>
-    setSettings((s) => (s ? { ...s, [k]: v } : s));
+  const handleTimeframe = (tf: string) => {
+    setTimeframe(tf);
+    update({ preferred_timeframe: tf });
+    setSavedAt(new Date());
+  };
 
   return (
     <div data-testid="settings-page" className="p-4 md:p-6">
-      <div className="mb-4">
-        <h1 className="text-white text-xl md:text-2xl font-semibold tracking-tight">
-          Settings
-        </h1>
-        <p className="text-xs text-[#787b86] mt-1">
-          Configure your TradeLens experience
-        </p>
+      <div className="mb-4 flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-white text-xl md:text-2xl font-semibold tracking-tight">
+            Settings
+          </h1>
+          <p className="text-xs text-[#787b86] mt-1">
+            Configure your TradeLens experience — stored in SQLite.
+          </p>
+        </div>
+        {savedAt && (
+          <span
+            className="inline-flex items-center gap-1.5 text-[10px] font-mono tabular-nums text-[#26a69a] uppercase tracking-widest"
+            data-testid="settings-saved-at"
+          >
+            <Check size={12} /> Saved{" "}
+            {savedAt.toLocaleTimeString("en-IN", { hour12: false })}
+          </span>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <PanelCard title="Appearance" testId="settings-appearance">
-          <Row label="Theme">
-            <div className="flex gap-2">
-              {(["dark", "light"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => update("theme", t)}
-                  data-testid={`settings-theme-${t}`}
-                  className={`px-3 py-1.5 rounded-md text-xs uppercase tracking-widest transition-colors border ${
-                    settings.theme === t
-                      ? "bg-[#2962ff]/15 text-white border-[#2962ff]/40"
-                      : "text-[#787b86] border-[#2a2e39] hover:text-[#d1d4dc]"
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
+      {isLoading && <LoadingState label="Loading settings" />}
+      {isError && !isLoading && (
+        <ErrorState
+          message={error?.message ?? "Failed to load settings."}
+          onRetry={refetch}
+          testId="settings-error"
+        />
+      )}
+
+      {!isLoading && !isError && settings && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <PanelCard title="Risk & Capital" testId="settings-risk">
+            <Row label="Capital (₹)">
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={capital}
+                onChange={(e) => setCapital(e.target.value)}
+                data-testid="settings-capital"
+                className="w-40 h-8 px-2 bg-[#131722] border border-[#2a2e39] rounded-md text-sm text-white font-mono tabular-nums focus:border-[#2962ff]/50 outline-none"
+              />
+            </Row>
+            <Row label="Risk per Trade (%)" divider>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.1}
+                value={risk}
+                onChange={(e) => setRisk(e.target.value)}
+                data-testid="settings-risk-input"
+                className="w-40 h-8 px-2 bg-[#131722] border border-[#2a2e39] rounded-md text-sm text-white font-mono tabular-nums focus:border-[#2962ff]/50 outline-none"
+              />
+            </Row>
+            <div className="pt-3 flex justify-end">
+              <button
+                onClick={handleSave}
+                disabled={isUpdating}
+                data-testid="settings-save"
+                className="px-3 py-1.5 rounded-md bg-[#2962ff] hover:bg-[#2962ff]/85 text-white text-xs uppercase tracking-widest transition-colors disabled:opacity-60"
+              >
+                {isUpdating ? "Saving…" : "Save Changes"}
+              </button>
             </div>
-          </Row>
-          <Row label="Compact Mode" divider>
-            <Toggle
-              on={settings.compactMode}
-              onChange={(v) => update("compactMode", v)}
-              testId="settings-compact"
-            />
-          </Row>
-        </PanelCard>
+          </PanelCard>
 
-        <PanelCard title="Data" testId="settings-data">
-          <Row label="Default Timeframe">
-            <div className="flex flex-wrap gap-2">
-              {TIMEFRAMES.map((tf) => (
-                <button
-                  key={tf}
-                  onClick={() => update("defaultTimeframe", tf)}
-                  data-testid={`settings-tf-${tf}`}
-                  className={`px-2.5 py-1 rounded text-[11px] font-mono uppercase tracking-wider transition-colors border ${
-                    settings.defaultTimeframe === tf
-                      ? "bg-[#2962ff]/15 text-white border-[#2962ff]/40"
-                      : "text-[#787b86] border-[#2a2e39] hover:text-[#d1d4dc]"
-                  }`}
-                >
-                  {tf}
-                </button>
-              ))}
+          <PanelCard title="Chart Preferences" testId="settings-preferences">
+            <Row label="Default Timeframe">
+              <div className="flex flex-wrap gap-2">
+                {TIMEFRAMES.map((tf) => (
+                  <button
+                    key={tf}
+                    onClick={() => handleTimeframe(tf)}
+                    data-testid={`settings-tf-${tf}`}
+                    className={`px-2.5 py-1 rounded text-[11px] font-mono uppercase tracking-wider transition-colors border ${
+                      timeframe === tf
+                        ? "bg-[#2962ff]/15 text-white border-[#2962ff]/40"
+                        : "text-[#787b86] border-[#2a2e39] hover:text-[#d1d4dc]"
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+            </Row>
+          </PanelCard>
+
+          <PanelCard title="Summary" testId="settings-summary">
+            <div className="grid grid-cols-3 gap-2 font-mono tabular-nums text-sm">
+              <Tile
+                label="Capital"
+                value={`₹${settings.capital.toLocaleString("en-IN")}`}
+              />
+              <Tile label="Risk" value={`${settings.risk_per_trade}%`} />
+              <Tile label="Timeframe" value={settings.preferred_timeframe} />
             </div>
-          </Row>
-          <Row label="Refresh Interval (s)" divider>
-            <input
-              type="number"
-              min={5}
-              max={300}
-              value={settings.refreshInterval}
-              onChange={(e) =>
-                update("refreshInterval", parseInt(e.target.value || "30", 10))
-              }
-              data-testid="settings-refresh"
-              className="w-24 h-8 px-2 bg-[#131722] border border-[#2a2e39] rounded-md text-sm text-white font-mono tabular-nums focus:border-[#2962ff]/50 outline-none"
-            />
-          </Row>
-        </PanelCard>
+            <div className="text-[11px] text-[#787b86] mt-3">
+              Per-trade risk ≈{" "}
+              <span className="text-[#d1d4dc] font-mono tabular-nums">
+                ₹
+                {(
+                  (settings.capital * settings.risk_per_trade) /
+                  100
+                ).toLocaleString("en-IN", {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })}
+              </span>
+              .
+            </div>
+          </PanelCard>
 
-        <PanelCard title="Notifications" testId="settings-notifications">
-          <Row label="Alert Notifications">
-            <Toggle
-              on={settings.notifications}
-              onChange={(v) => update("notifications", v)}
-              testId="settings-notif"
-            />
-          </Row>
-        </PanelCard>
-
-        <PanelCard title="About" testId="settings-about">
-          <div className="flex items-start gap-3">
-            <Info size={16} className="text-[#787b86] mt-0.5 shrink-0" />
-            <p className="text-xs text-[#787b86] leading-relaxed">
-              TradeLens v0.1 · Frontend preview. All data on this dashboard is
-              mocked from local JSON. No backend, API, or persistence is
-              connected. Save actions here update local state only.
-            </p>
-          </div>
-        </PanelCard>
-      </div>
+          <PanelCard title="About" testId="settings-about">
+            <div className="flex items-start gap-3">
+              <Info size={16} className="text-[#787b86] mt-0.5 shrink-0" />
+              <p className="text-xs text-[#787b86] leading-relaxed">
+                TradeLens v1.0 · FastAPI + SQLite backend. Watchlist, trades and
+                settings are persisted server-side. Market and opportunity data
+                are served from static seed values in this demo.
+              </p>
+            </div>
+          </PanelCard>
+        </div>
+      )}
     </div>
   );
 }
@@ -138,30 +196,13 @@ function Row({
   );
 }
 
-function Toggle({
-  on,
-  onChange,
-  testId,
-}: {
-  on: boolean;
-  onChange: (v: boolean) => void;
-  testId?: string;
-}) {
+function Tile({ label, value }: { label: string; value: string }) {
   return (
-    <button
-      role="switch"
-      aria-checked={on}
-      onClick={() => onChange(!on)}
-      data-testid={testId}
-      className={`relative w-10 h-5 rounded-full transition-colors ${
-        on ? "bg-[#2962ff]" : "bg-[#2a2e39]"
-      }`}
-    >
-      <span
-        className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-          on ? "translate-x-5" : "translate-x-0.5"
-        }`}
-      />
-    </button>
+    <div className="rounded-[4px] border border-[#2a2e39] bg-[#131722] px-3 py-2">
+      <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
+        {label}
+      </div>
+      <div className="text-white text-sm">{value}</div>
+    </div>
   );
 }

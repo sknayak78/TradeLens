@@ -1,7 +1,0 @@
-{
-  "theme": "dark",
-  "defaultTimeframe": "1D",
-  "refreshInterval": 30,
-  "notifications": true,
-  "compactMode": false
-}

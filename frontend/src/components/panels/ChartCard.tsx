@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -9,10 +9,13 @@ import {
   ReferenceLine,
   CartesianGrid,
 } from "recharts";
-import { getInsight, getWatchlist } from "@/services/marketService";
-import type { Insight } from "@/types";
+import { useStock } from "@/hooks/useMarket";
+import { useWatchlist } from "@/hooks/useWatchlist";
 import PanelCard from "@/components/panels/PanelCard";
 import TrendBadge from "@/components/panels/TrendBadge";
+import LoadingState from "@/components/common/LoadingState";
+import ErrorState from "@/components/common/ErrorState";
+import EmptyState from "@/components/common/EmptyState";
 import { Sparkles, TrendingUp, TrendingDown } from "lucide-react";
 
 interface ChartCardProps {
@@ -23,36 +26,35 @@ interface ChartCardProps {
 const TIMEFRAMES = ["1D", "1W", "1M", "3M", "1Y"];
 
 export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
-  const [insight, setInsight] = useState<Insight | null>(null);
-  const [available, setAvailable] = useState<string[]>([]);
+  const { data: watchlist = [] } = useWatchlist();
+  const { data: stock, isLoading, isError, error, refetch } = useStock(symbol);
   const [timeframe, setTimeframe] = useState("1D");
 
-  useEffect(() => {
-    getWatchlist().then((list) => setAvailable(list.map((w) => w.symbol)));
-  }, []);
-
-  useEffect(() => {
-    getInsight(symbol).then((i) => setInsight(i ?? null));
-  }, [symbol]);
+  const chips = useMemo(() => watchlist.map((w) => w.symbol), [watchlist]);
 
   const stats = useMemo(() => {
-    if (!insight) return null;
-    const values = insight.series.map((p) => p.v);
+    if (!stock) return null;
+    const values = stock.series.map((p) => p.v);
+    if (!values.length) return null;
     const first = values[0];
     const last = values[values.length - 1];
     const changePct = ((last - first) / first) * 100;
     const min = Math.min(...values);
     const max = Math.max(...values);
     return { first, last, changePct, min, max };
-  }, [insight]);
+  }, [stock]);
 
-  const isUp = insight?.trend === "bullish";
-  const lineColor = isUp ? "#26a69a" : insight?.trend === "bearish" ? "#ef5350" : "#2962ff";
+  const isUp = stock?.trend === "bullish";
+  const lineColor = isUp
+    ? "#26a69a"
+    : stock?.trend === "bearish"
+      ? "#ef5350"
+      : "#2962ff";
 
   return (
     <PanelCard
       title="Chart & AI Insight"
-      subtitle={insight ? `${insight.symbol} · Intraday` : "Loading…"}
+      subtitle={stock ? `${stock.symbol} · Intraday` : "Loading…"}
       testId="card-chart"
       action={
         <div className="flex items-center gap-1" data-testid="chart-timeframes">
@@ -73,19 +75,34 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
         </div>
       }
     >
-      {insight && stats && (
+      {isLoading && <LoadingState testId="chart-loading" label="Loading chart" />}
+      {isError && !isLoading && (
+        <ErrorState
+          message={error?.message ?? "Failed to load chart data."}
+          onRetry={() => refetch()}
+          testId="chart-error"
+        />
+      )}
+      {!isLoading && !isError && !stock && (
+        <EmptyState
+          title="Select a symbol"
+          description="Pick a stock to see its chart and AI insight."
+          testId="chart-empty"
+        />
+      )}
+      {!isLoading && !isError && stock && stats && (
         <div className="flex flex-col gap-4">
-          {/* Symbol selector chips */}
+          {/* Symbol chips */}
           <div
             className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1"
             data-testid="chart-symbol-chips"
           >
-            {available.map((s) => (
+            {chips.map((s) => (
               <button
                 key={s}
                 onClick={() => onSelectSymbol?.(s)}
                 data-testid={`chart-symbol-${s}`}
-                className={`px-2 py-1 rounded-[3px] text-[11px] font-mono tracking-wide transition-colors border ${
+                className={`px-2 py-1 rounded-[3px] text-[11px] font-mono tracking-wide transition-colors border shrink-0 ${
                   s === symbol
                     ? "bg-[#2962ff]/15 text-white border-[#2962ff]/40"
                     : "bg-transparent text-[#787b86] border-[#2a2e39] hover:text-[#d1d4dc] hover:border-[#3a3f4b]"
@@ -125,14 +142,14 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                 <span className="w-2 h-2 rounded-full bg-[#26a69a]" />
                 Support
                 <span className="text-[#d1d4dc]">
-                  {insight.support.toLocaleString("en-IN")}
+                  {stock.support.toLocaleString("en-IN")}
                 </span>
               </div>
               <div className="flex items-center gap-1.5 text-[#787b86]">
                 <span className="w-2 h-2 rounded-full bg-[#ef5350]" />
                 Resistance
                 <span className="text-[#d1d4dc]">
-                  {insight.resistance.toLocaleString("en-IN")}
+                  {stock.resistance.toLocaleString("en-IN")}
                 </span>
               </div>
             </div>
@@ -145,15 +162,9 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
           >
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
-                data={insight.series}
+                data={stock.series}
                 margin={{ top: 8, right: 12, bottom: 4, left: 4 }}
               >
-                <defs>
-                  <linearGradient id="lineGlow" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={lineColor} stopOpacity={0.35} />
-                    <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
                 <CartesianGrid
                   stroke="#2a2e39"
                   strokeDasharray="2 4"
@@ -184,10 +195,13 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                   }}
                   labelStyle={{ color: "#787b86" }}
                   itemStyle={{ color: "#d1d4dc" }}
-                  formatter={(v: number) => [`₹${v.toLocaleString("en-IN")}`, "Price"]}
+                  formatter={(v: number) => [
+                    `₹${v.toLocaleString("en-IN")}`,
+                    "Price",
+                  ]}
                 />
                 <ReferenceLine
-                  y={insight.support}
+                  y={stock.support}
                   stroke="#26a69a"
                   strokeDasharray="3 3"
                   strokeOpacity={0.5}
@@ -199,7 +213,7 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                   }}
                 />
                 <ReferenceLine
-                  y={insight.resistance}
+                  y={stock.resistance}
                   stroke="#ef5350"
                   strokeDasharray="3 3"
                   strokeOpacity={0.5}
@@ -224,26 +238,26 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
             </ResponsiveContainer>
           </div>
 
-          {/* Stats + Insight */}
+          {/* Stats + insight */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <StatTile label="Trend">
-              <TrendBadge trend={insight.trend} size="sm" />
+              <TrendBadge trend={stock.trend} size="sm" />
             </StatTile>
             <StatTile label="Support">
               <span className="text-[#26a69a] font-mono tabular-nums text-sm inline-flex items-center gap-1">
                 <TrendingUp size={13} />
-                {insight.support.toLocaleString("en-IN")}
+                {stock.support.toLocaleString("en-IN")}
               </span>
             </StatTile>
             <StatTile label="Resistance">
               <span className="text-[#ef5350] font-mono tabular-nums text-sm inline-flex items-center gap-1">
                 <TrendingDown size={13} />
-                {insight.resistance.toLocaleString("en-IN")}
+                {stock.resistance.toLocaleString("en-IN")}
               </span>
             </StatTile>
-            <StatTile label="AI Confidence">
+            <StatTile label="RSI (14)">
               <span className="text-white font-mono tabular-nums text-sm">
-                {(72 + (insight.symbol.length % 5) * 3).toString()}%
+                {stock.rsi.toFixed(1)}
               </span>
             </StatTile>
           </div>
@@ -260,7 +274,7 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                 AI Insight
               </div>
               <p className="text-sm text-[#d1d4dc] leading-relaxed">
-                {insight.aiInsight}
+                {stock.aiInsight}
               </p>
             </div>
           </div>

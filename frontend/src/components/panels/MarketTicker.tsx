@@ -1,20 +1,25 @@
-import { useEffect, useState } from "react";
-import { getMarketSnapshot } from "@/services/marketService";
-import type { MarketSnapshot } from "@/types";
+import { useMarketSummary } from "@/hooks/useMarket";
 
 export default function MarketTicker() {
-  const [indices, setIndices] = useState<MarketSnapshot[]>([]);
+  const { data, isLoading, isError } = useMarketSummary();
 
-  useEffect(() => {
-    getMarketSnapshot().then(setIndices);
-  }, []);
+  if (isLoading || isError || !data) {
+    return (
+      <div
+        className="h-10 flex items-center px-4 border-b border-[#2a2e39] bg-[#131722] text-[10px] uppercase tracking-widest text-[#787b86]"
+        data-testid="market-ticker"
+      >
+        {isLoading ? "Loading market data…" : ""}
+      </div>
+    );
+  }
 
   return (
     <div
       className="flex items-center gap-6 px-4 py-2.5 border-b border-[#2a2e39] bg-[#131722] overflow-x-auto"
       data-testid="market-ticker"
     >
-      {indices.map((idx) => {
+      {data.indices.map((idx) => {
         const isUp = idx.changePct >= 0;
         return (
           <div
@@ -42,8 +47,12 @@ export default function MarketTicker() {
         );
       })}
       <div className="ml-auto shrink-0 flex items-center gap-2 text-[10px] font-mono tabular-nums text-[#787b86] uppercase tracking-widest">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#26a69a] tl-pulse" />
-        Market Open
+        <span
+          className={`w-1.5 h-1.5 rounded-full ${
+            data.status === "open" ? "bg-[#26a69a] tl-pulse" : "bg-[#ef5350]"
+          }`}
+        />
+        Market {data.status === "open" ? "Open" : "Closed"}
       </div>
     </div>
   );

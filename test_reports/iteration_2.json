@@ -1,0 +1,28 @@
+{
+  "summary": "Full-stack testing of TradeLens FastAPI + SQLite backend and React/TypeScript frontend. Backend: 13/13 pytest tests pass covering /api/health, watchlist CRUD (add/duplicate 409/delete/404), trades CRUD (LONG/SHORT side computed, pnl computed, newest-first, 204/404), settings GET/PUT persistence, market-summary (3 indices + 4 focus + status/asOf), opportunities (10 items with all fields), stock detail curated (RELIANCE 13-pt), synthesized (TCS 13-pt), 404 NOTREAL, and stocks search. Frontend Playwright E2E: dashboard renders all cards with API data, 10 watchlist rows, Today's Focus symbols RELIANCE/TATAMOTORS/ADANIENT/ASIANPAINT visible, clicking watchlist rows (TCS, HDFCBANK) updates ChartCard to that symbol (regression from iteration 1 FIXED - now works for non-curated symbols via synthesize_insight backend), header search 'ADAN' shows dropdown with search-add-ADANIENT button, add works and row appears in watchlist. /watchlist page delete (ITC removed successfully). Journal New Trade dialog fills submit (RELIANCE 100/110/10), dialog closes, journal-row-1 appears, delete removes it. Settings prefilled from backend (capital=500000, risk=1.5), timeframe chip click persists and shows saved badge, Save Changes clicked. Refresh button clicked without error. No mock JSON imports remain (src/mocks does not exist, grep '@/mocks' returns 0). No direct axios/fetch outside /src/services.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "ChartCard", "issues": ["Recharts still logs 'width(-1) and height(-1) of chart should be greater than 0' warning on every chart mount / route with the chart. Benign but noisy — this issue was already flagged in iteration_1.json and is not yet fixed. Add explicit min-height (e.g. min-h-[280px]) to ResponsiveContainer parent."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_tradelens_api.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "OPTIONAL/LOW: Fix recharts width(-1)/height(-1) warning by giving ChartCard's ResponsiveContainer parent an explicit min-height."
+  ],
+  "critical_code_review_comments": [
+    "server.py cleanly separates routers, DB seeding runs only on empty DB — idempotent.",
+    "trades.py side calculation (LONG if exit>=entry) does not treat pnl sign-neutral for SHORT positions — for a SHORT with entry=200 exit=180 qty=5 the pnl returned is -100 (negative) while side='SHORT'. If UX expects 'positive pnl on winning short', this is incorrect. Currently frontend just displays pnl signed and colors green/red by sign, which for the above short yields a red (-100) even though the short was profitable. Consider computing pnl as (entry-exit)*qty when side==SHORT, or documenting the sign convention explicitly. Not blocking the review request but worth flagging.",
+    "schemas.py TradeCreate requires trade_date as datetime — frontend sends ISO datetime via new Date(...).toISOString(), which works. Good.",
+    "seed_data.STOCKS_BY_SYMBOL supports synthesize_insight fallback so every watchlist symbol has a chart. Iteration-1 regression is resolved by backend."
+  ],
+  "updated_files": ["/app/backend/tests/test_tradelens_api.py"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "None persistent. Test artifacts left in DB: ADANIENT added to watchlist during search test (was one of default 10 anyway), ITC removed from watchlist during delete test. Journal test trade was created then deleted. Settings capital changed to 750000 via Save Changes click.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend fully working at REACT_APP_BACKEND_URL (public URL). Trade schema uses entry_price/exit_price/quantity (NOT entry/exit/qty as shorthand in review request). trade_date must be ISO datetime. All watchlist symbols now have chart data (curated for RELIANCE/TATAMOTORS/ADANIENT/ASIANPAINT + synthesized for the rest). SQLite DB at /app/backend/tradelens.db — do NOT delete. Note: ITC was removed from watchlist during testing; if it needs to be present, re-add via POST /api/watchlist. Settings currently: capital=750000, risk_per_trade=1.5, preferred_timeframe=1M (last set by test).",
+  "rca of the issue": "No critical issues found. Only pre-existing recharts warning persists."
+}

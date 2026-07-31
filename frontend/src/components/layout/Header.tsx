@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { Search, RefreshCw, Settings, Menu, LineChart } from "lucide-react";
-import { searchStocks } from "@/services/marketService";
-import type { Stock } from "@/types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Search, RefreshCw, Settings, Menu, LineChart, Plus, Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { useWatchlist, useAddToWatchlist } from "@/hooks/useWatchlist";
+import { marketService, StockSummary } from "@/services/marketService";
 
 interface HeaderProps {
   onOpenMobileNav: () => void;
@@ -10,27 +11,43 @@ interface HeaderProps {
 
 export default function Header({ onOpenMobileNav }: HeaderProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Stock[]>([]);
+  const [results, setResults] = useState<StockSummary[]>([]);
   const [open, setOpen] = useState(false);
   const [spinning, setSpinning] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { data: watchlist = [] } = useWatchlist();
+  const addToWatchlist = useAddToWatchlist();
+
+  const watchlistSet = useMemo(
+    () => new Set(watchlist.map((w) => w.symbol)),
+    [watchlist],
+  );
 
   useEffect(() => {
     let cancelled = false;
-    if (!query.trim()) {
+    const q = query.trim();
+    if (!q) {
       setResults([]);
       setOpen(false);
       return;
     }
-    (async () => {
-      const r = await searchStocks(query);
-      if (!cancelled) {
-        setResults(r);
-        setOpen(true);
-      }
-    })();
+    marketService
+      .searchStocks(q, 8)
+      .then((r) => {
+        if (!cancelled) {
+          setResults(r);
+          setOpen(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setResults([]);
+          setOpen(true);
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -51,10 +68,16 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
 
   const handleRefresh = () => {
     setSpinning(true);
+    queryClient.invalidateQueries();
     setTimeout(() => {
       setSpinning(false);
       setLastRefresh(new Date());
     }, 700);
+  };
+
+  const handleAdd = (symbol: string) => {
+    if (watchlistSet.has(symbol)) return;
+    addToWatchlist.mutate(symbol);
   };
 
   return (
@@ -112,42 +135,57 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
               className="absolute left-0 right-0 top-11 rounded-md border border-[#2a2e39] bg-[#1e222d] shadow-2xl overflow-hidden z-40 tl-fade-in"
               data-testid="stock-search-results"
             >
-              {results.map((s) => (
-                <button
-                  key={s.symbol}
-                  onClick={() => {
-                    setQuery("");
-                    setOpen(false);
-                    navigate("/");
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#2a2e39] text-left transition-colors"
-                  data-testid={`search-result-${s.symbol}`}
-                >
-                  <div className="min-w-0">
-                    <div className="text-sm text-white font-medium">
-                      {s.symbol}
+              {results.map((s) => {
+                const inWatchlist = watchlistSet.has(s.symbol);
+                return (
+                  <div
+                    key={s.symbol}
+                    className="flex items-center justify-between px-3 py-2 hover:bg-[#2a2e39] transition-colors"
+                    data-testid={`search-result-${s.symbol}`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm text-white font-medium">
+                        {s.symbol}
+                      </div>
+                      <div className="text-xs text-[#787b86] truncate">
+                        {s.name}
+                      </div>
                     </div>
-                    <div className="text-xs text-[#787b86] truncate">
-                      {s.name}
+                    <div className="flex items-center gap-3">
+                      <div className="text-right shrink-0">
+                        <div className="font-mono tabular-nums text-sm text-[#d1d4dc]">
+                          ₹{s.price.toLocaleString("en-IN")}
+                        </div>
+                        <div
+                          className={`font-mono tabular-nums text-xs ${
+                            s.changePct >= 0
+                              ? "text-[#26a69a]"
+                              : "text-[#ef5350]"
+                          }`}
+                        >
+                          {s.changePct >= 0 ? "+" : ""}
+                          {s.changePct.toFixed(2)}%
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleAdd(s.symbol)}
+                        disabled={inWatchlist || addToWatchlist.isPending}
+                        data-testid={`search-add-${s.symbol}`}
+                        className={`p-1.5 rounded-md border transition-colors ${
+                          inWatchlist
+                            ? "text-[#26a69a] border-[#26a69a]/30 bg-[#26a69a]/10 cursor-default"
+                            : "text-[#787b86] border-[#2a2e39] hover:text-[#2962ff] hover:border-[#2962ff]/40 hover:bg-[#2962ff]/10"
+                        }`}
+                        aria-label={
+                          inWatchlist ? "Already in watchlist" : "Add to watchlist"
+                        }
+                      >
+                        {inWatchlist ? <Check size={12} /> : <Plus size={12} />}
+                      </button>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="font-mono tabular-nums text-sm text-[#d1d4dc]">
-                      ₹{s.price.toLocaleString("en-IN")}
-                    </div>
-                    <div
-                      className={`font-mono tabular-nums text-xs ${
-                        s.changePct >= 0
-                          ? "text-[#26a69a]"
-                          : "text-[#ef5350]"
-                      }`}
-                    >
-                      {s.changePct >= 0 ? "+" : ""}
-                      {s.changePct.toFixed(2)}%
-                    </div>
-                  </div>
-                </button>
-              ))}
+                );
+              })}
             </div>
           )}
           {open && query && results.length === 0 && (

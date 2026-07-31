@@ -8,10 +8,11 @@ export default function WatchlistPage() {
           Watchlist
         </h1>
         <p className="text-xs text-[#787b86] mt-1">
-          Track your favourite instruments with live indicators
+          Track your favourite instruments — search from the header to add,
+          click × to remove.
         </p>
       </div>
-      <WatchlistPanel />
+      <WatchlistPanel showRemove />
     </div>
   );
 }

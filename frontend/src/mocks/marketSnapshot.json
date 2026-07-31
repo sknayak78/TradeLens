@@ -1,7 +1,0 @@
-{
-  "indices": [
-    { "name": "Nifty 50", "symbol": "NIFTY", "value": 22648.20, "changePct": 0.68 },
-    { "name": "Bank Nifty", "symbol": "BANKNIFTY", "value": 48521.35, "changePct": 0.42 },
-    { "name": "India VIX", "symbol": "INDIAVIX", "value": 13.85, "changePct": -2.14 }
-  ]
-}
