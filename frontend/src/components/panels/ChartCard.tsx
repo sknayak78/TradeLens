@@ -157,7 +157,7 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
 
           {/* Chart */}
           <div
-            className="h-56 md:h-64 min-h-[224px] -mx-2 relative"
+            className="h-56 md:h-64 min-h-[240px] w-full -mx-2 relative"
             data-testid="chart-container"
           >
             <ResponsiveContainer width="100%" height="100%">

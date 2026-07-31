@@ -1,66 +1,70 @@
 # TradeLens — PRD
 
 ## Original Problem Statement
-Build TradeLens: a clean, lightweight, **frontend-only** React + TypeScript + Tailwind CSS web app with a modern dark theme inspired by TradingView. No auth, no databases, no APIs, no backend logic. All data is mocked via local JSON. Must include a Header (logo, search, refresh, settings), Left Sidebar (Dashboard, Watchlist, Trading Journal, Settings), and a Dashboard with 4 cards:
-1. Today's Focus — Best Setup, Momentum Stock, Watch for Breakout, Avoid Today
-2. Top Opportunities — table (Stock, Score, Trend, Price) with 10 sample stocks
-3. Watchlist — Stock, Price, RSI, EMA20, VWAP, Score, Trend
-4. TradingView-style Chart placeholder + Trend, Support, Resistance, AI Insight
-
-Must be responsive with reusable components.
-
-## User Choices
-- TypeScript (`.tsx`) — react-scripts + craco + typescript@4.9.5
-- Classic TradingView dark theme (deep navy #131722, surface #1e222d, green/red accents)
-- Simple animated line chart using **recharts**
-- Mock JSON stored under `/src/mocks/`, loaded via `/src/services/marketService.ts`
-- Mock files: `stocks.json`, `watchlist.json`, `opportunities.json`, `insights.json`, `marketSnapshot.json`, `todaysFocus.json`, `settings.json`
+Build TradeLens: a clean, lightweight React + TypeScript + Tailwind dashboard with a TradingView-style dark theme. **Phase 1** (frontend, Feb 12 2026): Header, Sidebar, and 4-card Dashboard (Today's Focus, Top Opportunities, Watchlist, Chart & AI Insight) driven by mock JSON. **Phase 2** (backend, Feb 12 2026): a lightweight FastAPI + SQLAlchemy + SQLite backend exposing REST endpoints for watchlist, trades, settings, market summary, opportunities, and stock detail. Frontend rewired via a service layer + React Query with retry-once, loading/empty/error states, and a Settings React Context.
 
 ## Architecture
-- **Frontend**: React 19 + TypeScript + Tailwind + Recharts + React Router 7
-- **State**: Local component state (no store)
-- **Data**: JSON mocks → `marketService.ts` (Promise-based) → components
-- **Backend**: Not used (dormant FastAPI template stays)
+- **Frontend**: React 19 + TypeScript + Tailwind + Recharts + React Router 7 + TanStack Query 5 (retry:1)
+  - `services/*` — axios-based service layer (no direct API calls in components)
+  - `hooks/*` — React Query hooks (`useWatchlist`, `useTrades`, `useSettings`, `useMarket`)
+  - `context/SettingsContext.tsx` — settings via Context
+  - `components/common/*` — `LoadingState`, `EmptyState`, `ErrorState`
+- **Backend**: FastAPI + SQLAlchemy 2.0 + SQLite
+  - `server.py` — app factory + router registration + startup seeding
+  - `database.py` · `models.py` · `schemas.py`
+  - `routers/watchlist.py · trades.py · settings.py · market.py`
+  - `seed_data.py` — static NSE catalogue, indices, opportunities, insights
 
-## Implemented Features (Feb 12, 2026 — v0.1)
-- Global TradingView-inspired dark shell (`AppShell`, `Header`, `Sidebar`, `MarketTicker`)
-- Header: TradeLens logo, live stock search dropdown, spinning Refresh button + timestamp, Settings shortcut
-- Left sidebar navigation with active route highlight + mobile drawer
-- Market snapshot ticker (Nifty 50, Bank Nifty, India VIX)
-- Dashboard 4-card bento grid:
-  - Today's Focus (4 curated tiles)
-  - Top Opportunities (10-row score-bar table)
-  - Watchlist (10-row table w/ RSI colouring, click updates chart)
-  - Chart & AI Insight (recharts line, S/R reference lines, timeframe chips, symbol chips, AI text)
-- Watchlist page (dedicated route)
-- Trading Journal page (stats + 4 sample trades)
-- Settings page (theme, timeframe, refresh interval, notifications, compact mode toggles)
-- Fully responsive: cards stack on mobile, sidebar collapses to drawer
-- All interactive elements carry `data-testid` attributes
+## Database Schema (SQLite — `/app/backend/tradelens.db`)
+- **watchlist**(id, symbol UNIQUE, created_at)
+- **trades**(id, trade_date, symbol, entry_price, exit_price, quantity, notes)
+- **settings**(id, capital, risk_per_trade, preferred_timeframe) — single row keyed id=1
+
+## REST API
+- `GET /api/health`
+- `GET/POST/DELETE /api/watchlist` · `DELETE /api/watchlist/{symbol}` (returns enriched rows joining static market data)
+- `GET/POST /api/trades` · `DELETE /api/trades/{id}` (derives `pnl` + `side` on read; SHORT pnl = (entry−exit)*qty)
+- `GET/PUT /api/settings`
+- `GET /api/market-summary` (indices, todaysFocus, status, asOf)
+- `GET /api/opportunities`
+- `GET /api/stock/{symbol}` (curated for RELIANCE/TATAMOTORS/ADANIENT/ASIANPAINT, synthesized for others)
+- `GET /api/stocks?q=` (search for header dropdown)
+
+## Implemented Features
+### v0.1 (Feb 12, 2026) — Frontend MVP
+- Dashboard, Watchlist, Journal, Settings pages
+- Header (logo · live stock search · refresh · settings)
+- Sidebar with mobile drawer, market ticker
+- Recharts line chart with S/R reference lines and AI insight text
+
+### v1.0 (Feb 12, 2026) — Backend integration
+- FastAPI + SQLAlchemy + SQLite backend, seeded default watchlist
+- Service + hook layer replaces all mock JSON imports
+- Add/remove watchlist symbols from header search and `/watchlist`
+- Trading Journal — add trade dialog (persisted to SQLite), delete trades
+- Settings — capital, risk-per-trade, timeframe persisted server-side
+- Loading spinners, empty states, error states with retry buttons on every data panel
+- React Query retry:1 for queries & mutations
+- Refresh button invalidates all React Query caches
 
 ## Prioritized Backlog
-### P1 (near-term polish)
-- Persist Settings + Watchlist to localStorage
-- Trading Journal: add/edit trade modal with local persistence
-- Global keyboard shortcuts (`/` search, `g d` dashboard, etc.)
+### P1
+- Position sizing calculator using capital × risk in the New Trade dialog
+- Journal filters (date range, symbol) + CSV export
+- Optimistic UI for watchlist add/remove
 
-### P2 (nice to have)
+### P2
 - Sector heatmap widget
-- Candlestick chart mode (lightweight-charts) with volume histogram
-- Alert builder (client-side rule engine over mock data)
-- CSV export of watchlist and journal
+- Candlestick chart mode with volume histogram
+- Alert builder (client-side rules over market data)
+- Persist chart's selected symbol per user
 
-### P3 (future — needs backend)
+### P3 (needs external data)
 - Live NSE/BSE data via broker/API
-- Auth + user-owned watchlists and journals
+- Auth + per-user watchlists and journals
 - AI insights via LLM with real market context
 
-## Users
-- **Day trader**: fast scanning of setups, momentum, and levels
-- **Swing trader**: watchlist + journal to review setups over days
-- **Learner**: dashboard reveals what a professional cockpit looks like
-
 ## Known Constraints
-- All data is MOCKED — refresh only jitters a timestamp; prices are static
-- No persistence — settings resets on reload
-- Chart is intraday-only regardless of timeframe chip selection (visual only)
+- Market/opportunities/stock endpoints serve static seed values (intentional for MVP)
+- No auth — a single global settings row & shared watchlist/trades
+- Recharts logs a benign `width(-1)/height(-1)` warning on first mount

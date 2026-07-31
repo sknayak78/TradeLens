@@ -12,9 +12,14 @@ router = APIRouter(prefix="/trades", tags=["trades"])
 
 
 def _to_out(t: Trade) -> TradeOut:
-    side = "LONG" if t.exit_price >= t.entry_price else "SHORT"
-    pnl = round((t.exit_price - t.entry_price) * t.quantity, 2)
-    # If user recorded a SHORT via ordering: keep pnl sign-neutral by absolute direction.
+    # If exit >= entry, treat as LONG (buy then sell higher).
+    # Otherwise treat as SHORT (sell high, buy back lower is a profit).
+    if t.exit_price >= t.entry_price:
+        side = "LONG"
+        pnl = round((t.exit_price - t.entry_price) * t.quantity, 2)
+    else:
+        side = "SHORT"
+        pnl = round((t.entry_price - t.exit_price) * t.quantity, 2)
     return TradeOut(
         id=t.id,
         trade_date=t.trade_date,
