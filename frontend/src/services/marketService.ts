@@ -1,11 +1,11 @@
 import { api } from "@/services/api";
 import type {
-  Opportunity,
-  Insight,
   MarketSnapshot,
   TodaysFocusItem,
   Stock,
   Trend,
+  Insight,
+  Ranking,
 } from "@/types";
 
 export interface MarketSummary {
@@ -20,6 +20,19 @@ export interface StockDetail extends Stock {
   resistance: number;
   aiInsight: string;
   series: { t: string; v: number }[];
+  // Analysis
+  strengthScore: number;
+  stars: number;
+  classification: string;
+  tradeSetup:
+    | "Momentum"
+    | "Breakout"
+    | "Pullback"
+    | "Trend Continuation"
+    | "Consolidation";
+  riskLevel: "Low" | "Medium" | "High";
+  suggestedAction: "Watch" | "Buy on Breakout" | "Wait" | "Avoid";
+  insight: string;
 }
 
 export interface StockSummary {
@@ -37,8 +50,8 @@ export const marketService = {
     return data;
   },
 
-  opportunities: async (): Promise<Opportunity[]> => {
-    const { data } = await api.get<Opportunity[]>("/opportunities");
+  opportunities: async (): Promise<Ranking[]> => {
+    const { data } = await api.get<Ranking[]>("/opportunities");
     return data;
   },
 

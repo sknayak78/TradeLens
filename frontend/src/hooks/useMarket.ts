@@ -4,7 +4,7 @@ import {
   MarketSummary,
   StockDetail,
 } from "@/services/marketService";
-import type { Opportunity } from "@/types";
+import type { Ranking } from "@/types";
 
 export const MARKET_SUMMARY_KEY = ["market", "summary"] as const;
 export const OPPORTUNITIES_KEY = ["market", "opportunities"] as const;
@@ -17,12 +17,15 @@ export function useMarketSummary(): UseQueryResult<MarketSummary, Error> {
   });
 }
 
-export function useOpportunities(): UseQueryResult<Opportunity[], Error> {
+export function useRankings(): UseQueryResult<Ranking[], Error> {
   return useQuery({
     queryKey: OPPORTUNITIES_KEY,
     queryFn: marketService.opportunities,
   });
 }
+
+// Legacy alias — kept so nothing else breaks.
+export const useOpportunities = useRankings;
 
 export function useStock(symbol: string): UseQueryResult<StockDetail, Error> {
   return useQuery({

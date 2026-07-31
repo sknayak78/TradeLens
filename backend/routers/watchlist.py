@@ -6,17 +6,18 @@ from sqlalchemy import select
 
 from database import get_db
 from models import WatchlistItem
-from schemas import WatchlistCreate, WatchlistEnriched
+from schemas import WatchlistCreate, WatchlistAnalysis
 from seed_data import STOCKS_BY_SYMBOL
+from analysis.service import service as analysis_service
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
 
-def _enrich(symbol: str) -> WatchlistEnriched:
+def _enrich(symbol: str) -> WatchlistAnalysis:
     stock = STOCKS_BY_SYMBOL.get(symbol)
     if not stock:
         # Unknown symbol — return minimal placeholder row so UI doesn't break.
-        return WatchlistEnriched(
+        return WatchlistAnalysis(
             symbol=symbol,
             name=symbol,
             price=0.0,
@@ -26,8 +27,14 @@ def _enrich(symbol: str) -> WatchlistEnriched:
             score=0,
             trend="neutral",
             changePct=0.0,
+            strengthScore=0,
+            stars=2,
+            tradeSetup="Consolidation",
+            riskLevel="High",
+            suggestedAction="Avoid",
         )
-    return WatchlistEnriched(
+    analysis = analysis_service.analyse(stock)
+    return WatchlistAnalysis(
         symbol=stock["symbol"],
         name=stock["name"],
         price=stock["price"],
@@ -37,17 +44,22 @@ def _enrich(symbol: str) -> WatchlistEnriched:
         score=stock["score"],
         trend=stock["trend"],
         changePct=stock["changePct"],
+        strengthScore=analysis.strength_score,
+        stars=analysis.stars,
+        tradeSetup=analysis.trade_setup,
+        riskLevel=analysis.risk_level,
+        suggestedAction=analysis.suggested_action,
     )
 
 
-@router.get("", response_model=List[WatchlistEnriched])
-def list_watchlist(db: Session = Depends(get_db)) -> List[WatchlistEnriched]:
+@router.get("", response_model=List[WatchlistAnalysis])
+def list_watchlist(db: Session = Depends(get_db)) -> List[WatchlistAnalysis]:
     rows = db.scalars(select(WatchlistItem).order_by(WatchlistItem.created_at.asc())).all()
     return [_enrich(r.symbol) for r in rows]
 
 
-@router.post("", response_model=WatchlistEnriched, status_code=status.HTTP_201_CREATED)
-def add_watchlist(payload: WatchlistCreate, db: Session = Depends(get_db)) -> WatchlistEnriched:
+@router.post("", response_model=WatchlistAnalysis, status_code=status.HTTP_201_CREATED)
+def add_watchlist(payload: WatchlistCreate, db: Session = Depends(get_db)) -> WatchlistAnalysis:
     symbol = payload.symbol.strip().upper()
     if not symbol:
         raise HTTPException(status_code=400, detail="Symbol is required")

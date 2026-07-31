@@ -1,4 +1,4 @@
-"""Market data endpoints — served from static seed data."""
+"""Market data endpoints — served from static seed data + analysis service."""
 from datetime import datetime, timezone
 from typing import List
 from fastapi import APIRouter, HTTPException
@@ -7,7 +7,7 @@ from schemas import (
     MarketSummary,
     IndexItem,
     TodaysFocusItem,
-    Opportunity,
+    Ranking,
     StockDetail,
     StockSummary,
     SeriesPoint,
@@ -20,6 +20,7 @@ from seed_data import (
     INSIGHTS,
     synthesize_insight,
 )
+from analysis.service import service as analysis_service
 
 router = APIRouter(tags=["market"])
 
@@ -59,25 +60,58 @@ def market_summary() -> MarketSummary:
     )
 
 
-@router.get("/opportunities", response_model=List[Opportunity])
-def opportunities() -> List[Opportunity]:
-    out: List[Opportunity] = []
-    for o in OPPORTUNITIES:
-        stock = STOCKS_BY_SYMBOL.get(o["symbol"])
-        if not stock:
-            continue
-        out.append(
-            Opportunity(
-                symbol=stock["symbol"],
-                name=stock["name"],
-                score=o["score"],
-                trend=stock["trend"],
-                price=stock["price"],
-                changePct=stock["changePct"],
-                reason=o["reason"],
-            )
+@router.get("/opportunities", response_model=List[Ranking])
+def opportunities() -> List[Ranking]:
+    """Today's Rankings — analysis-driven leaderboard.
+
+    Every stock is analysed by StockAnalysisService; rows are sorted by
+    strength score descending and re-ranked. Curated 'reason' strings from
+    the seed keep the human context.
+    """
+    reason_by_symbol = {o["symbol"]: o["reason"] for o in OPPORTUNITIES}
+
+    rows: List[dict] = []
+    for symbol, stock in STOCKS_BY_SYMBOL.items():
+        analysis = analysis_service.analyse(stock)
+        rows.append({
+            "symbol": symbol,
+            "name": stock["name"],
+            "price": stock["price"],
+            "changePct": stock["changePct"],
+            "trend": stock["trend"],
+            "analysis": analysis,
+        })
+
+    rows.sort(
+        key=lambda r: (r["analysis"].strength_score, r["price"]),
+        reverse=True,
+    )
+    rows = rows[:10]
+
+    result: List[Ranking] = []
+    for idx, r in enumerate(rows, start=1):
+        a = r["analysis"]
+        reason = reason_by_symbol.get(
+            r["symbol"],
+            a.classification + " — " + a.trade_setup,
         )
-    return out
+        result.append(Ranking(
+            rank=idx,
+            symbol=r["symbol"],
+            name=r["name"],
+            price=r["price"],
+            changePct=r["changePct"],
+            strengthScore=a.strength_score,
+            stars=a.stars,
+            classification=a.classification,
+            trend=a.trend,
+            tradeSetup=a.trade_setup,
+            riskLevel=a.risk_level,
+            suggestedAction=a.suggested_action,
+            insight=a.insight,
+            reason=reason,
+        ))
+    return result
 
 
 @router.get("/stock/{symbol}", response_model=StockDetail)
@@ -88,6 +122,8 @@ def stock_detail(symbol: str) -> StockDetail:
         raise HTTPException(status_code=404, detail=f"Stock {symbol} not found")
 
     insight = INSIGHTS.get(symbol) or synthesize_insight(symbol)
+    analysis = analysis_service.analyse(stock)
+
     return StockDetail(
         symbol=stock["symbol"],
         name=stock["name"],
@@ -104,4 +140,11 @@ def stock_detail(symbol: str) -> StockDetail:
         resistance=insight["resistance"],
         aiInsight=insight["aiInsight"],
         series=[SeriesPoint(**p) for p in insight["series"]],
+        strengthScore=analysis.strength_score,
+        stars=analysis.stars,
+        classification=analysis.classification,
+        tradeSetup=analysis.trade_setup,
+        riskLevel=analysis.risk_level,
+        suggestedAction=analysis.suggested_action,
+        insight=analysis.insight,
     )

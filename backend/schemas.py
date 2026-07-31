@@ -138,3 +138,47 @@ class StockDetail(BaseModel):
     resistance: float
     aiInsight: str
     series: List[SeriesPoint]
+    # Analysis fields
+    strengthScore: int
+    stars: int
+    classification: str
+    tradeSetup: str
+    riskLevel: Literal["Low", "Medium", "High"]
+    suggestedAction: str
+    insight: str
+
+
+class Ranking(BaseModel):
+    """Row in the 'Today's Rankings' table."""
+    rank: int
+    symbol: str
+    name: str
+    price: float
+    changePct: float
+    strengthScore: int
+    stars: int
+    classification: str
+    trend: Literal["bullish", "bearish", "neutral"]
+    tradeSetup: str
+    riskLevel: Literal["Low", "Medium", "High"]
+    suggestedAction: str
+    insight: str
+    reason: str
+
+
+class WatchlistAnalysis(BaseModel):
+    """Watchlist row enriched with analysis for badges on the dashboard."""
+    symbol: str
+    name: str
+    price: float
+    rsi: float
+    ema20: float
+    vwap: float
+    score: int
+    trend: Literal["bullish", "bearish", "neutral"]
+    changePct: float
+    strengthScore: int
+    stars: int
+    tradeSetup: str
+    riskLevel: Literal["Low", "Medium", "High"]
+    suggestedAction: str

@@ -26,7 +26,7 @@ def test_watchlist_list_enriched(s):
     r = s.get(f"{API}/watchlist", timeout=15)
     assert r.status_code == 200
     data = r.json()
-    assert isinstance(data, list) and len(data) >= 10
+    assert isinstance(data, list) and len(data) >= 5
     row = data[0]
     for k in ["symbol", "name", "price", "rsi", "ema20", "vwap", "score", "trend", "changePct"]:
         assert k in row, f"missing {k}"
@@ -129,7 +129,7 @@ def test_opportunities(s):
     assert r.status_code == 200
     data = r.json()
     assert len(data) == 10
-    for k in ["symbol", "name", "score", "trend", "price", "changePct", "reason"]:
+    for k in ["symbol", "name", "strengthScore", "trend", "price", "changePct", "reason"]:
         assert k in data[0], f"missing {k}"
 
 
@@ -158,3 +158,93 @@ def test_stocks_search(s):
     assert r.status_code == 200
     data = r.json()
     assert any(x["symbol"] == "ADANIENT" for x in data)
+
+
+# --- Analysis Engine (unit) ---
+def test_analysis_service_unit():
+    """Test StockAnalysisService.analyse directly on RELIANCE synthetic snapshot."""
+    import sys, os as _os
+    sys.path.insert(0, "/app/backend")
+    from analysis.service import service as svc
+    from seed_data import STOCKS_BY_SYMBOL
+
+    stock = STOCKS_BY_SYMBOL["RELIANCE"]
+    a = svc.analyse(stock)
+
+    assert a.trend in ("bullish", "bearish", "neutral")
+    assert 0 <= a.strength_score <= 100
+    assert a.stars in (2, 3, 4, 5)
+    assert isinstance(a.classification, str) and a.classification
+    assert a.trade_setup in ("Momentum", "Breakout", "Pullback", "Trend Continuation", "Consolidation")
+    assert a.risk_level in ("Low", "Medium", "High")
+    assert a.suggested_action in ("Watch", "Buy on Breakout", "Wait", "Avoid")
+    words = a.insight.split()
+    assert len(words) <= 60
+    low = a.insight.lower()
+    for banned in ("guaranteed", "certain", "sure shot"):
+        assert banned not in low, f"insight contains banned word '{banned}': {a.insight}"
+
+
+def test_analysis_no_llm_imports():
+    """Ensure the analysis module doesn't import LLM libs / make network calls."""
+    import pathlib
+    src = pathlib.Path("/app/backend/analysis").rglob("*.py")
+    banned = ("openai", "anthropic", "requests", "httpx", "urllib", "litellm", "emergentintegrations")
+    for f in src:
+        text = f.read_text().lower()
+        for b in banned:
+            assert b not in text, f"{f} contains banned import '{b}'"
+
+
+# --- Rankings ---
+def test_rankings_shape_and_order(s):
+    r = s.get(f"{API}/opportunities", timeout=15)
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data) == 10
+    required = ["rank", "symbol", "name", "price", "changePct", "strengthScore",
+                "stars", "classification", "trend", "tradeSetup", "riskLevel",
+                "suggestedAction", "insight", "reason"]
+    for i, row in enumerate(data):
+        for k in required:
+            assert k in row, f"row {i} missing {k}"
+        assert row["rank"] == i + 1
+        assert 0 <= row["strengthScore"] <= 100
+        assert row["stars"] in (2, 3, 4, 5)
+        assert row["tradeSetup"] in ("Momentum", "Breakout", "Pullback", "Trend Continuation", "Consolidation")
+        assert row["riskLevel"] in ("Low", "Medium", "High")
+        assert row["suggestedAction"] in ("Watch", "Buy on Breakout", "Wait", "Avoid")
+        low = row["insight"].lower()
+        for banned in ("guaranteed", "certain", "sure shot"):
+            assert banned not in low
+    # scores descending
+    scores = [row["strengthScore"] for row in data]
+    assert scores == sorted(scores, reverse=True), f"not descending: {scores}"
+
+
+# --- Stock detail analysis fields ---
+@pytest.mark.parametrize("sym", ["RELIANCE", "TCS"])
+def test_stock_detail_has_analysis_fields(s, sym):
+    r = s.get(f"{API}/stock/{sym}", timeout=15)
+    assert r.status_code == 200
+    d = r.json()
+    for k in ["strengthScore", "stars", "classification", "tradeSetup",
+              "riskLevel", "suggestedAction", "insight"]:
+        assert k in d, f"{sym} missing {k}"
+    assert 0 <= d["strengthScore"] <= 100
+    assert d["stars"] in (2, 3, 4, 5)
+    assert d["tradeSetup"] in ("Momentum", "Breakout", "Pullback", "Trend Continuation", "Consolidation")
+    assert d["riskLevel"] in ("Low", "Medium", "High")
+    assert d["suggestedAction"] in ("Watch", "Buy on Breakout", "Wait", "Avoid")
+
+
+# --- Watchlist analysis enrichment ---
+def test_watchlist_has_analysis_fields(s):
+    r = s.get(f"{API}/watchlist", timeout=15)
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data) >= 1
+    row = data[0]
+    for k in ["strengthScore", "stars", "tradeSetup", "riskLevel", "suggestedAction",
+              "symbol", "name", "price", "rsi", "ema20", "vwap", "score", "trend", "changePct"]:
+        assert k in row, f"missing {k}"

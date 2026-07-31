@@ -1,4 +1,12 @@
 export type Trend = "bullish" | "bearish" | "neutral";
+export type RiskLevel = "Low" | "Medium" | "High";
+export type TradeSetup =
+  | "Momentum"
+  | "Breakout"
+  | "Pullback"
+  | "Trend Continuation"
+  | "Consolidation";
+export type SuggestedAction = "Watch" | "Buy on Breakout" | "Wait" | "Avoid";
 
 export interface Stock {
   symbol: string;
@@ -14,15 +22,25 @@ export interface Stock {
   sector: string;
 }
 
-export interface Opportunity {
+export interface Ranking {
+  rank: number;
   symbol: string;
   name: string;
-  score: number;
-  trend: Trend;
   price: number;
   changePct: number;
+  strengthScore: number;
+  stars: number;
+  classification: string;
+  trend: Trend;
+  tradeSetup: TradeSetup;
+  riskLevel: RiskLevel;
+  suggestedAction: SuggestedAction;
+  insight: string;
   reason: string;
 }
+
+// Kept for legacy usage — Opportunity is now the Ranking payload.
+export type Opportunity = Ranking;
 
 export interface WatchItem {
   symbol: string;
@@ -34,6 +52,11 @@ export interface WatchItem {
   score: number;
   trend: Trend;
   changePct: number;
+  strengthScore: number;
+  stars: number;
+  tradeSetup: TradeSetup;
+  riskLevel: RiskLevel;
+  suggestedAction: SuggestedAction;
 }
 
 export interface TodaysFocusItem {

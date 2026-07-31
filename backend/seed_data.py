@@ -55,6 +55,50 @@ STOCKS: List[Dict] = [
 STOCKS_BY_SYMBOL: Dict[str, Dict] = {s["symbol"]: s for s in STOCKS}
 
 
+def _augment_with_intraday_fields() -> None:
+    """Add ``day_high`` and ``avg_volume`` to every stock so the analysis
+    engine has consistent inputs. Deterministic based on existing fields.
+    """
+    for s in STOCKS:
+        change_pct = s["changePct"]
+        price = s["price"]
+        volume = s["volume"]
+        rsi = s["rsi"]
+
+        # Day high: momentum stocks (high RSI + strong close) sit near the
+        # high; laggards and weak stocks sit further away. Only strong stocks
+        # will trigger the 'within 1% of day high' rule.
+        if rsi >= 68 and change_pct >= 1.5:
+            high_mult = 1.003
+        elif rsi >= 60 and change_pct >= 1.0:
+            high_mult = 1.007
+        elif change_pct >= 0.5:
+            high_mult = 1.013
+        elif change_pct >= 0:
+            high_mult = 1.020
+        else:
+            high_mult = 1.025 + min(abs(change_pct) * 0.003, 0.02)
+        s["day_high"] = round(price * high_mult, 2)
+
+        # Average volume: strong bullish moves trade well above average,
+        # neutral days sit near average, weak days trade below average
+        # (which fails the volume rule).
+        if change_pct >= 2.0 and rsi >= 60:
+            avg_mult = 0.65
+        elif change_pct >= 1.0:
+            avg_mult = 0.85
+        elif change_pct >= 0.3:
+            avg_mult = 1.02
+        elif change_pct >= 0:
+            avg_mult = 1.10
+        else:
+            avg_mult = 1.25
+        s["avg_volume"] = int(volume * avg_mult)
+
+
+_augment_with_intraday_fields()
+
+
 DEFAULT_WATCHLIST_SYMBOLS: List[str] = [
     "RELIANCE", "TCS", "HDFCBANK", "INFY", "TATAMOTORS",
     "BHARTIARTL", "SBIN", "ITC", "MARUTI", "ADANIENT",

@@ -12,10 +12,10 @@ import {
 import { useStock } from "@/hooks/useMarket";
 import { useWatchlist } from "@/hooks/useWatchlist";
 import PanelCard from "@/components/panels/PanelCard";
-import TrendBadge from "@/components/panels/TrendBadge";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import EmptyState from "@/components/common/EmptyState";
+import AnalysisBadges, { Stars, ActionPill } from "@/components/panels/AnalysisBadges";
 import { Sparkles, TrendingUp, TrendingDown } from "lucide-react";
 
 interface ChartCardProps {
@@ -240,8 +240,16 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
 
           {/* Stats + insight */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatTile label="Trend">
-              <TrendBadge trend={stock.trend} size="sm" />
+            <StatTile label="Strength Score">
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-white font-mono tabular-nums text-sm font-semibold"
+                  data-testid="detail-strength-score"
+                >
+                  {stock.strengthScore}
+                </span>
+                <Stars count={stock.stars} testId="detail-stars" />
+              </div>
             </StatTile>
             <StatTile label="Support">
               <span className="text-[#26a69a] font-mono tabular-nums text-sm inline-flex items-center gap-1">
@@ -255,11 +263,28 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                 {stock.resistance.toLocaleString("en-IN")}
               </span>
             </StatTile>
-            <StatTile label="RSI (14)">
-              <span className="text-white font-mono tabular-nums text-sm">
-                {stock.rsi.toFixed(1)}
-              </span>
+            <StatTile label="Suggested Action">
+              <ActionPill
+                action={stock.suggestedAction}
+                testId="detail-suggested-action"
+              />
             </StatTile>
+          </div>
+
+          {/* Three analysis badges */}
+          <div
+            className="rounded-[4px] border border-[#2a2e39] bg-[#131722] px-3 py-2 flex items-center justify-between gap-3 flex-wrap"
+            data-testid="detail-badges"
+          >
+            <div className="text-[10px] uppercase tracking-widest text-[#787b86]">
+              {stock.classification}
+            </div>
+            <AnalysisBadges
+              trend={stock.trend}
+              setup={stock.tradeSetup}
+              risk={stock.riskLevel}
+              testIdPrefix="detail-badge"
+            />
           </div>
 
           <div
@@ -271,10 +296,13 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
             </span>
             <div>
               <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
-                AI Insight
+                Insight
               </div>
-              <p className="text-sm text-[#d1d4dc] leading-relaxed">
-                {stock.aiInsight}
+              <p
+                className="text-sm text-[#d1d4dc] leading-relaxed"
+                data-testid="detail-insight"
+              >
+                {stock.insight}
               </p>
             </div>
           </div>
