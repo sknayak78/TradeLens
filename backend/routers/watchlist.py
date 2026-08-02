@@ -1,4 +1,4 @@
-"""Watchlist endpoints — persistent user watchlist joined with static market data."""
+"""Watchlist endpoints — persistent user watchlist joined with market data."""
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -7,17 +7,20 @@ from sqlalchemy import select
 from database import get_db
 from models import WatchlistItem
 from schemas import WatchlistCreate, WatchlistAnalysis
-from seed_data import STOCKS_BY_SYMBOL
 from analysis.service import service as analysis_service
+from services.market_data_service import market_data_service
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
 
 def _enrich(symbol: str) -> WatchlistAnalysis:
-    stock = STOCKS_BY_SYMBOL.get(symbol)
+    result = market_data_service.get_stock(symbol)
+    stock = result.data
+    metadata = result.metadata.to_api_dict()
     if not stock:
         # Unknown symbol — return minimal placeholder row so UI doesn't break.
         return WatchlistAnalysis(
+            **metadata,
             symbol=symbol,
             name=symbol,
             price=0.0,
@@ -35,6 +38,7 @@ def _enrich(symbol: str) -> WatchlistAnalysis:
         )
     analysis = analysis_service.analyse(stock)
     return WatchlistAnalysis(
+        **metadata,
         symbol=stock["symbol"],
         name=stock["name"],
         price=stock["price"],

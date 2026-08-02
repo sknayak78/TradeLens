@@ -1,5 +1,4 @@
-"""Market data endpoints — served from static seed data + analysis service."""
-from datetime import datetime, timezone
+"""Market-data endpoints backed by the cached provider service."""
 from typing import List
 from fastapi import APIRouter, HTTPException
 
@@ -12,15 +11,8 @@ from schemas import (
     StockSummary,
     SeriesPoint,
 )
-from seed_data import (
-    MARKET_INDICES,
-    TODAYS_FOCUS,
-    OPPORTUNITIES,
-    STOCKS_BY_SYMBOL,
-    INSIGHTS,
-    synthesize_insight,
-)
 from analysis.service import service as analysis_service
+from services.market_data_service import market_data_service
 
 router = APIRouter(tags=["market"])
 
@@ -28,17 +20,12 @@ router = APIRouter(tags=["market"])
 @router.get("/stocks", response_model=List[StockSummary])
 def list_stocks(q: str = "", limit: int = 20) -> List[StockSummary]:
     """Return the stock catalog. Optional `q` filters by symbol or name."""
-    query = q.strip().lower()
-    if query:
-        matches = [
-            s for s in STOCKS_BY_SYMBOL.values()
-            if query in s["symbol"].lower() or query in s["name"].lower()
-        ]
-    else:
-        matches = list(STOCKS_BY_SYMBOL.values())
-    matches = matches[: max(1, min(limit, 100))]
+    result = market_data_service.search_stocks(q, limit)
+    matches = result.data
+    metadata = result.metadata.to_api_dict()
     return [
         StockSummary(
+            **metadata,
             symbol=s["symbol"],
             name=s["name"],
             price=s["price"],
@@ -52,11 +39,13 @@ def list_stocks(q: str = "", limit: int = 20) -> List[StockSummary]:
 
 @router.get("/market-summary", response_model=MarketSummary)
 def market_summary() -> MarketSummary:
+    result = market_data_service.get_market_summary()
+    summary = result.data
     return MarketSummary(
-        indices=[IndexItem(**i) for i in MARKET_INDICES],
-        todaysFocus=[TodaysFocusItem(**f) for f in TODAYS_FOCUS],
+        **result.metadata.to_api_dict(),
+        indices=[IndexItem(**i) for i in summary["indices"]],
+        todaysFocus=[TodaysFocusItem(**f) for f in summary["todaysFocus"]],
         status="open",
-        asOf=datetime.now(timezone.utc),
     )
 
 
@@ -68,10 +57,16 @@ def opportunities() -> List[Ranking]:
     strength score descending and re-ranked. Curated 'reason' strings from
     the seed keep the human context.
     """
-    reason_by_symbol = {o["symbol"]: o["reason"] for o in OPPORTUNITIES}
+    opportunity_result = market_data_service.get_opportunities()
+    reason_by_symbol = {
+        o["symbol"]: o["reason"] for o in opportunity_result.data
+    }
+    stock_result = market_data_service.get_all_stocks()
+    metadata = stock_result.metadata.to_api_dict()
 
     rows: List[dict] = []
-    for symbol, stock in STOCKS_BY_SYMBOL.items():
+    for stock in stock_result.data:
+        symbol = stock["symbol"]
         analysis = analysis_service.analyse(stock)
         rows.append({
             "symbol": symbol,
@@ -96,6 +91,7 @@ def opportunities() -> List[Ranking]:
             a.classification + " — " + a.trade_setup,
         )
         result.append(Ranking(
+            **metadata,
             rank=idx,
             symbol=r["symbol"],
             name=r["name"],
@@ -117,14 +113,16 @@ def opportunities() -> List[Ranking]:
 @router.get("/stock/{symbol}", response_model=StockDetail)
 def stock_detail(symbol: str) -> StockDetail:
     symbol = symbol.strip().upper()
-    stock = STOCKS_BY_SYMBOL.get(symbol)
+    stock_result = market_data_service.get_stock(symbol)
+    stock = stock_result.data
     if not stock:
         raise HTTPException(status_code=404, detail=f"Stock {symbol} not found")
 
-    insight = INSIGHTS.get(symbol) or synthesize_insight(symbol)
+    insight = market_data_service.get_stock_insight(symbol).data
     analysis = analysis_service.analyse(stock)
 
     return StockDetail(
+        **stock_result.metadata.to_api_dict(),
         symbol=stock["symbol"],
         name=stock["name"],
         price=stock["price"],

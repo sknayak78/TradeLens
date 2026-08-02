@@ -4,6 +4,13 @@ from typing import Optional, List, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class MarketMetadata(BaseModel):
+    provider: str
+    cached: bool
+    asOf: datetime
+    marketStatus: Literal["OPEN", "PRE_OPEN", "CLOSED", "WEEKEND"]
+
+
 # ---------- Watchlist ----------
 
 class WatchlistCreate(BaseModel):
@@ -96,6 +103,9 @@ class MarketSummary(BaseModel):
     todaysFocus: List[TodaysFocusItem]
     status: Literal["open", "closed"] = "open"
     asOf: datetime
+    provider: str
+    cached: bool
+    marketStatus: Literal["OPEN", "PRE_OPEN", "CLOSED", "WEEKEND"]
 
 
 class Opportunity(BaseModel):
@@ -113,7 +123,7 @@ class SeriesPoint(BaseModel):
     v: float
 
 
-class StockSummary(BaseModel):
+class StockSummary(MarketMetadata):
     symbol: str
     name: str
     price: float
@@ -122,7 +132,7 @@ class StockSummary(BaseModel):
     sector: str
 
 
-class StockDetail(BaseModel):
+class StockDetail(MarketMetadata):
     symbol: str
     name: str
     price: float
@@ -148,7 +158,7 @@ class StockDetail(BaseModel):
     insight: str
 
 
-class Ranking(BaseModel):
+class Ranking(MarketMetadata):
     """Row in the 'Today's Rankings' table."""
     rank: int
     symbol: str
@@ -166,7 +176,7 @@ class Ranking(BaseModel):
     reason: str
 
 
-class WatchlistAnalysis(BaseModel):
+class WatchlistAnalysis(MarketMetadata):
     """Watchlist row enriched with analysis for badges on the dashboard."""
     symbol: str
     name: str

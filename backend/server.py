@@ -12,11 +12,10 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, APIRouter
 from starlette.middleware.cors import CORSMiddleware
-from sqlalchemy import select
 
 from database import init_db, SessionLocal
 from models import WatchlistItem
-from seed_data import DEFAULT_WATCHLIST_SYMBOLS
+from services.market_data_service import market_data_service
 from routers import watchlist as watchlist_router
 from routers import trades as trades_router
 from routers import settings as settings_router
@@ -40,10 +39,11 @@ def _seed_default_watchlist() -> None:
         existing_count = db.query(WatchlistItem).count()
         if existing_count > 0:
             return
-        for sym in DEFAULT_WATCHLIST_SYMBOLS:
+        default_symbols = market_data_service.get_default_watchlist_symbols().data
+        for sym in default_symbols:
             db.add(WatchlistItem(symbol=sym))
         db.commit()
-        logger.info("Seeded %d default watchlist symbols", len(DEFAULT_WATCHLIST_SYMBOLS))
+        logger.info("Seeded %d default watchlist symbols", len(default_symbols))
     finally:
         db.close()
 
@@ -69,6 +69,12 @@ def root() -> dict:
 @api_router.get("/health")
 def health() -> dict:
     return {"status": "healthy"}
+
+
+@api_router.get("/provider-status")
+def provider_status() -> dict:
+    """Return operational state for the active market-data provider."""
+    return market_data_service.provider_status()
 
 
 api_router.include_router(watchlist_router.router)

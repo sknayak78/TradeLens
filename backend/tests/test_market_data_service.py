@@ -1,0 +1,107 @@
+"""Unit tests for provider selection, cache behaviour, and safe fallback."""
+from __future__ import annotations
+
+from typing import Any
+
+from services.cache import InMemoryTTLCache
+from services.market_data_provider import MarketDataProvider
+from services.market_data_service import MarketDataService
+from services.providers.seed_provider import SeedProvider
+from services.providers.yahoo_finance_provider import YahooFinanceProvider
+from services.symbol_mapper import SymbolMapper
+
+
+class StubProvider(MarketDataProvider):
+    name = "stub"
+
+    def __init__(self, value: dict[str, Any] | None = None, error: Exception | None = None):
+        self.value = value or {"symbol": "RELIANCE", "price": 100.0}
+        self.error = error
+        self.stock_calls = 0
+
+    def _result(self, value: Any) -> Any:
+        if self.error:
+            raise self.error
+        return value
+
+    def get_market_summary(self):
+        return self._result({"indices": [], "todaysFocus": []})
+
+    def get_stock(self, symbol: str):
+        self.stock_calls += 1
+        return self._result({**self.value, "symbol": symbol})
+
+    def get_stock_insight(self, symbol: str):
+        return self._result({"support": 1, "resistance": 2, "aiInsight": "test", "series": []})
+
+    def search_stocks(self, query: str, limit: int = 20):
+        return self._result([])
+
+    def get_opportunities(self):
+        return self._result([])
+
+    def get_all_stocks(self):
+        return self._result([])
+
+    def get_default_watchlist_symbols(self):
+        return self._result([])
+
+
+def test_successful_yahoo_fetch_overlays_live_quote(monkeypatch):
+    provider = YahooFinanceProvider(SeedProvider())
+    monkeypatch.setattr(provider, "_quote", lambda symbol: (3001.25, 1.5, 123456))
+
+    stock = provider.get_stock("RELIANCE")
+
+    assert stock is not None
+    assert stock["symbol"] == "RELIANCE"
+    assert stock["price"] == 3001.25
+    assert stock["changePct"] == 1.5
+    assert stock["volume"] == 123456
+    # Sprint 1 deliberately retains compatibility indicators.
+    assert stock["rsi"] == 62.4
+
+
+def test_cache_hit_avoids_second_provider_call():
+    primary = StubProvider()
+    service = MarketDataService(primary, StubProvider(), InMemoryTTLCache(ttl_seconds=30))
+
+    assert service.get_stock("RELIANCE").data["price"] == 100.0
+    assert service.get_stock("RELIANCE").data["price"] == 100.0
+
+    assert primary.stock_calls == 1
+
+
+def test_cache_expiry_fetches_provider_again():
+    now = [0.0]
+    primary = StubProvider()
+    cache = InMemoryTTLCache(ttl_seconds=30, clock=lambda: now[0])
+    service = MarketDataService(primary, StubProvider(), cache)
+
+    service.get_stock("RELIANCE")
+    now[0] = 30.0
+    service.get_stock("RELIANCE")
+
+    assert primary.stock_calls == 2
+
+
+def test_provider_error_falls_back_without_breaking_call(caplog):
+    primary = StubProvider(error=RuntimeError("Yahoo unavailable"))
+    fallback = StubProvider(value={"symbol": "RELIANCE", "price": 99.0})
+    service = MarketDataService(primary, fallback, InMemoryTTLCache(ttl_seconds=30))
+
+    result = service.get_stock("RELIANCE")
+
+    assert result.data["price"] == 99.0
+    assert result.metadata.provider == "stub"
+    assert primary.stock_calls == 1
+    assert fallback.stock_calls == 1
+    assert "market_data.provider_failed_using_fallback" in caplog.text
+
+
+def test_symbol_mapper_uses_nse_suffix_and_explicit_aliases():
+    mapper = SymbolMapper()
+
+    assert mapper.to_yahoo("SBIN") == "SBIN.NS"
+    assert mapper.to_yahoo("infy") == "INFY.NS"
+    assert mapper.to_yahoo("M&M") == "M&M.NS"
