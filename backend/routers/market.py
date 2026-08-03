@@ -61,12 +61,16 @@ def opportunities() -> List[Ranking]:
     reason_by_symbol = {
         o["symbol"]: o["reason"] for o in opportunity_result.data
     }
-    stock_result = market_data_service.get_all_stocks()
-    metadata = stock_result.metadata.to_api_dict()
+    metadata = opportunity_result.metadata.to_api_dict()
 
     rows: List[dict] = []
-    for stock in stock_result.data:
-        symbol = stock["symbol"]
+    for opportunity in opportunity_result.data:
+        symbol = opportunity["symbol"]
+        stock_result = market_data_service.get_stock(symbol)
+        stock = stock_result.data
+        if not stock:
+            continue
+
         analysis = analysis_service.analyse(stock)
         rows.append({
             "symbol": symbol,

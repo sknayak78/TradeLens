@@ -173,6 +173,62 @@ def test_stock_insight_uses_dynamic_ai_insight(monkeypatch):
     assert "120.00" in insight["aiInsight"]
 
 
+def test_opportunities_uses_live_stock_snapshots(monkeypatch):
+    from datetime import datetime, timezone
+
+    from routers.market import opportunities
+    from services.market_data_service import MarketDataMetadata, MarketDataResult, market_data_service
+
+    metadata = MarketDataMetadata(
+        provider="seed",
+        cached=False,
+        as_of=datetime.now(timezone.utc),
+        market_status="OPEN",
+    )
+
+    monkeypatch.setattr(
+        market_data_service,
+        "get_opportunities",
+        lambda: MarketDataResult(
+            data=[{"symbol": "RELIANCE", "reason": "seed reason"}],
+            metadata=metadata,
+        ),
+    )
+    monkeypatch.setattr(
+        market_data_service,
+        "get_stock",
+        lambda symbol: MarketDataResult(
+            data={
+                "symbol": symbol,
+                "name": "Reliance Industries",
+                "price": 100.0,
+                "changePct": 1.2,
+                "score": 75,
+                "trend": "bullish",
+                "rsi": 60.0,
+                "ema20": 90.0,
+                "vwap": 95.0,
+                "volume": 1000,
+                "avg_volume": 800,
+                "day_high": 110.0,
+                "sector": "Energy",
+            },
+            metadata=metadata,
+        ),
+    )
+    monkeypatch.setattr(
+        market_data_service,
+        "get_all_stocks",
+        lambda: (_ for _ in ()).throw(AssertionError("get_all_stocks should not be used")),
+    )
+
+    rows = opportunities()
+
+    assert len(rows) == 1
+    assert rows[0].symbol == "RELIANCE"
+    assert rows[0].strengthScore == 80
+
+
 def test_symbol_mapper_uses_nse_suffix_and_explicit_aliases():
     mapper = SymbolMapper()
 
