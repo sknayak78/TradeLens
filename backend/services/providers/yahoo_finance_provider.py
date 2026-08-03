@@ -7,6 +7,7 @@ from typing import Any
 
 from pandas import Timestamp
 
+from indicators.ema import calculate_latest_ema
 from services.market_data_provider import MarketDataProvider
 from services.providers.seed_provider import SeedProvider
 from services.symbol_mapper import SymbolMapper
@@ -79,6 +80,20 @@ class YahooFinanceProvider(MarketDataProvider):
             points.append({"t": label, "v": round(float(row["Close"]), 2)})
         return points
 
+    @staticmethod
+    def _build_emas(history: Any) -> dict[str, float]:
+        if history is None or history.empty:
+            raise RuntimeError("Yahoo returned no history for EMA calculation")
+        if "Close" not in history:
+            raise RuntimeError("Yahoo history is missing Close prices")
+
+        closes = [float(value) for value in history["Close"].tolist()]
+        return {
+            "ema20": round(calculate_latest_ema(closes, 20), 2),
+            "ema50": round(calculate_latest_ema(closes, 50), 2),
+            "ema200": round(calculate_latest_ema(closes, 200), 2),
+        }
+
     def get_market_summary(self) -> dict[str, Any]:
         summary = self._seed.get_market_summary()
         indices: list[dict[str, Any]] = []
@@ -94,10 +109,19 @@ class YahooFinanceProvider(MarketDataProvider):
         stock = self._seed.get_stock(symbol)
         if stock is None:
             return None
-        price, change_pct, volume = self._quote(
-            self._symbol_mapper.to_yahoo(stock["symbol"])
+
+        yahoo_symbol = self._symbol_mapper.to_yahoo(stock["symbol"])
+        price, change_pct, volume = self._quote(yahoo_symbol)
+        history = self._history(yahoo_symbol, period="2y", interval="1d")
+        emas = self._build_emas(history)
+
+        stock.update(
+            price=price,
+            changePct=change_pct,
+            ema20=emas["ema20"],
+            ema50=emas["ema50"],
+            ema200=emas["ema200"],
         )
-        stock.update(price=price, changePct=change_pct)
         if volume is not None:
             stock["volume"] = volume
         return stock

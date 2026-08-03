@@ -101,6 +101,30 @@ def test_provider_error_falls_back_without_breaking_call(caplog):
     assert "market_data.provider_failed_using_fallback" in caplog.text
 
 
+def test_stock_uses_live_ema_values_from_history(monkeypatch):
+    provider = YahooFinanceProvider(SeedProvider())
+    history = pd.DataFrame(
+        {
+            "Open": [100.0 + i for i in range(20)],
+            "High": [101.0 + i for i in range(20)],
+            "Low": [99.0 + i for i in range(20)],
+            "Close": [100.5 + i for i in range(20)],
+            "Volume": [1000 + i for i in range(20)],
+        },
+        index=pd.date_range("2024-01-01", periods=20, freq="D"),
+    )
+    monkeypatch.setattr(provider, "_history", lambda symbol, period="2d", interval="1d": history)
+    monkeypatch.setattr(provider, "_quote", lambda symbol: (3001.25, 1.5, 123456))
+
+    stock = provider.get_stock("RELIANCE")
+
+    assert stock is not None
+    assert stock["ema20"] == 111.42
+    assert stock["ema50"] == 106.46
+    assert stock["ema200"] == 102.28
+    assert stock["price"] == 3001.25
+
+
 def test_stock_insight_uses_live_historical_close_series(monkeypatch):
     provider = YahooFinanceProvider(SeedProvider())
     history = pd.DataFrame(
