@@ -6,6 +6,7 @@ from typing import Any
 import pandas as pd
 
 from services.cache import InMemoryTTLCache
+from indicators.rsi import calculate_latest_rsi, calculate_rsi
 from services.market_data_provider import MarketDataProvider
 from services.market_data_service import MarketDataService
 from services.providers.seed_provider import SeedProvider
@@ -51,6 +52,17 @@ class StubProvider(MarketDataProvider):
 
 def test_successful_yahoo_fetch_overlays_live_quote(monkeypatch):
     provider = YahooFinanceProvider(SeedProvider())
+    history = pd.DataFrame(
+        {
+            "Open": [100.0 + i for i in range(20)],
+            "High": [101.0 + i for i in range(20)],
+            "Low": [99.0 + i for i in range(20)],
+            "Close": [100.5 + i for i in range(20)],
+            "Volume": [1000 + i for i in range(20)],
+        },
+        index=pd.date_range("2024-01-01", periods=20, freq="D"),
+    )
+    monkeypatch.setattr(provider, "_history", lambda symbol, period="2d", interval="1d": history)
     monkeypatch.setattr(provider, "_quote", lambda symbol: (3001.25, 1.5, 123456))
 
     stock = provider.get_stock("RELIANCE")
@@ -60,8 +72,7 @@ def test_successful_yahoo_fetch_overlays_live_quote(monkeypatch):
     assert stock["price"] == 3001.25
     assert stock["changePct"] == 1.5
     assert stock["volume"] == 123456
-    # Sprint 1 deliberately retains compatibility indicators.
-    assert stock["rsi"] == 62.4
+    assert stock["rsi"] == 100.0
 
 
 def test_cache_hit_avoids_second_provider_call():
@@ -125,6 +136,7 @@ def test_stock_uses_live_ema_values_from_history(monkeypatch):
     assert stock["support"] == 99.0
     assert stock["resistance"] == 120.0
     assert stock["price"] == 3001.25
+    assert stock["rsi"] == 100.0
 
 
 def test_stock_insight_uses_live_historical_close_series(monkeypatch):
@@ -227,6 +239,24 @@ def test_opportunities_uses_live_stock_snapshots(monkeypatch):
     assert len(rows) == 1
     assert rows[0].symbol == "RELIANCE"
     assert rows[0].strengthScore == 80
+
+
+def test_rsi_module_calculates_expected_values():
+    values = [44, 45, 46, 45, 47, 48, 49, 50, 49, 51, 52, 53, 54, 55, 56]
+
+    assert calculate_rsi(values, period=14)[-1] == 100.0
+    assert calculate_latest_rsi(values, period=14) == 100.0
+
+
+def test_provider_falls_back_when_history_missing(monkeypatch):
+    provider = YahooFinanceProvider(SeedProvider())
+    monkeypatch.setattr(provider, "_history", lambda symbol, period="2d", interval="1d": None)
+    monkeypatch.setattr(provider, "_quote", lambda symbol: (3001.25, 1.5, 123456))
+
+    stock = provider.get_stock("RELIANCE")
+
+    assert stock is not None
+    assert stock["rsi"] == 62.4
 
 
 def test_symbol_mapper_uses_nse_suffix_and_explicit_aliases():

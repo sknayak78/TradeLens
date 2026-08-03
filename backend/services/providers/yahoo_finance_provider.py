@@ -8,6 +8,7 @@ from typing import Any
 from pandas import Timestamp
 
 from indicators.ema import calculate_latest_ema
+from indicators.rsi import calculate_latest_rsi
 from services.market_data_provider import MarketDataProvider
 from services.providers.seed_provider import SeedProvider
 from services.symbol_mapper import SymbolMapper
@@ -109,6 +110,16 @@ class YahooFinanceProvider(MarketDataProvider):
         raise RuntimeError("Yahoo history is missing Low/High prices")
 
     @staticmethod
+    def _build_rsi(history: Any, period: int = 14) -> float:
+        if history is None or history.empty:
+            raise RuntimeError("Yahoo returned no history for RSI calculation")
+        if "Close" not in history:
+            raise RuntimeError("Yahoo history is missing Close prices")
+
+        closes = [float(value) for value in history["Close"].tolist()]
+        return round(calculate_latest_rsi(closes, period), 2)
+
+    @staticmethod
     def _build_ai_insight(price: float, ema20: float, support: float, resistance: float) -> str:
         bias = "above" if price >= ema20 else "below"
         return (
@@ -132,23 +143,28 @@ class YahooFinanceProvider(MarketDataProvider):
         if stock is None:
             return None
 
-        yahoo_symbol = self._symbol_mapper.to_yahoo(stock["symbol"])
-        price, change_pct, volume = self._quote(yahoo_symbol)
-        history = self._history(yahoo_symbol, period="2y", interval="1d")
-        emas = self._build_emas(history)
-        support_resistance = self._build_support_resistance(history)
+        try:
+            yahoo_symbol = self._symbol_mapper.to_yahoo(stock["symbol"])
+            price, change_pct, volume = self._quote(yahoo_symbol)
+            history = self._history(yahoo_symbol, period="2y", interval="1d")
+            emas = self._build_emas(history)
+            support_resistance = self._build_support_resistance(history)
+            rsi = self._build_rsi(history)
 
-        stock.update(
-            price=price,
-            changePct=change_pct,
-            ema20=emas["ema20"],
-            ema50=emas["ema50"],
-            ema200=emas["ema200"],
-            support=support_resistance["support"],
-            resistance=support_resistance["resistance"],
-        )
-        if volume is not None:
-            stock["volume"] = volume
+            stock.update(
+                price=price,
+                changePct=change_pct,
+                rsi=rsi,
+                ema20=emas["ema20"],
+                ema50=emas["ema50"],
+                ema200=emas["ema200"],
+                support=support_resistance["support"],
+                resistance=support_resistance["resistance"],
+            )
+            if volume is not None:
+                stock["volume"] = volume
+        except Exception:
+            logger.warning("market_data.yahoo_live_fetch_failed_falling_back_to_seed", exc_info=True)
         return stock
 
     def get_stock_insight(self, symbol: str) -> dict[str, Any]:
@@ -158,27 +174,31 @@ class YahooFinanceProvider(MarketDataProvider):
         if stock is None:
             return insight
 
-        yahoo_symbol = self._symbol_mapper.to_yahoo(stock["symbol"])
-        price, _, _ = self._quote(yahoo_symbol)
-        history = self._history(yahoo_symbol, period="2y", interval="1d")
-        chart_series = self._build_chart_series(history)
-        if not chart_series:
-            raise RuntimeError(f"Yahoo returned no chart points for {yahoo_symbol}")
+        try:
+            yahoo_symbol = self._symbol_mapper.to_yahoo(stock["symbol"])
+            price, _, _ = self._quote(yahoo_symbol)
+            history = self._history(yahoo_symbol, period="2y", interval="1d")
+            chart_series = self._build_chart_series(history)
+            if not chart_series:
+                raise RuntimeError(f"Yahoo returned no chart points for {yahoo_symbol}")
 
-        emas = self._build_emas(history)
-        support_resistance = self._build_support_resistance(history)
+            emas = self._build_emas(history)
+            support_resistance = self._build_support_resistance(history)
 
-        hydrated = deepcopy(insight)
-        hydrated["series"] = chart_series
-        hydrated["support"] = support_resistance["support"]
-        hydrated["resistance"] = support_resistance["resistance"]
-        hydrated["aiInsight"] = self._build_ai_insight(
-            price,
-            emas["ema20"],
-            support_resistance["support"],
-            support_resistance["resistance"],
-        )
-        return hydrated
+            hydrated = deepcopy(insight)
+            hydrated["series"] = chart_series
+            hydrated["support"] = support_resistance["support"]
+            hydrated["resistance"] = support_resistance["resistance"]
+            hydrated["aiInsight"] = self._build_ai_insight(
+                price,
+                emas["ema20"],
+                support_resistance["support"],
+                support_resistance["resistance"],
+            )
+            return hydrated
+        except Exception:
+            logger.warning("market_data.yahoo_insight_fetch_failed_falling_back_to_seed", exc_info=True)
+            return insight
 
     def search_stocks(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
         # Instrument discovery remains deterministic until a licensed master is added.
