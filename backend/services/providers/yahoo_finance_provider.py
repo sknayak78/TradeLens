@@ -144,6 +144,7 @@ class YahooFinanceProvider(MarketDataProvider):
             return None
 
         try:
+            
             yahoo_symbol = self._symbol_mapper.to_yahoo(stock["symbol"])
             price, change_pct, volume = self._quote(yahoo_symbol)
             history = self._history(yahoo_symbol, period="2y", interval="1d")

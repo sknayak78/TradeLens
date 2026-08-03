@@ -12,7 +12,7 @@ class SymbolMapper:
         "INFY": "INFY.NS",
         "ICICIBANK": "ICICIBANK.NS",
         "SBIN": "SBIN.NS",
-        "TATAMOTORS": "TATAMOTORS.NS",
+        "TATAMOTORS": "TMPV.NS",
         "BHARTIARTL": "BHARTIARTL.NS",
         "ADANIENT": "ADANIENT.NS",
         "M&M": "M&M.NS",
