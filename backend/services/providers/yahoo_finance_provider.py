@@ -5,6 +5,8 @@ from copy import deepcopy
 import logging
 from typing import Any
 
+from pandas import Timestamp
+
 from services.market_data_provider import MarketDataProvider
 from services.providers.seed_provider import SeedProvider
 from services.symbol_mapper import SymbolMapper
@@ -13,11 +15,10 @@ logger = logging.getLogger("tradelens.market_data.yahoo")
 
 
 class YahooFinanceProvider(MarketDataProvider):
-    """Overlay current Yahoo quotes on the compatibility seed dataset.
+    """Overlay Yahoo market quotes and historical closes on the compatibility seed dataset.
 
-    Indicators and chart series intentionally remain seed-backed in Sprint 1.
-    The adapter accepts only the existing catalogue, preserving the API's
-    historical 404 behaviour for unknown symbols.
+    Support/resistance and AI insight remain seed-backed to preserve the existing
+    API contract. Only the chart series is now sourced from Yahoo historical closes.
     """
 
     name = "yahoo_finance"
@@ -44,17 +45,39 @@ class YahooFinanceProvider(MarketDataProvider):
         return yf.Ticker(symbol)
 
     @staticmethod
-    def _quote(ticker_symbol: str) -> tuple[float, float, int | None]:
+    def _history(ticker_symbol: str, period: str = "2y", interval: str = "1d"):
         history = YahooFinanceProvider._ticker(ticker_symbol).history(
-            period="2d", interval="1d", auto_adjust=False
+            period=period, interval=interval, auto_adjust=False
         )
         if history is None or history.empty:
             raise RuntimeError(f"Yahoo returned no history for {ticker_symbol}")
+        return history
+
+    @staticmethod
+    def _quote(ticker_symbol: str) -> tuple[float, float, int | None]:
+        history = YahooFinanceProvider._history(ticker_symbol, period="2d", interval="1d")
         close = float(history["Close"].iloc[-1])
         previous = float(history["Close"].iloc[-2]) if len(history.index) > 1 else close
         change_pct = ((close - previous) / previous * 100) if previous else 0.0
         volume = int(history["Volume"].iloc[-1]) if "Volume" in history else None
         return round(close, 2), round(change_pct, 2), volume
+
+    @staticmethod
+    def _build_chart_series(history: Any, max_points: int = 13) -> list[dict[str, Any]]:
+        if history is None or history.empty:
+            raise RuntimeError("Yahoo returned no history for chart series")
+        if "Close" not in history:
+            raise RuntimeError("Yahoo history is missing Close prices")
+
+        points: list[dict[str, Any]] = []
+        for _, row in history.tail(max_points).iterrows():
+            timestamp = row.name
+            if isinstance(timestamp, Timestamp):
+                label = timestamp.strftime("%Y-%m-%d")
+            else:
+                label = str(timestamp)
+            points.append({"t": label, "v": round(float(row["Close"]), 2)})
+        return points
 
     def get_market_summary(self) -> dict[str, Any]:
         summary = self._seed.get_market_summary()
@@ -80,8 +103,21 @@ class YahooFinanceProvider(MarketDataProvider):
         return stock
 
     def get_stock_insight(self, symbol: str) -> dict[str, Any]:
-        # Intraday chart series remains seed-backed until indicator/candle work.
-        return self._seed.get_stock_insight(symbol)
+        insight = self._seed.get_stock_insight(symbol)
+        normalized = symbol.strip().upper()
+        stock = self._seed.get_stock(normalized)
+        if stock is None:
+            return insight
+
+        yahoo_symbol = self._symbol_mapper.to_yahoo(stock["symbol"])
+        history = self._history(yahoo_symbol, period="2y", interval="1d")
+        chart_series = self._build_chart_series(history)
+        if not chart_series:
+            raise RuntimeError(f"Yahoo returned no chart points for {yahoo_symbol}")
+
+        hydrated = deepcopy(insight)
+        hydrated["series"] = chart_series
+        return hydrated
 
     def search_stocks(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
         # Instrument discovery remains deterministic until a licensed master is added.

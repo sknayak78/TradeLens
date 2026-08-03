@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pandas as pd
+
 from services.cache import InMemoryTTLCache
 from services.market_data_provider import MarketDataProvider
 from services.market_data_service import MarketDataService
@@ -97,6 +99,29 @@ def test_provider_error_falls_back_without_breaking_call(caplog):
     assert primary.stock_calls == 1
     assert fallback.stock_calls == 1
     assert "market_data.provider_failed_using_fallback" in caplog.text
+
+
+def test_stock_insight_uses_live_historical_close_series(monkeypatch):
+    provider = YahooFinanceProvider(SeedProvider())
+    history = pd.DataFrame(
+        {
+            "Open": [100.0 + i for i in range(20)],
+            "High": [101.0 + i for i in range(20)],
+            "Low": [99.0 + i for i in range(20)],
+            "Close": [100.5 + i for i in range(20)],
+            "Volume": [1000 + i for i in range(20)],
+        },
+        index=pd.date_range("2024-01-01", periods=20, freq="D"),
+    )
+    monkeypatch.setattr(provider, "_history", lambda symbol, period="2d", interval="1d": history)
+
+    insight = provider.get_stock_insight("RELIANCE")
+
+    assert insight["support"] == 2890
+    assert insight["resistance"] == 2985
+    assert len(insight["series"]) == 13
+    assert insight["series"][0]["v"] == 107.5
+    assert insight["series"][-1]["v"] == 119.5
 
 
 def test_symbol_mapper_uses_nse_suffix_and_explicit_aliases():
