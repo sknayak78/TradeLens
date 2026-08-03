@@ -108,6 +108,14 @@ class YahooFinanceProvider(MarketDataProvider):
             }
         raise RuntimeError("Yahoo history is missing Low/High prices")
 
+    @staticmethod
+    def _build_ai_insight(price: float, ema20: float, support: float, resistance: float) -> str:
+        bias = "above" if price >= ema20 else "below"
+        return (
+            f"Price {price:.2f} is {bias} EMA20 {ema20:.2f}; "
+            f"support {support:.2f} and resistance {resistance:.2f}."
+        )
+
     def get_market_summary(self) -> dict[str, Any]:
         summary = self._seed.get_market_summary()
         indices: list[dict[str, Any]] = []
@@ -151,17 +159,25 @@ class YahooFinanceProvider(MarketDataProvider):
             return insight
 
         yahoo_symbol = self._symbol_mapper.to_yahoo(stock["symbol"])
+        price, _, _ = self._quote(yahoo_symbol)
         history = self._history(yahoo_symbol, period="2y", interval="1d")
         chart_series = self._build_chart_series(history)
         if not chart_series:
             raise RuntimeError(f"Yahoo returned no chart points for {yahoo_symbol}")
 
+        emas = self._build_emas(history)
         support_resistance = self._build_support_resistance(history)
 
         hydrated = deepcopy(insight)
         hydrated["series"] = chart_series
         hydrated["support"] = support_resistance["support"]
         hydrated["resistance"] = support_resistance["resistance"]
+        hydrated["aiInsight"] = self._build_ai_insight(
+            price,
+            emas["ema20"],
+            support_resistance["support"],
+            support_resistance["resistance"],
+        )
         return hydrated
 
     def search_stocks(self, query: str, limit: int = 20) -> list[dict[str, Any]]:

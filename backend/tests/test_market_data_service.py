@@ -150,6 +150,29 @@ def test_stock_insight_uses_live_historical_close_series(monkeypatch):
     assert insight["series"][-1]["v"] == 119.5
 
 
+def test_stock_insight_uses_dynamic_ai_insight(monkeypatch):
+    provider = YahooFinanceProvider(SeedProvider())
+    history = pd.DataFrame(
+        {
+            "Open": [100.0 + i for i in range(20)],
+            "High": [101.0 + i for i in range(20)],
+            "Low": [99.0 + i for i in range(20)],
+            "Close": [100.5 + i for i in range(20)],
+            "Volume": [1000 + i for i in range(20)],
+        },
+        index=pd.date_range("2024-01-01", periods=20, freq="D"),
+    )
+    monkeypatch.setattr(provider, "_history", lambda symbol, period="2d", interval="1d": history)
+    monkeypatch.setattr(provider, "_quote", lambda symbol: (3001.25, 1.5, 123456))
+
+    insight = provider.get_stock_insight("RELIANCE")
+
+    assert "3001.25" in insight["aiInsight"]
+    assert "111.42" in insight["aiInsight"]
+    assert "99.00" in insight["aiInsight"]
+    assert "120.00" in insight["aiInsight"]
+
+
 def test_symbol_mapper_uses_nse_suffix_and_explicit_aliases():
     mapper = SymbolMapper()
 
