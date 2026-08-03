@@ -122,6 +122,8 @@ def test_stock_uses_live_ema_values_from_history(monkeypatch):
     assert stock["ema20"] == 111.42
     assert stock["ema50"] == 106.46
     assert stock["ema200"] == 102.28
+    assert stock["support"] == 99.0
+    assert stock["resistance"] == 120.0
     assert stock["price"] == 3001.25
 
 
@@ -141,8 +143,8 @@ def test_stock_insight_uses_live_historical_close_series(monkeypatch):
 
     insight = provider.get_stock_insight("RELIANCE")
 
-    assert insight["support"] == 2890
-    assert insight["resistance"] == 2985
+    assert insight["support"] == 99.0
+    assert insight["resistance"] == 120.0
     assert len(insight["series"]) == 13
     assert insight["series"][0]["v"] == 107.5
     assert insight["series"][-1]["v"] == 119.5

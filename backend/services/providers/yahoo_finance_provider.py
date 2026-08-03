@@ -18,8 +18,8 @@ logger = logging.getLogger("tradelens.market_data.yahoo")
 class YahooFinanceProvider(MarketDataProvider):
     """Overlay Yahoo market quotes and historical closes on the compatibility seed dataset.
 
-    Support/resistance and AI insight remain seed-backed to preserve the existing
-    API contract. Only the chart series is now sourced from Yahoo historical closes.
+    Support/resistance now come from Yahoo historical OHLC data, while the rest of the
+    compatibility-backed insight contract remains intact.
     """
 
     name = "yahoo_finance"
@@ -94,6 +94,20 @@ class YahooFinanceProvider(MarketDataProvider):
             "ema200": round(calculate_latest_ema(closes, 200), 2),
         }
 
+    @staticmethod
+    def _build_support_resistance(history: Any, lookback: int = 20) -> dict[str, float]:
+        if history is None or history.empty:
+            raise RuntimeError("Yahoo returned no history for support/resistance calculation")
+        if {"Low", "High"}.issubset(history.columns):
+            recent = history.tail(lookback)
+            support = float(recent["Low"].min())
+            resistance = float(recent["High"].max())
+            return {
+                "support": round(support, 2),
+                "resistance": round(resistance, 2),
+            }
+        raise RuntimeError("Yahoo history is missing Low/High prices")
+
     def get_market_summary(self) -> dict[str, Any]:
         summary = self._seed.get_market_summary()
         indices: list[dict[str, Any]] = []
@@ -114,6 +128,7 @@ class YahooFinanceProvider(MarketDataProvider):
         price, change_pct, volume = self._quote(yahoo_symbol)
         history = self._history(yahoo_symbol, period="2y", interval="1d")
         emas = self._build_emas(history)
+        support_resistance = self._build_support_resistance(history)
 
         stock.update(
             price=price,
@@ -121,6 +136,8 @@ class YahooFinanceProvider(MarketDataProvider):
             ema20=emas["ema20"],
             ema50=emas["ema50"],
             ema200=emas["ema200"],
+            support=support_resistance["support"],
+            resistance=support_resistance["resistance"],
         )
         if volume is not None:
             stock["volume"] = volume
@@ -139,8 +156,12 @@ class YahooFinanceProvider(MarketDataProvider):
         if not chart_series:
             raise RuntimeError(f"Yahoo returned no chart points for {yahoo_symbol}")
 
+        support_resistance = self._build_support_resistance(history)
+
         hydrated = deepcopy(insight)
         hydrated["series"] = chart_series
+        hydrated["support"] = support_resistance["support"]
+        hydrated["resistance"] = support_resistance["resistance"]
         return hydrated
 
     def search_stocks(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
