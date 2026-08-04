@@ -36,24 +36,28 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="p-4 md:p-6 pt-3 grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-5 xl:col-span-4">
-          <TodaysFocus />
-        </div>
-        <div className="lg:col-span-7 xl:col-span-8">
-          <TopOpportunities onSelect={setActiveSymbol} activeSymbol={activeSymbol} />
-        </div>
-        <div className="lg:col-span-12 xl:col-span-7">
-          <WatchlistPanel
-            onSelect={setActiveSymbol}
-            activeSymbol={activeSymbol}
-          />
-        </div>
-        <div className="lg:col-span-12 xl:col-span-5">
-          <ChartCard
-            symbol={activeSymbol}
-            onSelectSymbol={setActiveSymbol}
-          />
+      <div className="p-4 md:p-6 pt-3 flex flex-col gap-4">
+        <div className="flex flex-col xl:flex-row gap-4 xl:items-stretch">
+          <div className="w-full xl:w-[35%] flex flex-col gap-4">
+            <TopOpportunities
+              onSelect={setActiveSymbol}
+              activeSymbol={activeSymbol}
+            />
+            <WatchlistPanel
+              onSelect={setActiveSymbol}
+              activeSymbol={activeSymbol}
+            />
+            <TodaysFocus />
+          </div>
+
+          <div className="w-full xl:w-[65%] flex flex-col gap-4">
+            <div className="flex-1 min-h-[420px]">
+              <ChartCard
+                symbol={activeSymbol}
+                onSelectSymbol={setActiveSymbol}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>

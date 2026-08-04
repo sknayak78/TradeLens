@@ -50,7 +50,7 @@ export default function TodaysRankings({
 
   return (
     <PanelCard
-      title="Today's Rankings"
+      title="Today's Opportunities"
       subtitle="Analysis-driven leaderboard"
       testId="card-top-opportunities"
       action={

@@ -22,7 +22,7 @@ export default function WatchlistPanel({
 
   return (
     <PanelCard
-      title="Watchlist"
+      title="My Watchlist"
       subtitle={
         !isLoading && !isError ? `${items.length} instruments tracked` : undefined
       }
