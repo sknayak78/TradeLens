@@ -6,6 +6,7 @@ cannot leak into recommendation logic.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Literal, Mapping, Optional
 
@@ -20,12 +21,19 @@ DataQuality = Literal["Complete", "Partial"]
 
 
 def _optional_float(source: Mapping[str, Any], key: str) -> Optional[float]:
+    """Read a usable float, treating anything non-computable as absent.
+
+    Providers can emit NaN or infinity for an indicator they could not compute
+    (an unfinished bar, too little history), and those values silently poison
+    every comparison they touch, so they are read as missing.
+    """
     value = source.get(key)
     if value is None or isinstance(value, bool):
         return None
     if not isinstance(value, (int, float)):
         return None
-    return float(value)
+    number = float(value)
+    return number if math.isfinite(number) else None
 
 
 @dataclass(frozen=True)
@@ -52,8 +60,17 @@ class RecommendationInput:
     def __post_init__(self) -> None:
         if not self.symbol or not self.symbol.strip():
             raise ValueError("symbol must not be empty")
+        if not math.isfinite(self.price):
+            raise ValueError("price must be a finite number")
         if self.price <= 0:
             raise ValueError("price must be positive")
+        # Non-computable indicators are absent indicators: keeping NaN here
+        # would make every threshold comparison silently False and could reach
+        # the API as a non-JSON-compliant number.
+        for name in self.OPTIONAL_FIELDS:
+            value = getattr(self, name)
+            if value is not None and not math.isfinite(value):
+                object.__setattr__(self, name, None)
 
     @classmethod
     def from_snapshot(
@@ -78,7 +95,7 @@ class RecommendationInput:
 
         price = _optional_float(stock, "price")
         if price is None:
-            raise ValueError("snapshot is missing a numeric price")
+            raise ValueError("snapshot is missing a usable numeric price")
 
         return cls(
             symbol=str(stock["symbol"]).strip().upper(),
