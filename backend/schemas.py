@@ -132,6 +132,38 @@ class StockSummary(MarketMetadata):
     sector: str
 
 
+class RecommendationLevels(BaseModel):
+    """Long entry zone and exit geometry from the recommendation engine."""
+    entryMin: float
+    entryMax: float
+    stopLoss: float
+    target1: float
+    target2: float
+    riskReward: float
+
+
+class RecommendationOut(BaseModel):
+    """Recommendation derived from live indicators only.
+
+    Additive: consumers that ignore this block see the unchanged contract.
+    """
+    action: Literal[
+        "Strong Buy", "Buy", "Buy on Breakout", "Hold", "Watch", "Wait", "Avoid"
+    ]
+    conviction: Literal["High", "Medium", "Low"]
+    score: int
+    trend: Literal["bullish", "bearish", "neutral"]
+    confidence: float
+    # "Partial" when any live indicator was missing; `warnings` says which.
+    dataQuality: Literal["Complete", "Partial"]
+    holdingPeriod: str
+    entryCondition: str
+    rationale: str
+    rulesMatched: List[str]
+    warnings: List[str]
+    levels: Optional[RecommendationLevels] = None
+
+
 class StockDetail(MarketMetadata):
     symbol: str
     name: str
@@ -156,6 +188,8 @@ class StockDetail(MarketMetadata):
     riskLevel: Literal["Low", "Medium", "High"]
     suggestedAction: str
     insight: str
+    # Additive: absent only when live indicators are too sparse to score.
+    recommendation: Optional[RecommendationOut] = None
 
 
 class Ranking(MarketMetadata):

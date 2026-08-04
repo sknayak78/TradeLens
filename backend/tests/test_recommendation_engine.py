@@ -118,6 +118,7 @@ def test_full_score_setup_is_a_strong_buy():
     assert recommendation.trend == "bullish"
     assert recommendation.confidence == 1.0
     assert recommendation.holding_period == "2-6 weeks"
+    assert recommendation.data_quality == "Complete"
     assert recommendation.warnings == []
     assert set(recommendation.rules_matched) == {rule.key for rule in SCORING_RULES}
 
@@ -159,6 +160,9 @@ def test_mixed_ema_stack_is_neutral_and_never_a_buy():
     assert recommendation.trend == "neutral"
     assert recommendation.action == "Watch"
     assert recommendation.holding_period == "Wait"
+    assert recommendation.entry_condition.startswith(
+        "Wait for the price to stabilise near EMA20"
+    )
 
 
 def test_overbought_rsi_holds_a_healthy_trend_instead_of_entering():
@@ -216,7 +220,11 @@ def test_missing_indicators_lower_confidence_and_block_a_buy():
     assert recommendation.confidence == 0.22  # 2 of 6 indicators, score 30
     assert recommendation.levels is None
     assert recommendation.action == "Avoid"
-    assert any(w.startswith("missing_indicators:") for w in recommendation.warnings)
+    assert recommendation.data_quality == "Partial"
+    assert recommendation.warnings == [
+        "partial_data: EMA50, EMA200, support, resistance unavailable, so this "
+        "recommendation is based on an incomplete indicator set."
+    ]
 
 
 def test_no_ema_data_is_neutral_and_not_actionable():
@@ -285,12 +293,52 @@ def test_hold_rationale_addresses_existing_holders():
     assert "Existing holders" in recommendation.rationale
 
 
+def test_entry_condition_is_beginner_friendly_per_action():
+    buy = engine.recommend(_bullish())
+    breakout = engine.recommend(
+        _bullish(price=100.0, ema20=99.0, ema50=98.0, ema200=97.0,
+                 support=99.0, resistance=101.9)
+    )
+    hold = engine.recommend(_bullish(rsi=85.0))
+    watch = engine.recommend(
+        _bullish(price=103.0, ema20=100.0, ema50=105.0, support=95.0)
+    )
+    avoid = engine.recommend(_bullish(price=80.0, support=70.0, resistance=95.0))
+
+    assert buy.action == "Strong Buy"
+    assert buy.entry_condition == (
+        "Consider entering between 105.00 and 110.00 once the price stabilises, "
+        "and exit if it closes below 99.00."
+    )
+    assert breakout.entry_condition == (
+        "Wait for a daily close above resistance 101.90 before entering."
+    )
+    assert hold.entry_condition.startswith("No fresh entry here")
+    assert watch.action == "Watch"
+    assert watch.entry_condition == (
+        "Wait for the price to pull back into 100.00-103.00 and hold there."
+    )
+    assert avoid.entry_condition.startswith("No trade")
+
+
+def test_entry_condition_never_quotes_levels_it_does_not_have():
+    recommendation = engine.recommend(
+        RecommendationInput(symbol="INFY", price=110.0, ema20=105.0, rsi=85.0)
+    )
+
+    assert recommendation.levels is None
+    assert recommendation.action == "Wait"
+    assert recommendation.entry_condition == "Wait for momentum to cool: RSI is above 80."
+
+
 def test_to_dict_is_json_shaped():
     payload = engine.recommend(_bullish()).to_dict()
 
     assert payload["symbol"] == "RELIANCE"
     assert payload["action"] == "Strong Buy"
     assert payload["holding_period"] == "2-6 weeks"
+    assert payload["data_quality"] == "Complete"
+    assert payload["entry_condition"].startswith("Consider entering between")
     assert payload["levels"]["entry_min"] == 105.0
     assert payload["levels"]["target2"] == 130.0
     assert isinstance(payload["rules_matched"], list)

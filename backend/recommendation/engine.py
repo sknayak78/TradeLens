@@ -22,6 +22,7 @@ from .config import (
     ACTION_WATCH_MIN_SCORE,
     CONVICTION_BANDS,
     HOLDING_PERIODS,
+    INDICATOR_LABELS,
     MAX_SCORE,
     MIN_HEADROOM_PCT,
     MIN_RISK_REWARD,
@@ -34,6 +35,7 @@ from .config import (
 from .models import (
     Action,
     Conviction,
+    DataQuality,
     Recommendation,
     RecommendationInput,
     TradeLevels,
@@ -83,7 +85,9 @@ class RecommendationEngine:
             score=score,
             trend=trend,
             confidence=self._confidence(market, score),
+            data_quality=self._data_quality(market),
             holding_period=HOLDING_PERIODS[action],
+            entry_condition=self._entry_condition(market, action, levels),
             rationale=self._rationale(market, trend, action, rules_matched),
             rules_matched=rules_matched,
             warnings=warnings,
@@ -125,6 +129,9 @@ class RecommendationEngine:
         strength = 0.5 + 0.5 * (score / MAX_SCORE)
         return round(market.completeness * strength, 2)
 
+    def _data_quality(self, market: RecommendationInput) -> DataQuality:
+        return "Complete" if not market.missing_indicators else "Partial"
+
     # ---------- Trend (EMA stack only) ----------
 
     def _trend(self, market: RecommendationInput) -> Trend:
@@ -146,13 +153,13 @@ class RecommendationEngine:
 
     def _warnings(self, market: RecommendationInput) -> List[str]:
         warnings: List[str] = []
-        missing = [
-            name
-            for name in RecommendationInput.OPTIONAL_FIELDS
-            if getattr(market, name) is None
-        ]
+        missing = market.missing_indicators
         if missing:
-            warnings.append("missing_indicators:" + ",".join(missing))
+            labels = ", ".join(INDICATOR_LABELS[name] for name in missing)
+            warnings.append(
+                f"partial_data: {labels} unavailable, so this recommendation is "
+                "based on an incomplete indicator set."
+            )
         if market.rsi is not None:
             if market.rsi >= RSI_OVERBOUGHT:
                 warnings.append("rsi_overbought")
@@ -232,6 +239,58 @@ class RecommendationEngine:
         if score >= ACTION_WATCH_MIN_SCORE:
             return "Watch"
         return "Wait"
+
+    # ---------- Beginner-facing entry condition (template-based, no LLM) ----------
+
+    def _entry_condition(
+        self,
+        market: RecommendationInput,
+        action: Action,
+        levels: Optional[TradeLevels],
+    ) -> str:
+        """Return the one concrete thing a beginner should watch for next."""
+        if action in ("Strong Buy", "Buy") and levels is not None:
+            return (
+                f"Consider entering between {levels.entry_min:.2f} and "
+                f"{levels.entry_max:.2f} once the price stabilises, and exit if it "
+                f"closes below {levels.stop_loss:.2f}."
+            )
+        if action == "Buy on Breakout":
+            if market.resistance is not None:
+                return (
+                    "Wait for a daily close above resistance "
+                    f"{market.resistance:.2f} before entering."
+                )
+            return "Wait for a daily close above the recent high before entering."
+        if action == "Hold":
+            if levels is not None:
+                return (
+                    "No fresh entry here: hold and reassess if the price closes "
+                    f"below {levels.stop_loss:.2f}."
+                )
+            if market.support is not None:
+                return (
+                    "No fresh entry here: hold and reassess if the price closes "
+                    f"below support {market.support:.2f}."
+                )
+            return "No fresh entry here: hold and reassess on the next pullback."
+        if action == "Watch":
+            if levels is not None:
+                return (
+                    "Wait for the price to pull back into "
+                    f"{levels.entry_min:.2f}-{levels.entry_max:.2f} and hold there."
+                )
+            if market.ema20 is not None:
+                return (
+                    f"Wait for the price to stabilise near EMA20 {market.ema20:.2f} "
+                    "before considering an entry."
+                )
+            return "Wait for clearer support and resistance levels before acting."
+        if action == "Wait":
+            if market.rsi is not None and market.rsi >= RSI_OVERBOUGHT:
+                return "Wait for momentum to cool: RSI is above 80."
+            return "Wait for the setup to strengthen before considering an entry."
+        return "No trade: stay out until the price reclaims its moving averages."
 
     # ---------- Rationale (template-based, no LLM) ----------
 

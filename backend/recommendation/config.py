@@ -114,6 +114,18 @@ ACTION_WATCH_MIN_SCORE: int = 60
 ACTION_WAIT_MIN_SCORE: int = 40
 
 
+# ---------- Indicator labels for human-readable data-quality warnings ----------
+
+INDICATOR_LABELS: dict[str, str] = {
+    "ema20": "EMA20",
+    "ema50": "EMA50",
+    "ema200": "EMA200",
+    "rsi": "RSI",
+    "support": "support",
+    "resistance": "resistance",
+}
+
+
 # ---------- Holding period per action ----------
 
 HOLDING_PERIODS: dict[str, str] = {
