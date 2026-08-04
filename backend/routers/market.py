@@ -1,10 +1,14 @@
 """Market-data endpoints backed by the cached provider service."""
-from typing import List
+import logging
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, HTTPException
 
 from schemas import (
     MarketSummary,
     IndexItem,
+    RecommendationLevels,
+    RecommendationOut,
     TodaysFocusItem,
     Ranking,
     StockDetail,
@@ -12,9 +16,54 @@ from schemas import (
     SeriesPoint,
 )
 from analysis.service import service as analysis_service
+from recommendation.engine import engine as recommendation_engine
+from recommendation.models import RecommendationInput
 from services.market_data_service import market_data_service
 
+logger = logging.getLogger("tradelens.market")
+
 router = APIRouter(tags=["market"])
+
+
+def _recommendation(
+    stock: Dict[str, Any], insight: Dict[str, Any]
+) -> Optional[RecommendationOut]:
+    """Map the pure engine's output onto the API model.
+
+    Returns ``None`` when the live snapshot cannot even be read, so the rest of
+    the response is never at risk.
+    """
+    try:
+        market = RecommendationInput.from_snapshot(stock, insight)
+    except (KeyError, ValueError):
+        logger.warning(
+            "market.recommendation_skipped_unusable_snapshot", exc_info=True
+        )
+        return None
+
+    recommendation = recommendation_engine.recommend(market)
+    levels = recommendation.levels
+    return RecommendationOut(
+        action=recommendation.action,
+        conviction=recommendation.conviction,
+        score=recommendation.score,
+        trend=recommendation.trend,
+        confidence=recommendation.confidence,
+        dataQuality=recommendation.data_quality,
+        holdingPeriod=recommendation.holding_period,
+        entryCondition=recommendation.entry_condition,
+        rationale=recommendation.rationale,
+        rulesMatched=recommendation.rules_matched,
+        warnings=recommendation.warnings,
+        levels=None if levels is None else RecommendationLevels(
+            entryMin=levels.entry_min,
+            entryMax=levels.entry_max,
+            stopLoss=levels.stop_loss,
+            target1=levels.target1,
+            target2=levels.target2,
+            riskReward=levels.risk_reward,
+        ),
+    )
 
 
 @router.get("/stocks", response_model=List[StockSummary])
@@ -149,4 +198,5 @@ def stock_detail(symbol: str) -> StockDetail:
         riskLevel=analysis.risk_level,
         suggestedAction=analysis.suggested_action,
         insight=analysis.insight,
+        recommendation=_recommendation(stock, insight),
     )

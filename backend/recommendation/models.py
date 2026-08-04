@@ -14,6 +14,9 @@ Action = Literal[
     "Strong Buy", "Buy", "Buy on Breakout", "Hold", "Watch", "Wait", "Avoid"
 ]
 Conviction = Literal["High", "Medium", "Low"]
+#: "Partial" whenever any live indicator was unavailable, so consumers can flag
+#: the recommendation instead of trusting a silently degraded one.
+DataQuality = Literal["Complete", "Partial"]
 
 
 def _optional_float(source: Mapping[str, Any], key: str) -> Optional[float]:
@@ -112,6 +115,13 @@ class RecommendationInput:
         return (self.price - self.support) / self.price * 100
 
     @property
+    def missing_indicators(self) -> List[str]:
+        """Names of the optional indicators the provider did not supply."""
+        return [
+            name for name in self.OPTIONAL_FIELDS if getattr(self, name) is None
+        ]
+
+    @property
     def completeness(self) -> float:
         """Fraction of optional indicators that are present."""
         present = sum(
@@ -151,7 +161,11 @@ class Recommendation:
     score: int
     trend: Trend
     confidence: float
+    data_quality: DataQuality
     holding_period: str
+    #: Plain-language next step for a beginner, e.g. "Wait for a daily close
+    #: above resistance 120.00 before entering."
+    entry_condition: str
     rationale: str
     rules_matched: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
