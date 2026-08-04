@@ -7,6 +7,11 @@ import TrendBadge from "@/components/panels/TrendBadge";
 import { useRankings } from "@/hooks/useMarket";
 import type { RiskLevel } from "@/types";
 
+interface TopOpportunitiesProps {
+  onSelect?: (symbol: string) => void;
+  activeSymbol?: string;
+}
+
 const RISK_STYLE: Record<RiskLevel, string> = {
   Low: "text-[#26a69a] bg-[#26a69a]/10 border-[#26a69a]/25",
   Medium: "text-[#f5a623] bg-[#f5a623]/10 border-[#f5a623]/25",
@@ -37,7 +42,10 @@ function ScoreCell({ score }: { score: number }) {
   );
 }
 
-export default function TodaysRankings() {
+export default function TodaysRankings({
+  onSelect,
+  activeSymbol,
+}: TopOpportunitiesProps) {
   const { data: items = [], isLoading, isError, error, refetch } = useRankings();
 
   return (
@@ -87,11 +95,16 @@ export default function TodaysRankings() {
               </tr>
             </thead>
             <tbody>
-              {items.map((r) => (
+              {items.map((r) => {
+                const isActive = activeSymbol === r.symbol;
+                return (
                 <tr
                   key={r.symbol}
                   data-testid={`opportunity-row-${r.symbol}`}
-                  className="tl-row border-t border-[#2a2e39]/60"
+                  onClick={() => onSelect?.(r.symbol)}
+                  className={`tl-row border-t border-[#2a2e39]/60 ${
+                    onSelect ? "cursor-pointer" : ""
+                  } ${isActive ? "bg-[#2962ff]/8 border-l-2 border-l-[#2962ff]" : ""}`}
                 >
                   <td className="px-3 py-2.5">
                     <span className="font-mono tabular-nums text-[11px] text-[#787b86] font-semibold">
@@ -156,7 +169,8 @@ export default function TodaysRankings() {
                     />
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

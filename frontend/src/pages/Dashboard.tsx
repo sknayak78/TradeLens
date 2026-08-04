@@ -41,7 +41,7 @@ export default function Dashboard() {
           <TodaysFocus />
         </div>
         <div className="lg:col-span-7 xl:col-span-8">
-          <TopOpportunities />
+          <TopOpportunities onSelect={setActiveSymbol} activeSymbol={activeSymbol} />
         </div>
         <div className="lg:col-span-12 xl:col-span-7">
           <WatchlistPanel

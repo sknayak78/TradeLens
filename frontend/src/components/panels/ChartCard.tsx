@@ -30,7 +30,13 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
   const { data: stock, isLoading, isError, error, refetch } = useStock(symbol);
   const [timeframe, setTimeframe] = useState("1D");
 
-  const chips = useMemo(() => watchlist.map((w) => w.symbol), [watchlist]);
+  const chips = useMemo(() => {
+    const watchlistSymbols = watchlist.map((w) => w.symbol);
+    if (!symbol || watchlistSymbols.includes(symbol)) {
+      return watchlistSymbols;
+    }
+    return [symbol, ...watchlistSymbols];
+  }, [watchlist, symbol]);
 
   const stats = useMemo(() => {
     if (!stock) return null;
