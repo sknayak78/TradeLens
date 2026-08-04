@@ -10,7 +10,9 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Literal, Mapping, Optional
 
 Trend = Literal["bullish", "bearish", "neutral"]
-Action = Literal["Buy", "Buy on Breakout", "Watch", "Wait", "Avoid"]
+Action = Literal[
+    "Strong Buy", "Buy", "Buy on Breakout", "Hold", "Watch", "Wait", "Avoid"
+]
 Conviction = Literal["High", "Medium", "Low"]
 
 
@@ -120,9 +122,16 @@ class RecommendationInput:
 
 @dataclass(frozen=True)
 class TradeLevels:
-    """Entry/exit geometry for a long setup."""
+    """Entry/exit geometry for a long setup.
 
-    entry: float
+    The entry is a zone rather than a single price: ``entry_min`` is the higher
+    of EMA20 and support (the level a pullback should hold) and ``entry_max`` is
+    the last price.  ``risk_reward`` is measured from the midpoint of the zone,
+    the representative fill.
+    """
+
+    entry_min: float
+    entry_max: float
     stop_loss: float
     target1: float
     target2: float
@@ -142,6 +151,7 @@ class Recommendation:
     score: int
     trend: Trend
     confidence: float
+    holding_period: str
     rationale: str
     rules_matched: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)

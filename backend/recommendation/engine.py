@@ -17,18 +17,19 @@ from typing import Any, List, Optional, Tuple
 
 from .config import (
     ACTION_BUY_MIN_SCORE,
+    ACTION_STRONG_BUY_MIN_SCORE,
     ACTION_WAIT_MIN_SCORE,
     ACTION_WATCH_MIN_SCORE,
     CONVICTION_BANDS,
+    HOLDING_PERIODS,
     MAX_SCORE,
-    MAX_STOP_DISTANCE_PCT,
     MIN_HEADROOM_PCT,
     MIN_RISK_REWARD,
     RSI_OVERBOUGHT,
     RSI_OVERSOLD,
     SCORING_RULES,
-    SECOND_TARGET_EXTENSION,
-    STOP_BUFFER_PCT,
+    SECOND_TARGET_BAND_SHARE,
+    STOP_SUPPORT_MULTIPLIER,
 )
 from .models import (
     Action,
@@ -41,7 +42,8 @@ from .models import (
 
 logger = logging.getLogger("tradelens.recommendation")
 
-_BUY_ACTIONS: Tuple[Action, ...] = ("Buy", "Buy on Breakout")
+_BUY_ACTIONS: Tuple[Action, ...] = ("Strong Buy", "Buy", "Buy on Breakout")
+_FRESH_ENTRY_ACTIONS: Tuple[Action, ...] = ("Strong Buy", "Buy")
 
 
 def _event(event: str, **fields: Any) -> str:
@@ -60,18 +62,19 @@ class RecommendationEngine:
         action = self._action(market, trend, score)
 
         if action in _BUY_ACTIONS and levels is None:
-            # Without a stop and a target there is nothing actionable to give.
-            action = "Watch"
+            # Without an entry zone, a stop and a target there is nothing to
+            # enter; an extended winner is still holdable, missing data is not.
             warnings.append("no_usable_levels")
+            action = self._downgrade(trend, score)
         elif (
-            action == "Buy"
+            action in _FRESH_ENTRY_ACTIONS
             and levels is not None
             and levels.risk_reward < MIN_RISK_REWARD
         ):
             # Breakout entries are priced above resistance, so the reward:risk
-            # gate only applies to an immediate entry at the last price.
-            action = "Watch"
+            # gate only applies to an immediate entry inside the zone.
             warnings.append("risk_reward_below_minimum")
+            action = self._downgrade(trend, score)
 
         recommendation = Recommendation(
             symbol=market.symbol,
@@ -80,6 +83,7 @@ class RecommendationEngine:
             score=score,
             trend=trend,
             confidence=self._confidence(market, score),
+            holding_period=HOLDING_PERIODS[action],
             rationale=self._rationale(market, trend, action, rules_matched),
             rules_matched=rules_matched,
             warnings=warnings,
@@ -168,18 +172,25 @@ class RecommendationEngine:
         if support is None or resistance is None or resistance <= market.price:
             return None
 
-        entry = market.price
-        support_stop = support * (1 - STOP_BUFFER_PCT / 100)
-        hard_floor = entry * (1 - MAX_STOP_DISTANCE_PCT / 100)
-        stop_loss = max(support_stop, hard_floor)
-        if stop_loss >= entry:
+        # Entry zone: pull back to the higher of EMA20 and support, buy up to
+        # the last price.
+        entry_max = market.price
+        entry_min = support if market.ema20 is None else max(market.ema20, support)
+        if entry_min >= entry_max:
+            return None
+
+        stop_loss = support * STOP_SUPPORT_MULTIPLIER
+        if stop_loss >= entry_min:
             return None
 
         target1 = resistance
-        target2 = entry + (target1 - entry) * SECOND_TARGET_EXTENSION
-        risk_reward = (target1 - entry) / (entry - stop_loss)
+        target2 = resistance + SECOND_TARGET_BAND_SHARE * (resistance - support)
+        # Measured from the midpoint of the zone — the representative fill.
+        entry_reference = (entry_min + entry_max) / 2
+        risk_reward = (target1 - entry_reference) / (entry_reference - stop_loss)
         return TradeLevels(
-            entry=round(entry, 2),
+            entry_min=round(entry_min, 2),
+            entry_max=round(entry_max, 2),
             stop_loss=round(stop_loss, 2),
             target1=round(target1, 2),
             target2=round(target2, 2),
@@ -194,10 +205,14 @@ class RecommendationEngine:
         if trend == "bearish":
             return "Avoid"
         if market.rsi is not None and market.rsi >= RSI_OVERBOUGHT:
-            return "Wait"
+            # Stretched momentum rules out a fresh entry, but a healthy trend is
+            # still worth holding for anyone already positioned.
+            return self._downgrade(trend, score)
         if score >= ACTION_BUY_MIN_SCORE and trend == "bullish":
             headroom = market.headroom_pct
             if headroom is not None and headroom >= MIN_HEADROOM_PCT:
+                if score >= ACTION_STRONG_BUY_MIN_SCORE:
+                    return "Strong Buy"
                 return "Buy"
             return "Buy on Breakout"
         if score >= ACTION_WATCH_MIN_SCORE:
@@ -205,6 +220,18 @@ class RecommendationEngine:
         if score >= ACTION_WAIT_MIN_SCORE:
             return "Wait"
         return "Avoid"
+
+    def _downgrade(self, trend: Trend, score: int) -> Action:
+        """Resolve a blocked entry into "Hold" (trend intact) or a wait state.
+
+        Existing holders keep a position while the trend and score still stand;
+        otherwise there is nothing to do yet.
+        """
+        if trend == "bullish" and score >= ACTION_WATCH_MIN_SCORE:
+            return "Hold"
+        if score >= ACTION_WATCH_MIN_SCORE:
+            return "Watch"
+        return "Wait"
 
     # ---------- Rationale (template-based, no LLM) ----------
 
@@ -251,10 +278,12 @@ class RecommendationEngine:
             parts.append("Support and resistance levels are incomplete.")
 
         # Line 4 — actionable close.
-        if action == "Buy":
-            parts.append("Enter now and trail the stop below support.")
+        if action in ("Strong Buy", "Buy"):
+            parts.append("Buy inside the entry zone and trail the stop below support.")
         elif action == "Buy on Breakout":
             parts.append("Wait for a close above resistance before entering.")
+        elif action == "Hold":
+            parts.append("Existing holders can stay; no fresh entry here.")
         elif action == "Watch":
             parts.append("Track it for a cleaner entry.")
         elif action == "Wait":

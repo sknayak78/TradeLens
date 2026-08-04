@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from recommendation.config import MAX_SCORE, MIN_RISK_REWARD, SCORING_RULES
+from recommendation.config import (
+    HOLDING_PERIODS,
+    MAX_SCORE,
+    MIN_RISK_REWARD,
+    SCORING_RULES,
+)
 from recommendation.engine import RecommendationEngine
 from recommendation.models import RecommendationInput
 
@@ -34,6 +39,18 @@ def test_scoring_rules_sum_to_one_hundred():
     assert MAX_SCORE == 100
     assert sum(rule.points for rule in SCORING_RULES) == 100
     assert len({rule.key for rule in SCORING_RULES}) == len(SCORING_RULES)
+
+
+def test_every_action_has_a_holding_period():
+    assert HOLDING_PERIODS == {
+        "Strong Buy": "2-6 weeks",
+        "Buy": "1-4 weeks",
+        "Buy on Breakout": "1-4 weeks after the breakout confirms",
+        "Hold": "Existing holders",
+        "Watch": "Wait",
+        "Wait": "Wait",
+        "Avoid": "No Trade",
+    }
 
 
 # ---------- Input validation and construction ----------
@@ -90,68 +107,27 @@ def test_from_snapshot_tolerates_missing_indicators_but_requires_price():
         RecommendationInput.from_snapshot({"symbol": "SBIN", "price": None})
 
 
-# ---------- Scoring, trend and actions ----------
+# ---------- Actions ----------
 
-def test_textbook_long_setup_scores_full_marks_and_recommends_buy():
+def test_full_score_setup_is_a_strong_buy():
     recommendation = engine.recommend(_bullish())
 
     assert recommendation.score == 100
-    assert recommendation.action == "Buy"
+    assert recommendation.action == "Strong Buy"
     assert recommendation.conviction == "High"
     assert recommendation.trend == "bullish"
     assert recommendation.confidence == 1.0
+    assert recommendation.holding_period == "2-6 weeks"
     assert recommendation.warnings == []
     assert set(recommendation.rules_matched) == {rule.key for rule in SCORING_RULES}
 
 
-def test_levels_use_support_for_the_stop_and_resistance_for_target_one():
-    levels = engine.recommend(_bullish()).levels
+def test_score_between_eighty_and_ninety_is_a_plain_buy():
+    recommendation = engine.recommend(_bullish(rsi=50.0))
 
-    assert levels is not None
-    # Support 100 is 9.1% below price, so the 5% hard cap wins: 110 * 0.95.
-    assert levels.entry == 110.0
-    assert levels.stop_loss == 104.5
-    assert levels.target1 == 120.0
-    assert levels.target2 == 125.0
-    assert levels.risk_reward == 1.82
-
-
-def test_stop_uses_support_buffer_when_support_is_close_to_price():
-    levels = engine.recommend(_bullish(support=108.0)).levels
-
-    assert levels is not None
-    assert levels.stop_loss == 107.46  # 108 * 0.995, inside the 5% cap
-
-
-def test_price_below_every_ema_is_avoided_without_levels():
-    recommendation = engine.recommend(
-        _bullish(price=80.0, support=70.0, resistance=95.0)
-    )
-
-    assert recommendation.trend == "bearish"
-    assert recommendation.action == "Avoid"
-    assert recommendation.levels is None
-
-
-def test_mixed_ema_stack_is_neutral_and_never_a_buy():
-    recommendation = engine.recommend(_bullish(price=102.0, support=95.0))
-
-    assert recommendation.trend == "neutral"
-    assert recommendation.action in ("Watch", "Wait")
-
-
-def test_overbought_rsi_defers_the_entry():
-    recommendation = engine.recommend(_bullish(rsi=85.0))
-
-    assert recommendation.action == "Wait"
-    assert "rsi_overbought" in recommendation.warnings
     assert recommendation.score == 85  # healthy-RSI rule does not fire
-
-
-def test_oversold_rsi_is_flagged():
-    recommendation = engine.recommend(_bullish(rsi=25.0))
-
-    assert "rsi_oversold" in recommendation.warnings
+    assert recommendation.action == "Buy"
+    assert recommendation.holding_period == "1-4 weeks"
 
 
 def test_thin_headroom_becomes_a_breakout_setup():
@@ -162,29 +138,71 @@ def test_thin_headroom_becomes_a_breakout_setup():
 
     assert recommendation.score == 85  # room-to-resistance rule does not fire
     assert recommendation.action == "Buy on Breakout"
+    assert recommendation.holding_period == "1-4 weeks after the breakout confirms"
     assert recommendation.levels is not None
 
 
-def test_poor_reward_to_risk_downgrades_a_buy_to_watch():
+def test_price_below_every_ema_is_avoided_without_levels():
     recommendation = engine.recommend(
-        _bullish(price=100.0, ema20=99.0, ema50=98.0, ema200=97.0,
-                 support=80.0, resistance=102.5)
+        _bullish(price=80.0, support=70.0, resistance=95.0)
     )
+
+    assert recommendation.trend == "bearish"
+    assert recommendation.action == "Avoid"
+    assert recommendation.holding_period == "No Trade"
+    assert recommendation.levels is None
+
+
+def test_mixed_ema_stack_is_neutral_and_never_a_buy():
+    recommendation = engine.recommend(_bullish(price=102.0, support=95.0))
+
+    assert recommendation.trend == "neutral"
+    assert recommendation.action == "Watch"
+    assert recommendation.holding_period == "Wait"
+
+
+def test_overbought_rsi_holds_a_healthy_trend_instead_of_entering():
+    recommendation = engine.recommend(_bullish(rsi=85.0))
+
+    assert recommendation.score == 85  # healthy-RSI rule does not fire
+    assert recommendation.action == "Hold"
+    assert recommendation.holding_period == "Existing holders"
+    assert "rsi_overbought" in recommendation.warnings
+
+
+def test_overbought_rsi_on_a_weak_setup_is_only_a_wait():
+    recommendation = engine.recommend(
+        RecommendationInput(symbol="ITC", price=110.0, ema20=105.0, rsi=85.0)
+    )
+
+    assert recommendation.score == 15
+    assert recommendation.action == "Wait"
+
+
+def test_oversold_rsi_is_flagged():
+    recommendation = engine.recommend(_bullish(rsi=25.0))
+
+    assert "rsi_oversold" in recommendation.warnings
+
+
+def test_poor_reward_to_risk_downgrades_a_buy_to_hold():
+    recommendation = engine.recommend(_bullish(resistance=115.0))
 
     assert recommendation.score == 100
     assert recommendation.levels is not None
     assert recommendation.levels.risk_reward < MIN_RISK_REWARD
-    assert recommendation.action == "Watch"
+    assert recommendation.action == "Hold"
+    assert recommendation.holding_period == "Existing holders"
     assert "risk_reward_below_minimum" in recommendation.warnings
 
 
-def test_price_above_resistance_is_warned_and_not_actionable():
+def test_price_above_resistance_holds_without_levels():
     recommendation = engine.recommend(_bullish(resistance=105.0))
 
     assert "price_at_or_above_resistance" in recommendation.warnings
-    assert recommendation.levels is None
-    assert recommendation.action == "Watch"
     assert "no_usable_levels" in recommendation.warnings
+    assert recommendation.levels is None
+    assert recommendation.action == "Hold"
 
 
 def test_missing_indicators_lower_confidence_and_block_a_buy():
@@ -210,21 +228,71 @@ def test_no_ema_data_is_neutral_and_not_actionable():
     assert recommendation.action == "Avoid"
 
 
+# ---------- Levels ----------
+
+def test_entry_zone_runs_from_the_higher_of_ema20_and_support_to_last_price():
+    levels = engine.recommend(_bullish()).levels
+
+    assert levels is not None
+    assert levels.entry_min == 105.0  # EMA20 sits above support 100
+    assert levels.entry_max == 110.0  # last price
+
+
+def test_entry_zone_floor_uses_support_when_it_is_above_ema20():
+    levels = engine.recommend(_bullish(support=108.0)).levels
+
+    assert levels is not None
+    assert levels.entry_min == 108.0
+    assert levels.stop_loss == 106.92  # 108 * 0.99
+
+
+def test_entry_zone_floor_uses_support_when_ema20_is_missing():
+    levels = engine.recommend(_bullish(ema20=None)).levels
+
+    assert levels is not None
+    assert levels.entry_min == 100.0
+
+
+def test_no_levels_when_price_sits_below_the_zone_floor():
+    recommendation = engine.recommend(_bullish(price=101.0))
+
+    assert recommendation.levels is None  # EMA20 105 is above the last price
+
+
+def test_stop_and_targets_use_support_and_resistance():
+    levels = engine.recommend(_bullish()).levels
+
+    assert levels is not None
+    assert levels.stop_loss == 99.0  # support 100 * 0.99
+    assert levels.target1 == 120.0  # resistance
+    assert levels.target2 == 130.0  # 120 + 0.5 * (120 - 100)
+    # Measured from the zone midpoint 107.5: (120 - 107.5) / (107.5 - 99).
+    assert levels.risk_reward == 1.47
+
+
 # ---------- Output shape and purity ----------
 
 def test_rationale_is_short_and_mentions_the_next_step():
     recommendation = engine.recommend(_bullish())
 
     assert len(recommendation.rationale.split()) <= 60
-    assert "trail the stop" in recommendation.rationale
+    assert "entry zone" in recommendation.rationale
+
+
+def test_hold_rationale_addresses_existing_holders():
+    recommendation = engine.recommend(_bullish(rsi=85.0))
+
+    assert "Existing holders" in recommendation.rationale
 
 
 def test_to_dict_is_json_shaped():
     payload = engine.recommend(_bullish()).to_dict()
 
     assert payload["symbol"] == "RELIANCE"
-    assert payload["action"] == "Buy"
-    assert payload["levels"]["target1"] == 120.0
+    assert payload["action"] == "Strong Buy"
+    assert payload["holding_period"] == "2-6 weeks"
+    assert payload["levels"]["entry_min"] == 105.0
+    assert payload["levels"]["target2"] == 130.0
     assert isinstance(payload["rules_matched"], list)
 
 

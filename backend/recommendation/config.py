@@ -67,19 +67,19 @@ RSI_OVERBOUGHT: float = 80.0
 RSI_OVERSOLD: float = 30.0
 
 
-# ---------- Level geometry (percentages of last price) ----------
+# ---------- Level geometry ----------
 
 # Minimum distance to resistance for a fresh entry; below it the setup is a
 # breakout candidate rather than a buy.
 MIN_HEADROOM_PCT: float = 2.0
 # Minimum distance above support before a long is considered "clear" of it.
 MIN_SUPPORT_CUSHION_PCT: float = 1.0
-# Stop placed just under support, and never further away than the hard cap.
-STOP_BUFFER_PCT: float = 0.5
-MAX_STOP_DISTANCE_PCT: float = 5.0
-# Second target extends the first target's move by this multiple.
-SECOND_TARGET_EXTENSION: float = 1.5
-# Setups whose reward:risk is below this are downgraded to "Watch".
+# Stop sits just under support: stop_loss = support * STOP_SUPPORT_MULTIPLIER.
+STOP_SUPPORT_MULTIPLIER: float = 0.99
+# Second target extends past resistance by this share of the support-resistance
+# band: target2 = resistance + SECOND_TARGET_BAND_SHARE * (resistance - support).
+SECOND_TARGET_BAND_SHARE: float = 0.5
+# Fresh entries whose reward:risk is below this become "Hold" or "Watch".
 MIN_RISK_REWARD: float = 1.2
 
 
@@ -107,6 +107,21 @@ CONVICTION_BANDS: list[dict] = [
 
 # ---------- Action thresholds ----------
 
+ACTION_STRONG_BUY_MIN_SCORE: int = 90
 ACTION_BUY_MIN_SCORE: int = 80
+# Also the floor for "Hold": a trend still healthy enough for existing holders.
 ACTION_WATCH_MIN_SCORE: int = 60
 ACTION_WAIT_MIN_SCORE: int = 40
+
+
+# ---------- Holding period per action ----------
+
+HOLDING_PERIODS: dict[str, str] = {
+    "Strong Buy": "2-6 weeks",
+    "Buy": "1-4 weeks",
+    "Buy on Breakout": "1-4 weeks after the breakout confirms",
+    "Hold": "Existing holders",
+    "Watch": "Wait",
+    "Wait": "Wait",
+    "Avoid": "No Trade",
+}
