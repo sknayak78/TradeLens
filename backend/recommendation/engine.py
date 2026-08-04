@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from typing import Any, List, Optional, Tuple
 
 from .config import (
@@ -194,7 +195,13 @@ class RecommendationEngine:
         target2 = resistance + SECOND_TARGET_BAND_SHARE * (resistance - support)
         # Measured from the midpoint of the zone — the representative fill.
         entry_reference = (entry_min + entry_max) / 2
+        if entry_reference <= stop_loss:
+            return None
         risk_reward = (target1 - entry_reference) / (entry_reference - stop_loss)
+        computed = (entry_min, entry_max, stop_loss, target1, target2, risk_reward)
+        if not all(math.isfinite(value) for value in computed):
+            # Levels are all-or-nothing: a partial set is worse than none.
+            return None
         return TradeLevels(
             entry_min=round(entry_min, 2),
             entry_max=round(entry_max, 2),

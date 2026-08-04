@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import logging
+import math
 from typing import Any
 
 from pandas import Timestamp
@@ -56,12 +57,51 @@ class YahooFinanceProvider(MarketDataProvider):
         return history
 
     @staticmethod
+    def _finite(value: Any, label: str) -> float:
+        """Return ``value`` as a float, rejecting NaN and infinity.
+
+        Yahoo bars are not always numeric, and a single NaN close poisons every
+        derived indicator, so non-finite values are treated as a fetch failure
+        and handled by the seed fallback.
+        """
+        number = float(value)
+        if not math.isfinite(number):
+            raise RuntimeError(f"Yahoo returned a non-finite {label}")
+        return number
+
+    @staticmethod
+    def _complete_bars(history: Any):
+        """Drop rows without a close price.
+
+        The bar for an in-progress session is published with ``Close`` unset, so
+        the newest row can be a placeholder that must not be read as a quote.
+        """
+        if history is None or history.empty:
+            raise RuntimeError("Yahoo returned no history")
+        if "Close" not in history:
+            raise RuntimeError("Yahoo history is missing Close prices")
+        complete = history[history["Close"].notna()]
+        if complete.empty:
+            raise RuntimeError("Yahoo history has no completed bars")
+        return complete
+
+    @staticmethod
     def _quote(ticker_symbol: str) -> tuple[float, float, int | None]:
-        history = YahooFinanceProvider._history(ticker_symbol, period="2d", interval="1d")
-        close = float(history["Close"].iloc[-1])
-        previous = float(history["Close"].iloc[-2]) if len(history.index) > 1 else close
+        history = YahooFinanceProvider._complete_bars(
+            YahooFinanceProvider._history(ticker_symbol, period="2d", interval="1d")
+        )
+        close = YahooFinanceProvider._finite(history["Close"].iloc[-1], "close")
+        previous = (
+            YahooFinanceProvider._finite(history["Close"].iloc[-2], "previous close")
+            if len(history.index) > 1
+            else close
+        )
         change_pct = ((close - previous) / previous * 100) if previous else 0.0
-        volume = int(history["Volume"].iloc[-1]) if "Volume" in history else None
+        volume: int | None = None
+        if "Volume" in history:
+            raw_volume = history["Volume"].iloc[-1]
+            if raw_volume is not None and math.isfinite(float(raw_volume)):
+                volume = int(raw_volume)
         return round(close, 2), round(change_pct, 2), volume
 
     @staticmethod
@@ -72,13 +112,16 @@ class YahooFinanceProvider(MarketDataProvider):
             raise RuntimeError("Yahoo history is missing Close prices")
 
         points: list[dict[str, Any]] = []
-        for _, row in history.tail(max_points).iterrows():
+        for _, row in YahooFinanceProvider._complete_bars(history).tail(max_points).iterrows():
             timestamp = row.name
             if isinstance(timestamp, Timestamp):
                 label = timestamp.strftime("%Y-%m-%d")
             else:
                 label = str(timestamp)
-            points.append({"t": label, "v": round(float(row["Close"]), 2)})
+            points.append({
+                "t": label,
+                "v": round(YahooFinanceProvider._finite(row["Close"], "close"), 2),
+            })
         return points
 
     @staticmethod
@@ -88,21 +131,42 @@ class YahooFinanceProvider(MarketDataProvider):
         if "Close" not in history:
             raise RuntimeError("Yahoo history is missing Close prices")
 
-        closes = [float(value) for value in history["Close"].tolist()]
+        closes = YahooFinanceProvider._closes(history)
         return {
-            "ema20": round(calculate_latest_ema(closes, 20), 2),
-            "ema50": round(calculate_latest_ema(closes, 50), 2),
-            "ema200": round(calculate_latest_ema(closes, 200), 2),
+            "ema20": round(
+                YahooFinanceProvider._finite(
+                    calculate_latest_ema(closes, 20), "EMA20"
+                ), 2
+            ),
+            "ema50": round(
+                YahooFinanceProvider._finite(
+                    calculate_latest_ema(closes, 50), "EMA50"
+                ), 2
+            ),
+            "ema200": round(
+                YahooFinanceProvider._finite(
+                    calculate_latest_ema(closes, 200), "EMA200"
+                ), 2
+            ),
         }
+
+    @staticmethod
+    def _closes(history: Any) -> list[float]:
+        return [
+            YahooFinanceProvider._finite(value, "close")
+            for value in YahooFinanceProvider._complete_bars(history)["Close"].tolist()
+        ]
 
     @staticmethod
     def _build_support_resistance(history: Any, lookback: int = 20) -> dict[str, float]:
         if history is None or history.empty:
             raise RuntimeError("Yahoo returned no history for support/resistance calculation")
         if {"Low", "High"}.issubset(history.columns):
-            recent = history.tail(lookback)
-            support = float(recent["Low"].min())
-            resistance = float(recent["High"].max())
+            recent = YahooFinanceProvider._complete_bars(history).tail(lookback)
+            support = YahooFinanceProvider._finite(recent["Low"].min(), "support")
+            resistance = YahooFinanceProvider._finite(
+                recent["High"].max(), "resistance"
+            )
             return {
                 "support": round(support, 2),
                 "resistance": round(resistance, 2),
@@ -116,8 +180,12 @@ class YahooFinanceProvider(MarketDataProvider):
         if "Close" not in history:
             raise RuntimeError("Yahoo history is missing Close prices")
 
-        closes = [float(value) for value in history["Close"].tolist()]
-        return round(calculate_latest_rsi(closes, period), 2)
+        closes = YahooFinanceProvider._closes(history)
+        return round(
+            YahooFinanceProvider._finite(
+                calculate_latest_rsi(closes, period), "RSI"
+            ), 2
+        )
 
     @staticmethod
     def _build_ai_insight(price: float, ema20: float, support: float, resistance: float) -> str:

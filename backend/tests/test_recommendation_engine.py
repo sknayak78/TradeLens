@@ -1,6 +1,8 @@
 """Unit tests for the pure recommendation engine (no network, no database)."""
 from __future__ import annotations
 
+import json
+import math
 from pathlib import Path
 
 import pytest
@@ -60,6 +62,95 @@ def test_input_rejects_non_positive_price_and_blank_symbol():
         RecommendationInput(symbol="RELIANCE", price=0.0)
     with pytest.raises(ValueError):
         RecommendationInput(symbol="  ", price=100.0)
+
+
+# ---------- Non-finite provider values ----------
+
+def test_input_rejects_a_non_finite_price():
+    for price in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(ValueError):
+            RecommendationInput(symbol="RELIANCE", price=price)
+
+
+def test_non_finite_indicators_are_read_as_missing():
+    market = _bullish(
+        ema20=float("nan"),
+        ema50=float("inf"),
+        ema200=float("-inf"),
+        rsi=float("nan"),
+    )
+
+    assert (market.ema20, market.ema50, market.ema200, market.rsi) == (
+        None, None, None, None,
+    )
+    assert market.missing_indicators == ["ema20", "ema50", "ema200", "rsi"]
+
+
+def test_from_snapshot_treats_nan_indicators_as_missing():
+    stock = {
+        "symbol": "RELIANCE",
+        "price": 110.0,
+        "ema20": float("nan"),
+        "ema50": float("nan"),
+        "ema200": float("nan"),
+        "rsi": float("nan"),
+    }
+
+    market = RecommendationInput.from_snapshot(
+        stock, {"support": 100.0, "resistance": 120.0}
+    )
+
+    assert market.missing_indicators == ["ema20", "ema50", "ema200", "rsi"]
+    assert (market.support, market.resistance) == (100.0, 120.0)
+
+
+def test_from_snapshot_rejects_a_nan_price():
+    with pytest.raises(ValueError):
+        RecommendationInput.from_snapshot(
+            {"symbol": "RELIANCE", "price": float("nan")}
+        )
+
+
+def test_a_nan_riddled_snapshot_stays_json_compliant():
+    """Regression: NaN in the payload must never reach the JSON encoder."""
+    nan = float("nan")
+    stock = {
+        "symbol": "RELIANCE",
+        "price": 110.0,
+        "ema20": nan,
+        "ema50": nan,
+        "ema200": nan,
+        "rsi": nan,
+        "support": nan,
+        "resistance": nan,
+    }
+
+    recommendation = engine.recommend(RecommendationInput.from_snapshot(stock))
+    payload = recommendation.to_dict()
+
+    # allow_nan=False raises exactly the ValueError FastAPI reported.
+    assert json.loads(json.dumps(payload, allow_nan=False))
+    assert recommendation.data_quality == "Partial"
+    assert recommendation.levels is None
+    assert recommendation.action == "Avoid"
+
+
+def test_every_numeric_output_is_finite_across_degraded_inputs():
+    nan = float("nan")
+    cases = [
+        _bullish(),
+        _bullish(support=nan, resistance=nan),
+        _bullish(rsi=nan, ema200=nan),
+        _bullish(ema20=nan, support=109.99),
+        RecommendationInput(symbol="ITC", price=0.01, support=nan),
+    ]
+
+    for market in cases:
+        recommendation = engine.recommend(market)
+        numbers = [recommendation.score, recommendation.confidence]
+        if recommendation.levels is not None:
+            numbers.extend(recommendation.levels.to_dict().values())
+        assert all(math.isfinite(value) for value in numbers), market
 
 
 def test_from_snapshot_reads_live_fields_and_ignores_seeded_fields():
