@@ -53,12 +53,15 @@ from .models import (
     DataQuality,
     Recommendation,
     RecommendationInput,
+    Strategy,
     TradeLevels,
     Trend,
 )
 
 logger = logging.getLogger("tradelens.recommendation")
 
+#: Actions that put money to work today.
+_ENTRY_ACTIONS: Tuple[Action, ...] = ("Strong Buy", "Buy")
 #: Actions whose confidence grows with the bullish evidence.  For the waiting
 #: states the opposite holds: the weaker the setup, the surer the call.
 _POSITIVE_ACTIONS: Tuple[Action, ...] = ("Strong Buy", "Buy", "Watch")
@@ -79,6 +82,7 @@ class RecommendationEngine:
         limits = self._limits(market, trend, score, levels)
         action = self._action(trend, score, limits)
         published_levels = None if action == "Avoid" else levels
+        strategy = self._strategy(market, action, published_levels, limits)
 
         story = narrative.build(
             market=market,
@@ -94,6 +98,7 @@ class RecommendationEngine:
         recommendation = Recommendation(
             symbol=market.symbol,
             action=action,
+            strategy=strategy,
             verdict=story.verdict,
             summary=summary,
             conviction=self._conviction(score),
@@ -296,6 +301,28 @@ class RecommendationEngine:
         narrative.LIMIT_POOR_RISK_REWARD,
         narrative.LIMIT_WEAK_EVIDENCE,
     )
+
+    def _strategy(
+        self,
+        market: RecommendationInput,
+        action: Action,
+        levels: Optional[TradeLevels],
+        limits: Limits,
+    ) -> Strategy:
+        """Describe *how* an entry would be taken, separately from the decision.
+
+        Keeping this out of the action means a consumer switching on the action
+        never has to parse a strategy out of it.
+        """
+        if action in _ENTRY_ACTIONS:
+            return "Immediate Entry"
+        if action != "Watch":
+            return "No Entry Yet"
+        if narrative.LIMIT_THIN_HEADROOM in limits and market.resistance is not None:
+            return "Breakout Confirmation"
+        if levels is not None:
+            return "Pullback Entry"
+        return "No Entry Yet"
 
     def _action(self, trend: Trend, score: int, limits: Limits) -> Action:
         """Answer "should I open a position today?" and nothing else.

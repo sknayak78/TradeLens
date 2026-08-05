@@ -45,6 +45,7 @@ def _recommendation(
     levels = recommendation.levels
     return RecommendationOut(
         action=recommendation.action,
+        strategy=recommendation.strategy,
         verdict=recommendation.verdict,
         summary=recommendation.summary,
         conviction=recommendation.conviction,

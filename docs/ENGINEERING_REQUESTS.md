@@ -131,14 +131,16 @@ Done
 ### Business Goal
 
 Make the Recommendation Engine the authoritative, beginner-friendly answer to
-"is this a good time to buy this stock today?", per `docs/PRODUCT_VISION.md`.
+"is this a good time to buy this stock today?".
 
 ### Deliverables
 
 - Actions restricted to Strong Buy, Buy, Watch, Wait and Avoid; position
   management deferred to a future Portfolio Advisor.
-- Additive fields: `verdict`, `summary`, `why[]`, `positives[]`, `risks[]`,
-  `nextTrigger`, `beginnerTip`, `idealFor`.
+- Additive fields: `strategy`, `verdict`, `summary`, `why[]`, `positives[]`,
+  `risks[]`, `nextTrigger`, `beginnerTip`, `idealFor`.
+- Trading strategy (immediate, pullback, breakout confirmation) exposed as
+  `strategy` so the action stays a pure decision.
 - Plain-English explanations in place of indicator readings.
 - Confidence banded per action and never 100%.
 - Holding period always a trade duration, never a status.

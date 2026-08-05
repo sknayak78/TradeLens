@@ -55,13 +55,17 @@ def test_recommendation_block_is_camel_cased_and_populated(seeded: None) -> None
         "warnings", "levels",
     }
     v1_1_fields = {
-        "verdict", "summary", "why", "positives", "risks", "nextTrigger",
-        "beginnerTip", "idealFor",
+        "strategy", "verdict", "summary", "why", "positives", "risks",
+        "nextTrigger", "beginnerTip", "idealFor",
     }
 
     assert recommendation.keys() == v1_fields | v1_1_fields
     assert recommendation["action"] in {
         "Strong Buy", "Buy", "Watch", "Wait", "Avoid"
+    }
+    assert recommendation["strategy"] in {
+        "Immediate Entry", "Pullback Entry", "Breakout Confirmation",
+        "No Entry Yet",
     }
     assert 0 < recommendation["confidence"] < 1
     assert recommendation["holdingPeriod"]

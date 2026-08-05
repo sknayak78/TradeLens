@@ -18,6 +18,7 @@ from recommendation.config import (
     MAX_SCORE,
     MIN_RISK_REWARD,
     SCORING_RULES,
+    STRATEGIES,
 )
 from recommendation.engine import RecommendationEngine
 from recommendation.models import Recommendation, RecommendationInput
@@ -78,6 +79,44 @@ def test_scoring_rules_sum_to_one_hundred():
 def test_position_management_actions_are_out_of_scope():
     """Hold / Add More / Book Profit / Exit belong to the Portfolio Advisor."""
     assert ACTIONS == ("Strong Buy", "Buy", "Watch", "Wait", "Avoid")
+
+
+def test_no_action_encodes_a_trading_strategy():
+    """Breakout/pullback context lives in `strategy`, never in the action."""
+    for action in ACTIONS:
+        assert not any(word in action.lower() for word in ("breakout", "pullback"))
+    assert STRATEGIES == (
+        "Immediate Entry", "Pullback Entry", "Breakout Confirmation", "No Entry Yet"
+    )
+
+
+@pytest.mark.parametrize("action", BY_ACTION)
+def test_every_state_reports_a_known_strategy(action: str):
+    assert engine.recommend(BY_ACTION[action]).strategy in STRATEGIES
+
+
+def test_an_entry_call_is_taken_immediately():
+    for entry in (STRONG_BUY, BUY):
+        assert engine.recommend(entry).strategy == "Immediate Entry"
+
+
+def test_an_overextended_stock_is_bought_back_on_a_pullback():
+    recommendation = engine.recommend(WATCH_OVERBOUGHT)
+
+    assert recommendation.action == "Watch"
+    assert recommendation.strategy == "Pullback Entry"
+
+
+def test_a_stock_pinned_under_resistance_needs_the_breakout_to_confirm():
+    recommendation = engine.recommend(WATCH_AT_RESISTANCE)
+
+    assert recommendation.action == "Watch"
+    assert recommendation.strategy == "Breakout Confirmation"
+
+
+def test_a_waiting_call_has_no_entry_plan_to_describe():
+    assert engine.recommend(WAIT).strategy == "No Entry Yet"
+    assert engine.recommend(AVOID).strategy == "No Entry Yet"
 
 
 def test_every_action_is_fully_configured():

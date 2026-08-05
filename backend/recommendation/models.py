@@ -15,6 +15,11 @@ Trend = Literal["bullish", "bearish", "neutral"]
 #: context, so position-management verdicts (Hold, Add More, Book Profit, Exit)
 #: belong to a future Portfolio Advisor and are deliberately absent here.
 Action = Literal["Strong Buy", "Buy", "Watch", "Wait", "Avoid"]
+#: How an entry would be taken.  Trading strategy is deliberately kept out of
+#: ``Action`` so the action stays a pure decision.
+Strategy = Literal[
+    "Immediate Entry", "Pullback Entry", "Breakout Confirmation", "No Entry Yet"
+]
 Conviction = Literal["High", "Medium", "Low"]
 #: "Partial" whenever any live indicator was unavailable, so consumers can flag
 #: the recommendation instead of trusting a silently degraded one.
@@ -180,6 +185,9 @@ class Recommendation:
 
     symbol: str
     action: Action
+    #: The shape of the entry, if any: immediate, on a pullback, or only once a
+    #: breakout confirms.  Never folded into ``action``.
+    strategy: Strategy
     #: One line a trader can act on without reading anything else.
     verdict: str
     #: Two or three plain-English sentences: the call, the catch, the next step.

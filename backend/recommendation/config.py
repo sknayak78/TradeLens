@@ -121,6 +121,18 @@ CONVICTION_BANDS: list[dict] = [
 ACTIONS: tuple[str, ...] = ("Strong Buy", "Buy", "Watch", "Wait", "Avoid")
 
 
+# ---------- Strategy ----------
+
+#: How an entry would be taken, kept out of the action so the action stays a
+#: pure decision.  "No Entry Yet" means there is no entry plan to describe.
+STRATEGIES: tuple[str, ...] = (
+    "Immediate Entry",
+    "Pullback Entry",
+    "Breakout Confirmation",
+    "No Entry Yet",
+)
+
+
 # ---------- Action thresholds ----------
 
 ACTION_STRONG_BUY_MIN_SCORE: int = 90
