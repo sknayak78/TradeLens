@@ -16,6 +16,8 @@ import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import EmptyState from "@/components/common/EmptyState";
 import AnalysisBadges, { Stars, ActionPill } from "@/components/panels/AnalysisBadges";
+import RecommendationCard from "@/components/panels/RecommendationCard";
+import StockHero from "@/components/panels/StockHero";
 import { Sparkles, TrendingUp, TrendingDown } from "lucide-react";
 
 interface ChartCardProps {
@@ -59,7 +61,7 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
 
   return (
     <PanelCard
-      title="Chart & AI Insight"
+      title="Recommendation & Chart"
       subtitle={stock ? `${stock.symbol} · Intraday` : "Loading…"}
       testId="card-chart"
       action={
@@ -98,6 +100,9 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
       )}
       {!isLoading && !isError && stock && stats && (
         <div className="flex flex-col gap-4">
+          {/* Which stock am I looking at? */}
+          <StockHero stock={stock} dayLow={stats.min} dayHigh={stats.max} />
+
           {/* Symbol chips */}
           <div
             className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1"
@@ -119,47 +124,14 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
             ))}
           </div>
 
-          {/* Price header */}
-          <div className="flex items-end justify-between gap-4 flex-wrap">
-            <div>
-              <div className="flex items-baseline gap-3">
-                <span className="text-white text-2xl md:text-3xl font-semibold font-mono tabular-nums tracking-tight">
-                  ₹{stats.last.toLocaleString("en-IN")}
-                </span>
-                <span
-                  className={`font-mono tabular-nums text-sm ${
-                    stats.changePct >= 0
-                      ? "text-[#26a69a]"
-                      : "text-[#ef5350]"
-                  }`}
-                  data-testid="chart-change-pct"
-                >
-                  {stats.changePct >= 0 ? "+" : ""}
-                  {stats.changePct.toFixed(2)}%
-                </span>
-              </div>
-              <div className="text-[11px] text-[#787b86] mt-0.5 font-mono tabular-nums">
-                DAY {stats.min.toLocaleString("en-IN")} —{" "}
-                {stats.max.toLocaleString("en-IN")}
-              </div>
-            </div>
-            <div className="flex items-center gap-3 text-[11px] font-mono tabular-nums">
-              <div className="flex items-center gap-1.5 text-[#787b86]">
-                <span className="w-2 h-2 rounded-full bg-[#26a69a]" />
-                Support
-                <span className="text-[#d1d4dc]">
-                  {stock.support.toLocaleString("en-IN")}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[#787b86]">
-                <span className="w-2 h-2 rounded-full bg-[#ef5350]" />
-                Resistance
-                <span className="text-[#d1d4dc]">
-                  {stock.resistance.toLocaleString("en-IN")}
-                </span>
-              </div>
-            </div>
-          </div>
+          {/* Recommendation — the primary answer to "should I buy today?".
+              Falls back to the legacy insight panel when the engine could not
+              produce a decision. */}
+          {stock.recommendation ? (
+            <RecommendationCard recommendation={stock.recommendation} />
+          ) : (
+            <InsightPanel insight={stock.insight} />
+          )}
 
           {/* Chart */}
           <div
@@ -293,28 +265,34 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
             />
           </div>
 
-          <div
-            className="rounded-[4px] border border-[#2a2e39] bg-[#131722] p-3 flex gap-3"
-            data-testid="ai-insight"
-          >
-            <span className="mt-0.5 shrink-0 w-7 h-7 rounded-md bg-[#2962ff]/15 border border-[#2962ff]/30 text-[#2962ff] flex items-center justify-center">
-              <Sparkles size={14} />
-            </span>
-            <div>
-              <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
-                Insight
-              </div>
-              <p
-                className="text-sm text-[#d1d4dc] leading-relaxed"
-                data-testid="detail-insight"
-              >
-                {stock.insight}
-              </p>
-            </div>
-          </div>
         </div>
       )}
     </PanelCard>
+  );
+}
+
+/** Legacy technical insight, kept as the fallback when no recommendation. */
+function InsightPanel({ insight }: { insight: string }) {
+  return (
+    <div
+      className="rounded-[4px] border border-[#2a2e39] bg-[#131722] p-3 flex gap-3"
+      data-testid="ai-insight"
+    >
+      <span className="mt-0.5 shrink-0 w-7 h-7 rounded-md bg-[#2962ff]/15 border border-[#2962ff]/30 text-[#2962ff] flex items-center justify-center">
+        <Sparkles size={14} />
+      </span>
+      <div>
+        <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
+          Insight
+        </div>
+        <p
+          className="text-sm text-[#d1d4dc] leading-relaxed"
+          data-testid="detail-insight"
+        >
+          {insight}
+        </p>
+      </div>
+    </div>
   );
 }
 
