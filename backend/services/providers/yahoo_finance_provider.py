@@ -9,6 +9,7 @@ from typing import Any
 from pandas import Timestamp
 
 from indicators.ema import calculate_latest_ema
+from indicators.vwap import calculate_rolling_vwap
 from indicators.rsi import calculate_latest_rsi
 from services.market_data_provider import MarketDataProvider
 from services.providers.seed_provider import SeedProvider
@@ -158,6 +159,29 @@ class YahooFinanceProvider(MarketDataProvider):
         ]
 
     @staticmethod
+    def _build_vwap(history: Any, lookback: int = 20) -> float:
+        """Rolling volume-weighted average price over the recent sessions.
+
+        Serving the seeded VWAP alongside a live price produced values from a
+        different era of the stock, so it is recomputed from the same bars every
+        other indicator uses.
+        """
+        if history is None or history.empty:
+            raise RuntimeError("Yahoo returned no history for VWAP calculation")
+        if not {"High", "Low", "Close", "Volume"}.issubset(history.columns):
+            raise RuntimeError("Yahoo history is missing High/Low/Close/Volume")
+
+        bars = YahooFinanceProvider._complete_bars(history)
+        vwap = calculate_rolling_vwap(
+            highs=[YahooFinanceProvider._finite(v, "high") for v in bars["High"]],
+            lows=[YahooFinanceProvider._finite(v, "low") for v in bars["Low"]],
+            closes=[YahooFinanceProvider._finite(v, "close") for v in bars["Close"]],
+            volumes=[float(v or 0) for v in bars["Volume"]],
+            period=lookback,
+        )
+        return round(YahooFinanceProvider._finite(vwap, "VWAP"), 2)
+
+    @staticmethod
     def _build_support_resistance(history: Any, lookback: int = 20) -> dict[str, float]:
         if history is None or history.empty:
             raise RuntimeError("Yahoo returned no history for support/resistance calculation")
@@ -227,6 +251,7 @@ class YahooFinanceProvider(MarketDataProvider):
                 ema20=emas["ema20"],
                 ema50=emas["ema50"],
                 ema200=emas["ema200"],
+                vwap=self._build_vwap(history),
                 support=support_resistance["support"],
                 resistance=support_resistance["resistance"],
             )

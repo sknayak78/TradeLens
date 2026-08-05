@@ -175,3 +175,37 @@ week, and keep the narrative honest about what the indicators actually show.
 - Narrative claims tied to available indicators: no "buyers are in control" or
   "selling interest is weak" without support, and no long-term claims when the
   long-term average is missing.
+
+---
+
+## ER-0014B
+
+### Title
+
+Establish Recommendation as the Single Source of Truth
+
+### Priority
+
+P0
+
+### Status
+
+Done
+
+### Business Goal
+
+Make the API expose exactly one trading opinion, so a parent `trend`/`score` can
+never disagree with the `recommendation` block beneath it.
+
+### Deliverables
+
+- `services/stock_decision.decide()` is the only source of a published trend or
+  score; stock detail, watchlist, rankings and the catalog all read it.
+- Seeded `trend`/`score` literals are no longer served anywhere.
+- `vwap` recomputed from live bars as a rolling 20-session VWAP
+  (`indicators/vwap.py`) instead of carrying a seeded value from another era.
+- Legacy analysis fields (`suggestedAction`, `classification`, `insight`,
+  `tradeSetup`, `riskLevel`, `strengthScore`, `stars`) marked deprecated in the
+  schema; retained on the wire and still not inputs to the engine.
+- Field-by-field provenance and the migration plan documented in
+  `docs/DATA_PROVENANCE.md`.

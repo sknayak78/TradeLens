@@ -9,6 +9,7 @@ from models import WatchlistItem
 from schemas import WatchlistCreate, WatchlistAnalysis
 from analysis.service import service as analysis_service
 from services.market_data_service import market_data_service
+from services.stock_decision import decide
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
@@ -37,6 +38,7 @@ def _enrich(symbol: str) -> WatchlistAnalysis:
             suggestedAction="Avoid",
         )
     analysis = analysis_service.analyse(stock)
+    decision = decide(stock)
     return WatchlistAnalysis(
         **metadata,
         symbol=stock["symbol"],
@@ -45,8 +47,9 @@ def _enrich(symbol: str) -> WatchlistAnalysis:
         rsi=stock["rsi"],
         ema20=stock["ema20"],
         vwap=stock["vwap"],
-        score=stock["score"],
-        trend=stock["trend"],
+        # Parent trend/score are the recommendation's, never the provider's.
+        score=decision.score,
+        trend=decision.trend,
         changePct=stock["changePct"],
         strengthScore=analysis.strength_score,
         stars=analysis.stars,
