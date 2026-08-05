@@ -139,7 +139,7 @@ Make the Recommendation Engine the authoritative, beginner-friendly answer to
   management deferred to a future Portfolio Advisor.
 - Additive fields: `strategy`, `verdict`, `summary`, `why[]`, `positives[]`,
   `risks[]`, `nextTrigger`, `beginnerTip`, `idealFor`.
-- Trading strategy (immediate, pullback, breakout confirmation) exposed as
+- Trading strategy (Fresh Entry, Pullback, Breakout, No Entry Yet) exposed as
   `strategy` so the action stays a pure decision.
 - Plain-English explanations in place of indicator readings.
 - Confidence banded per action and never 100%.

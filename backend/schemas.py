@@ -155,10 +155,7 @@ class RecommendationOut(BaseModel):
     action: Literal["Strong Buy", "Buy", "Watch", "Wait", "Avoid"]
     # How an entry would be taken.  Trading strategy is kept out of `action` so
     # the action stays a pure decision.
-    strategy: Literal[
-        "Immediate Entry", "Pullback Entry", "Breakout Confirmation",
-        "No Entry Yet",
-    ]
+    strategy: Literal["Fresh Entry", "Pullback", "Breakout", "No Entry Yet"]
     verdict: str
     summary: str
     conviction: Literal["High", "Medium", "Low"]

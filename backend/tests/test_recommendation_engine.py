@@ -85,9 +85,7 @@ def test_no_action_encodes_a_trading_strategy():
     """Breakout/pullback context lives in `strategy`, never in the action."""
     for action in ACTIONS:
         assert not any(word in action.lower() for word in ("breakout", "pullback"))
-    assert STRATEGIES == (
-        "Immediate Entry", "Pullback Entry", "Breakout Confirmation", "No Entry Yet"
-    )
+    assert STRATEGIES == ("Fresh Entry", "Pullback", "Breakout", "No Entry Yet")
 
 
 @pytest.mark.parametrize("action", BY_ACTION)
@@ -97,21 +95,21 @@ def test_every_state_reports_a_known_strategy(action: str):
 
 def test_an_entry_call_is_taken_immediately():
     for entry in (STRONG_BUY, BUY):
-        assert engine.recommend(entry).strategy == "Immediate Entry"
+        assert engine.recommend(entry).strategy == "Fresh Entry"
 
 
 def test_an_overextended_stock_is_bought_back_on_a_pullback():
     recommendation = engine.recommend(WATCH_OVERBOUGHT)
 
     assert recommendation.action == "Watch"
-    assert recommendation.strategy == "Pullback Entry"
+    assert recommendation.strategy == "Pullback"
 
 
 def test_a_stock_pinned_under_resistance_needs_the_breakout_to_confirm():
     recommendation = engine.recommend(WATCH_AT_RESISTANCE)
 
     assert recommendation.action == "Watch"
-    assert recommendation.strategy == "Breakout Confirmation"
+    assert recommendation.strategy == "Breakout"
 
 
 def test_a_waiting_call_has_no_entry_plan_to_describe():

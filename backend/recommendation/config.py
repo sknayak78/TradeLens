@@ -126,9 +126,9 @@ ACTIONS: tuple[str, ...] = ("Strong Buy", "Buy", "Watch", "Wait", "Avoid")
 #: How an entry would be taken, kept out of the action so the action stays a
 #: pure decision.  "No Entry Yet" means there is no entry plan to describe.
 STRATEGIES: tuple[str, ...] = (
-    "Immediate Entry",
-    "Pullback Entry",
-    "Breakout Confirmation",
+    "Fresh Entry",
+    "Pullback",
+    "Breakout",
     "No Entry Yet",
 )
 

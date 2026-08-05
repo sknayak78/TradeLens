@@ -315,13 +315,13 @@ class RecommendationEngine:
         never has to parse a strategy out of it.
         """
         if action in _ENTRY_ACTIONS:
-            return "Immediate Entry"
+            return "Fresh Entry"
         if action != "Watch":
             return "No Entry Yet"
         if narrative.LIMIT_THIN_HEADROOM in limits and market.resistance is not None:
-            return "Breakout Confirmation"
+            return "Breakout"
         if levels is not None:
-            return "Pullback Entry"
+            return "Pullback"
         return "No Entry Yet"
 
     def _action(self, trend: Trend, score: int, limits: Limits) -> Action:

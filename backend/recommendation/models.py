@@ -17,9 +17,7 @@ Trend = Literal["bullish", "bearish", "neutral"]
 Action = Literal["Strong Buy", "Buy", "Watch", "Wait", "Avoid"]
 #: How an entry would be taken.  Trading strategy is deliberately kept out of
 #: ``Action`` so the action stays a pure decision.
-Strategy = Literal[
-    "Immediate Entry", "Pullback Entry", "Breakout Confirmation", "No Entry Yet"
-]
+Strategy = Literal["Fresh Entry", "Pullback", "Breakout", "No Entry Yet"]
 Conviction = Literal["High", "Medium", "Low"]
 #: "Partial" whenever any live indicator was unavailable, so consumers can flag
 #: the recommendation instead of trusting a silently degraded one.
