@@ -1,7 +1,21 @@
 """Pydantic schemas for TradeLens API."""
 from datetime import datetime
-from typing import Optional, List, Literal
+from typing import Any, Optional, List, Literal
 from pydantic import BaseModel, ConfigDict, Field
+
+
+#: Reason attached to every deprecated legacy analysis field, so the note appears
+#: once in the OpenAPI schema instead of being restated per model.
+LEGACY_ANALYSIS_DEPRECATION = (
+    "Deprecated: superseded by the `recommendation` block. Retained for "
+    "backward compatibility and scheduled for removal once the UI reads "
+    "`recommendation` exclusively."
+)
+
+
+def _legacy_field() -> Any:
+    """Declare a legacy analysis field as deprecated in the published schema."""
+    return Field(..., deprecated=True, description=LEGACY_ANALYSIS_DEPRECATION)
 
 
 class MarketMetadata(BaseModel):
@@ -183,29 +197,44 @@ class RecommendationOut(BaseModel):
 
 
 class StockDetail(MarketMetadata):
+    """One stock, as the detail screen consumes it.
+
+    `trend` and `score` are the Recommendation Engine's own values, so they can
+    never disagree with the `recommendation` block below them.
+    """
     symbol: str
     name: str
     price: float
     changePct: float
-    score: int
-    trend: Literal["bullish", "bearish", "neutral"]
+    score: int = Field(
+        ..., description="Recommendation score (0-100). Mirrors `recommendation.score`."
+    )
+    trend: Literal["bullish", "bearish", "neutral"] = Field(
+        ..., description="Recommendation trend. Mirrors `recommendation.trend`."
+    )
     rsi: float
     ema20: float
-    vwap: float
+    vwap: float = Field(
+        ...,
+        description=(
+            "Rolling 20-session volume-weighted average price, recomputed from "
+            "live bars."
+        ),
+    )
     volume: int
     sector: str
     support: float
     resistance: float
     aiInsight: str
     series: List[SeriesPoint]
-    # Analysis fields
-    strengthScore: int
-    stars: int
-    classification: str
-    tradeSetup: str
-    riskLevel: Literal["Low", "Medium", "High"]
-    suggestedAction: str
-    insight: str
+    # Legacy analysis fields — deprecated, never inputs to the engine.
+    strengthScore: int = _legacy_field()
+    stars: int = _legacy_field()
+    classification: str = _legacy_field()
+    tradeSetup: str = _legacy_field()
+    riskLevel: Literal["Low", "Medium", "High"] = _legacy_field()
+    suggestedAction: str = _legacy_field()
+    insight: str = _legacy_field()
     # Additive: absent only when live indicators are too sparse to score.
     recommendation: Optional[RecommendationOut] = None
 
@@ -217,15 +246,18 @@ class Ranking(MarketMetadata):
     name: str
     price: float
     changePct: float
-    strengthScore: int
-    stars: int
-    classification: str
-    trend: Literal["bullish", "bearish", "neutral"]
-    tradeSetup: str
-    riskLevel: Literal["Low", "Medium", "High"]
-    suggestedAction: str
-    insight: str
+    trend: Literal["bullish", "bearish", "neutral"] = Field(
+        ..., description="Recommendation trend for this stock."
+    )
     reason: str
+    # Legacy analysis fields — deprecated, never inputs to the engine.
+    strengthScore: int = _legacy_field()
+    stars: int = _legacy_field()
+    classification: str = _legacy_field()
+    tradeSetup: str = _legacy_field()
+    riskLevel: Literal["Low", "Medium", "High"] = _legacy_field()
+    suggestedAction: str = _legacy_field()
+    insight: str = _legacy_field()
 
 
 class WatchlistAnalysis(MarketMetadata):
@@ -236,11 +268,16 @@ class WatchlistAnalysis(MarketMetadata):
     rsi: float
     ema20: float
     vwap: float
-    score: int
-    trend: Literal["bullish", "bearish", "neutral"]
+    score: int = Field(
+        ..., description="Recommendation score (0-100) for this stock."
+    )
+    trend: Literal["bullish", "bearish", "neutral"] = Field(
+        ..., description="Recommendation trend for this stock."
+    )
     changePct: float
-    strengthScore: int
-    stars: int
-    tradeSetup: str
-    riskLevel: Literal["Low", "Medium", "High"]
-    suggestedAction: str
+    # Legacy analysis fields — deprecated, never inputs to the engine.
+    strengthScore: int = _legacy_field()
+    stars: int = _legacy_field()
+    tradeSetup: str = _legacy_field()
+    riskLevel: Literal["Low", "Medium", "High"] = _legacy_field()
+    suggestedAction: str = _legacy_field()

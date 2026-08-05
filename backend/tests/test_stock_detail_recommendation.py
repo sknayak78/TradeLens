@@ -12,6 +12,7 @@ import pytest
 import routers.market as market_router
 from services.market_data_service import MarketDataService
 from services.providers.seed_provider import SeedProvider
+from services.stock_decision import decide
 
 
 @pytest.fixture
@@ -120,8 +121,8 @@ def test_legacy_analysis_fields_do_not_influence_the_recommendation(
         "trend": "bearish",
     }
 
-    clean = market_router._recommendation(snapshot, {})
-    contaminated = market_router._recommendation({**snapshot, **legacy}, {})
+    clean = decide(snapshot, {}).recommendation
+    contaminated = decide({**snapshot, **legacy}, {}).recommendation
 
     assert clean == contaminated
     assert clean is not None and clean.action == "Strong Buy"
@@ -150,13 +151,21 @@ def test_partial_indicator_set_is_reported_not_silently_degraded(
     )
 
 
-def test_unusable_snapshot_yields_no_block_instead_of_raising() -> None:
+@pytest.mark.parametrize(
+    "snapshot",
+    [
+        {"symbol": "RELIANCE"},
+        {"symbol": "RELIANCE", "price": None},
+        {"price": 100.0},
+    ],
+)
+def test_unusable_snapshot_yields_no_block_instead_of_raising(snapshot: dict) -> None:
     """A snapshot without a numeric price must not break the response."""
-    assert market_router._recommendation({"symbol": "RELIANCE"}, {}) is None
-    assert market_router._recommendation(
-        {"symbol": "RELIANCE", "price": None}, {}
-    ) is None
-    assert market_router._recommendation({"price": 100.0}, {}) is None
+    decision = decide(snapshot, {})
+
+    assert decision.recommendation is None
+    # The parent payload then publishes no direction rather than a guessed one.
+    assert (decision.trend, decision.score) == ("neutral", 0)
 
 
 def test_unknown_symbol_still_returns_404(seeded: None) -> None:

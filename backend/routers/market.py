@@ -16,32 +16,17 @@ from schemas import (
     SeriesPoint,
 )
 from analysis.service import service as analysis_service
-from recommendation.engine import engine as recommendation_engine
-from recommendation.models import RecommendationInput
+from recommendation.models import Recommendation
 from services.market_data_service import market_data_service
+from services.stock_decision import decide
 
 logger = logging.getLogger("tradelens.market")
 
 router = APIRouter(tags=["market"])
 
 
-def _recommendation(
-    stock: Dict[str, Any], insight: Dict[str, Any]
-) -> Optional[RecommendationOut]:
-    """Map the pure engine's output onto the API model.
-
-    Returns ``None`` when the live snapshot cannot even be read, so the rest of
-    the response is never at risk.
-    """
-    try:
-        market = RecommendationInput.from_snapshot(stock, insight)
-    except (KeyError, ValueError):
-        logger.warning(
-            "market.recommendation_skipped_unusable_snapshot", exc_info=True
-        )
-        return None
-
-    recommendation = recommendation_engine.recommend(market)
+def _recommendation_out(recommendation: Recommendation) -> RecommendationOut:
+    """Map the pure engine's output onto the API model."""
     levels = recommendation.levels
     return RecommendationOut(
         action=recommendation.action,
@@ -88,7 +73,8 @@ def list_stocks(q: str = "", limit: int = 20) -> List[StockSummary]:
             name=s["name"],
             price=s["price"],
             changePct=s["changePct"],
-            trend=s["trend"],
+            # Derived from the indicators on the row, not the seeded literal.
+            trend=decide(s).trend,
             sector=s["sector"],
         )
         for s in matches
@@ -135,7 +121,7 @@ def opportunities() -> List[Ranking]:
             "name": stock["name"],
             "price": stock["price"],
             "changePct": stock["changePct"],
-            "trend": stock["trend"],
+            "trend": decide(stock).trend,
             "analysis": analysis,
         })
 
@@ -162,7 +148,7 @@ def opportunities() -> List[Ranking]:
             strengthScore=a.strength_score,
             stars=a.stars,
             classification=a.classification,
-            trend=a.trend,
+            trend=r["trend"],
             tradeSetup=a.trade_setup,
             riskLevel=a.risk_level,
             suggestedAction=a.suggested_action,
@@ -182,6 +168,7 @@ def stock_detail(symbol: str) -> StockDetail:
 
     insight = market_data_service.get_stock_insight(symbol).data
     analysis = analysis_service.analyse(stock)
+    decision = decide(stock, insight)
 
     return StockDetail(
         **stock_result.metadata.to_api_dict(),
@@ -189,8 +176,9 @@ def stock_detail(symbol: str) -> StockDetail:
         name=stock["name"],
         price=stock["price"],
         changePct=stock["changePct"],
-        score=stock["score"],
-        trend=stock["trend"],
+        # Parent trend/score are the recommendation's, never the provider's.
+        score=decision.score,
+        trend=decision.trend,
         rsi=stock["rsi"],
         ema20=stock["ema20"],
         vwap=stock["vwap"],
@@ -207,5 +195,9 @@ def stock_detail(symbol: str) -> StockDetail:
         riskLevel=analysis.risk_level,
         suggestedAction=analysis.suggested_action,
         insight=analysis.insight,
-        recommendation=_recommendation(stock, insight),
+        recommendation=(
+            None
+            if decision.recommendation is None
+            else _recommendation_out(decision.recommendation)
+        ),
     )
