@@ -11,9 +11,13 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Literal, Mapping, Optional
 
 Trend = Literal["bullish", "bearish", "neutral"]
-Action = Literal[
-    "Strong Buy", "Buy", "Buy on Breakout", "Hold", "Watch", "Wait", "Avoid"
-]
+#: The engine answers "should I open a position today?" and has no portfolio
+#: context, so position-management verdicts (Hold, Add More, Book Profit, Exit)
+#: belong to a future Portfolio Advisor and are deliberately absent here.
+Action = Literal["Strong Buy", "Buy", "Watch", "Wait", "Avoid"]
+#: How an entry would be taken.  Trading strategy is deliberately kept out of
+#: ``Action`` so the action stays a pure decision.
+Strategy = Literal["Fresh Entry", "Pullback", "Breakout", "No Entry Yet"]
 Conviction = Literal["High", "Medium", "Low"]
 #: "Partial" whenever any live indicator was unavailable, so consumers can flag
 #: the recommendation instead of trusting a silently degraded one.
@@ -132,6 +136,37 @@ class RecommendationInput:
         return (self.price - self.support) / self.price * 100
 
     @property
+    def stack_rising(self) -> bool:
+        """True when the short average leads the medium and the medium the long.
+
+        The shape of a trend that has been up for a while, regardless of where
+        today's price sits inside it.
+        """
+        if None in (self.ema20, self.ema50, self.ema200):
+            return False
+        return self.ema20 > self.ema50 > self.ema200  # type: ignore[operator]
+
+    @property
+    def stack_falling(self) -> bool:
+        """True when the averages are stacked the other way round."""
+        if None in (self.ema20, self.ema50, self.ema200):
+            return False
+        return self.ema20 < self.ema50 < self.ema200  # type: ignore[operator]
+
+    @property
+    def is_pullback(self) -> bool:
+        """A dip under a shorter average while the long-term uptrend holds.
+
+        Distinguishing this from a breakdown is what keeps a healthy stock
+        having a bad week out of the "Avoid" bucket.
+        """
+        if self.ema200 is None or self.price <= self.ema200:
+            return False
+        return any(
+            ema is not None and self.price <= ema for ema in (self.ema20, self.ema50)
+        )
+
+    @property
     def missing_indicators(self) -> List[str]:
         """Names of the optional indicators the provider did not supply."""
         return [
@@ -170,20 +205,44 @@ class TradeLevels:
 
 @dataclass(frozen=True)
 class Recommendation:
-    """Deterministic recommendation derived from live indicators only."""
+    """Deterministic recommendation derived from live indicators only.
+
+    The decision fields a consumer should render are ``action``, ``verdict``,
+    ``summary``, ``levels`` and ``next_trigger``; the remaining fields explain
+    that decision or preserve the v1.0 contract.
+    """
 
     symbol: str
     action: Action
+    #: The shape of the entry, if any: immediate, on a pullback, or only once a
+    #: breakout confirms.  Never folded into ``action``.
+    strategy: Strategy
+    #: One line a trader can act on without reading anything else.
+    verdict: str
+    #: Two or three plain-English sentences: the call, the catch, the next step.
+    summary: str
     conviction: Conviction
     score: int
     trend: Trend
+    #: TradeLens' confidence in its own call (0-1), never the odds of a profit
+    #: and never 1.0.
     confidence: float
     data_quality: DataQuality
+    #: Expected duration of the trade once a valid entry is taken.
     holding_period: str
+    #: The single thing that has to happen before this call changes.
+    next_trigger: str
+    beginner_tip: str
+    ideal_for: str
     #: Plain-language next step for a beginner, e.g. "Wait for a daily close
-    #: above resistance 120.00 before entering."
+    #: above resistance 120.00 before entering."  Superseded by ``next_trigger``.
     entry_condition: str
+    #: Deprecated alias of ``summary``, kept so v1.0 consumers keep rendering.
     rationale: str
+    #: Why this call was made, including why it was not upgraded further.
+    why: List[str] = field(default_factory=list)
+    positives: List[str] = field(default_factory=list)
+    risks: List[str] = field(default_factory=list)
     rules_matched: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     levels: Optional[TradeLevels] = None

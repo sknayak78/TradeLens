@@ -96,6 +96,14 @@ SCORING_RULES: list[Rule] = [
 MAX_SCORE: int = sum(rule.points for rule in SCORING_RULES)  # 100
 
 
+# ---------- Reward quality bands used by the plain-English narrative ----------
+
+# Reward:risk at or above this reads as "generous" rather than merely acceptable.
+GOOD_RISK_REWARD: float = 2.0
+# Headroom at or above this reads as "plenty of room" to the next hurdle.
+COMFORTABLE_HEADROOM_PCT: float = 6.0
+
+
 # ---------- Conviction bands (inclusive lower bound) ----------
 
 CONVICTION_BANDS: list[dict] = [
@@ -105,13 +113,51 @@ CONVICTION_BANDS: list[dict] = [
 ]
 
 
+# ---------- Actions ----------
+
+#: The only answers the engine may give, strongest first.  Position management
+#: (Hold, Add More, Book Profit, Exit) needs portfolio context the engine does
+#: not have and belongs to a future Portfolio Advisor.
+ACTIONS: tuple[str, ...] = ("Strong Buy", "Buy", "Watch", "Wait", "Avoid")
+
+
+# ---------- Strategy ----------
+
+#: How an entry would be taken, kept out of the action so the action stays a
+#: pure decision.  "No Entry Yet" means there is no entry plan to describe.
+STRATEGIES: tuple[str, ...] = (
+    "Fresh Entry",
+    "Pullback",
+    "Breakout",
+    "No Entry Yet",
+)
+
+
 # ---------- Action thresholds ----------
 
 ACTION_STRONG_BUY_MIN_SCORE: int = 90
 ACTION_BUY_MIN_SCORE: int = 80
-# Also the floor for "Hold": a trend still healthy enough for existing holders.
+# The floor a blocked entry must clear to stay a "Watch" rather than a "Wait".
+# There is no floor below it: "Avoid" is decided by a broken trend, not by a
+# low score, so a pullback with thin evidence still lands on "Wait".
 ACTION_WATCH_MIN_SCORE: int = 60
-ACTION_WAIT_MIN_SCORE: int = 40
+
+
+# ---------- Confidence bands per action (inclusive, as a 0-1 fraction) ----------
+
+# Confidence expresses how sure TradeLens is of its own call, not the odds of a
+# profitable trade, so every action owns a band and 100% is unreachable by
+# construction.
+CONFIDENCE_BANDS: dict[str, tuple[float, float]] = {
+    "Strong Buy": (0.90, 0.95),
+    "Buy": (0.80, 0.90),
+    "Watch": (0.60, 0.75),
+    "Wait": (0.40, 0.60),
+    "Avoid": (0.20, 0.40),
+}
+
+#: No recommendation may ever claim certainty.
+CONFIDENCE_CEILING: float = 0.95
 
 
 # ---------- Indicator labels for human-readable data-quality warnings ----------
@@ -128,12 +174,63 @@ INDICATOR_LABELS: dict[str, str] = {
 
 # ---------- Holding period per action ----------
 
+# The expected duration of the trade *after* a valid entry, never a status such
+# as "Wait": a trader planning an entry needs the horizon before they take it.
+# Avoid carries the longest horizon because the trend has to repair itself first.
 HOLDING_PERIODS: dict[str, str] = {
-    "Strong Buy": "2-6 weeks",
-    "Buy": "1-4 weeks",
-    "Buy on Breakout": "1-4 weeks after the breakout confirms",
-    "Hold": "Existing holders",
-    "Watch": "Wait",
-    "Wait": "Wait",
-    "Avoid": "No Trade",
+    "Strong Buy": "1-3 Months",
+    "Buy": "1-3 Weeks",
+    "Watch": "1-3 Weeks",
+    "Wait": "1-3 Weeks",
+    "Avoid": "1-3 Months",
+}
+
+
+# ---------- Who each action suits ----------
+
+IDEAL_FOR: dict[str, str] = {
+    "Strong Buy": (
+        "Beginners who want a clean trend to follow with a clearly defined exit."
+    ),
+    "Buy": (
+        "Traders who are comfortable entering a healthy trend and sizing the "
+        "position modestly."
+    ),
+    "Watch": (
+        "Patient traders happy to keep this on a shortlist and act only when the "
+        "price comes to them."
+    ),
+    "Wait": (
+        "Traders who would rather miss a move than pay a poor price; there is "
+        "nothing to do here today."
+    ),
+    "Avoid": (
+        "Nobody looking for a fresh position today, and least of all beginners."
+    ),
+}
+
+
+# ---------- Beginner coaching per action ----------
+
+BEGINNER_TIPS: dict[str, str] = {
+    "Strong Buy": (
+        "Even the best-looking setup can fail, so decide your exit price before "
+        "you buy and never risk more than a small slice of your capital."
+    ),
+    "Buy": (
+        "Buy in one go only if you are comfortable with the exit price; "
+        "otherwise start small and add once the stock proves itself."
+    ),
+    "Watch": (
+        "Chasing a stock that has already moved is the most common beginner "
+        "mistake. Set an alert and let the price come to you."
+    ),
+    "Wait": (
+        "Sitting on your hands is a position too. Missing a trade costs you "
+        "nothing; a bad entry costs you money."
+    ),
+    "Avoid": (
+        "A falling stock always looks cheap on the way down. Wait for buyers to "
+        "show up before you try to catch it."
+    ),
 }

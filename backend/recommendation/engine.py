@@ -1,13 +1,21 @@
 """RecommendationEngine — deterministic trade recommendations from live indicators.
 
+The engine answers one question: *is this a good time to open a position in this
+stock today?*  It has no portfolio context, so it never returns a
+position-management verdict (Hold, Add More, Book Profit, Exit); those belong to
+a future Portfolio Advisor.  The five answers it can give are Strong Buy, Buy,
+Watch, Wait and Avoid.
+
 The engine is pure: no network access, no database access, no LLM, no clock or
 randomness.  It consumes a :class:`~recommendation.models.RecommendationInput`
 (price, EMA20/50/200, RSI, support, resistance) and returns a
-:class:`~recommendation.models.Recommendation` describing an action, its
-conviction, the derived trend, long trade levels and a short rationale.
+:class:`~recommendation.models.Recommendation` carrying the action, a one-line
+verdict, a plain-English summary, the reasoning, the trade levels and the next
+thing to watch.
 
 Trend is derived from the EMA stack rather than taken from any snapshot field so
-seeded trend values cannot influence the outcome.
+seeded trend values — and every legacy analysis field — cannot influence the
+outcome.
 """
 from __future__ import annotations
 
@@ -16,13 +24,18 @@ import logging
 import math
 from typing import Any, List, Optional, Tuple
 
+from . import narrative
+from .narrative import Limits
 from .config import (
     ACTION_BUY_MIN_SCORE,
     ACTION_STRONG_BUY_MIN_SCORE,
-    ACTION_WAIT_MIN_SCORE,
     ACTION_WATCH_MIN_SCORE,
+    BEGINNER_TIPS,
+    CONFIDENCE_BANDS,
+    CONFIDENCE_CEILING,
     CONVICTION_BANDS,
     HOLDING_PERIODS,
+    IDEAL_FOR,
     INDICATOR_LABELS,
     MAX_SCORE,
     MIN_HEADROOM_PCT,
@@ -39,14 +52,18 @@ from .models import (
     DataQuality,
     Recommendation,
     RecommendationInput,
+    Strategy,
     TradeLevels,
     Trend,
 )
 
 logger = logging.getLogger("tradelens.recommendation")
 
-_BUY_ACTIONS: Tuple[Action, ...] = ("Strong Buy", "Buy", "Buy on Breakout")
-_FRESH_ENTRY_ACTIONS: Tuple[Action, ...] = ("Strong Buy", "Buy")
+#: Actions that put money to work today.
+_ENTRY_ACTIONS: Tuple[Action, ...] = ("Strong Buy", "Buy")
+#: Actions whose confidence grows with the bullish evidence.  For the waiting
+#: states the opposite holds: the weaker the setup, the surer the call.
+_POSITIVE_ACTIONS: Tuple[Action, ...] = ("Strong Buy", "Buy", "Watch")
 
 
 def _event(event: str, **fields: Any) -> str:
@@ -60,39 +77,48 @@ class RecommendationEngine:
     def recommend(self, market: RecommendationInput) -> Recommendation:
         rules_matched, score = self._score(market)
         trend = self._trend(market)
-        warnings = self._warnings(market)
         levels = self._levels(market)
-        action = self._action(market, trend, score)
+        limits = self._limits(market, trend, score, levels)
+        action = self._action(trend, score, limits)
+        published_levels = None if action == "Avoid" else levels
+        strategy = self._strategy(market, action, published_levels, limits)
 
-        if action in _BUY_ACTIONS and levels is None:
-            # Without an entry zone, a stop and a target there is nothing to
-            # enter; an extended winner is still holdable, missing data is not.
-            warnings.append("no_usable_levels")
-            action = self._downgrade(trend, score)
-        elif (
-            action in _FRESH_ENTRY_ACTIONS
-            and levels is not None
-            and levels.risk_reward < MIN_RISK_REWARD
-        ):
-            # Breakout entries are priced above resistance, so the reward:risk
-            # gate only applies to an immediate entry inside the zone.
-            warnings.append("risk_reward_below_minimum")
-            action = self._downgrade(trend, score)
+        story = narrative.build(
+            market=market,
+            trend=trend,
+            action=action,
+            score=score,
+            rules_matched=rules_matched,
+            levels=published_levels,
+            limits=limits,
+        )
+        summary = story.summary
 
         recommendation = Recommendation(
             symbol=market.symbol,
             action=action,
+            strategy=strategy,
+            verdict=story.verdict,
+            summary=summary,
             conviction=self._conviction(score),
             score=score,
             trend=trend,
-            confidence=self._confidence(market, score),
+            confidence=self._confidence(market, action, score),
             data_quality=self._data_quality(market),
             holding_period=HOLDING_PERIODS[action],
-            entry_condition=self._entry_condition(market, action, levels),
-            rationale=self._rationale(market, trend, action, rules_matched),
+            next_trigger=story.next_trigger,
+            beginner_tip=BEGINNER_TIPS[action],
+            ideal_for=IDEAL_FOR[action],
+            entry_condition=story.entry_condition,
+            # Legacy field: v1.0 consumers render `rationale`, which now carries
+            # the same plain-English text as `summary`.
+            rationale=summary,
+            why=story.why,
+            positives=story.positives,
+            risks=story.risks,
             rules_matched=rules_matched,
-            warnings=warnings,
-            levels=None if action == "Avoid" else levels,
+            warnings=self._warnings(market, limits),
+            levels=published_levels,
         )
         logger.debug(_event(
             "recommendation.generated",
@@ -125,17 +151,39 @@ class RecommendationEngine:
                 return band["label"]
         return CONVICTION_BANDS[-1]["label"]
 
-    def _confidence(self, market: RecommendationInput, score: int) -> float:
-        """Blend indicator completeness with rule strength into a 0-1 value."""
-        strength = 0.5 + 0.5 * (score / MAX_SCORE)
-        return round(market.completeness * strength, 2)
+    def _confidence(
+        self, market: RecommendationInput, action: Action, score: int
+    ) -> float:
+        """How sure TradeLens is of *this call* — not the odds of a profit.
+
+        Each action owns a band, so confidence can never contradict the action
+        it accompanies, and the position inside that band comes from how much
+        evidence the call rests on: the strength of the setup plus how much of
+        the market history was actually available.  A waiting call is read the
+        other way round — the weaker the setup, the surer TradeLens is that
+        standing aside is right.
+        """
+        low, high = CONFIDENCE_BANDS[action]
+        setup_strength = score / MAX_SCORE
+        if action not in _POSITIVE_ACTIONS:
+            setup_strength = 1.0 - setup_strength
+        evidence = 0.5 * setup_strength + 0.5 * market.completeness
+        return round(min(low + (high - low) * evidence, CONFIDENCE_CEILING), 2)
 
     def _data_quality(self, market: RecommendationInput) -> DataQuality:
         return "Complete" if not market.missing_indicators else "Partial"
 
-    # ---------- Trend (EMA stack only) ----------
+    # ---------- Trend (the three averages read together) ----------
 
     def _trend(self, market: RecommendationInput) -> Trend:
+        """Read the short, medium and long averages as one structure.
+
+        A single average cannot tell a pullback from a breakdown, so the three
+        are weighed together: while the price holds above its long-term average
+        the larger uptrend is intact and a dip under the shorter averages is a
+        pullback, never a downtrend.  Only a price that has lost the long-term
+        average — or every average, when there is no long-term one — is bearish.
+        """
         emas = [
             value
             for value in (market.ema20, market.ema50, market.ema200)
@@ -144,15 +192,19 @@ class RecommendationEngine:
         if not emas:
             return "neutral"
         above = sum(1 for ema in emas if market.price > ema)
-        if above == len(emas):
+
+        if above == len(emas) and not market.stack_falling:
             return "bullish"
-        if above == 0:
+        if market.ema200 is not None and market.price > market.ema200:
+            # Below a shorter average but still above the long-term one.
+            return "neutral"
+        if above == 0 or market.stack_falling:
             return "bearish"
         return "neutral"
 
-    # ---------- Warnings ----------
+    # ---------- Warnings (machine-readable; prose lives in `risks`) ----------
 
-    def _warnings(self, market: RecommendationInput) -> List[str]:
+    def _warnings(self, market: RecommendationInput, limits: Limits) -> List[str]:
         warnings: List[str] = []
         missing = market.missing_indicators
         if missing:
@@ -168,6 +220,10 @@ class RecommendationEngine:
                 warnings.append("rsi_oversold")
         if market.resistance is not None and market.price >= market.resistance:
             warnings.append("price_at_or_above_resistance")
+        if narrative.LIMIT_NO_LEVELS in limits:
+            warnings.append("no_usable_levels")
+        if narrative.LIMIT_POOR_RISK_REWARD in limits:
+            warnings.append("risk_reward_below_minimum")
         return warnings
 
     # ---------- Trade levels ----------
@@ -211,159 +267,95 @@ class RecommendationEngine:
             risk_reward=round(risk_reward, 2),
         )
 
+    # ---------- Blockers ----------
+
+    def _limits(
+        self,
+        market: RecommendationInput,
+        trend: Trend,
+        score: int,
+        levels: Optional[TradeLevels],
+    ) -> Limits:
+        """Everything standing between this snapshot and a fresh entry today.
+
+        The same list decides the action and drives the "why not stronger?"
+        explanation, so the two can never disagree.
+        """
+        limits: List[str] = []
+        if trend == "bearish":
+            limits.append(narrative.LIMIT_TREND_BEARISH)
+        elif trend != "bullish":
+            limits.append(narrative.LIMIT_TREND_NOT_BULLISH)
+        if market.rsi is not None and market.rsi >= RSI_OVERBOUGHT:
+            limits.append(narrative.LIMIT_OVERBOUGHT)
+        headroom = market.headroom_pct
+        if headroom is None or headroom < MIN_HEADROOM_PCT:
+            limits.append(narrative.LIMIT_THIN_HEADROOM)
+        if levels is None:
+            limits.append(narrative.LIMIT_NO_LEVELS)
+        elif levels.risk_reward < MIN_RISK_REWARD:
+            limits.append(narrative.LIMIT_POOR_RISK_REWARD)
+        if score < ACTION_BUY_MIN_SCORE:
+            limits.append(narrative.LIMIT_WEAK_EVIDENCE)
+        if market.missing_indicators:
+            limits.append(narrative.LIMIT_PARTIAL_DATA)
+        return tuple(limits)
+
     # ---------- Action ----------
 
-    def _action(
-        self, market: RecommendationInput, trend: Trend, score: int
-    ) -> Action:
-        if trend == "bearish":
-            return "Avoid"
-        if market.rsi is not None and market.rsi >= RSI_OVERBOUGHT:
-            # Stretched momentum rules out a fresh entry, but a healthy trend is
-            # still worth holding for anyone already positioned.
-            return self._downgrade(trend, score)
-        if score >= ACTION_BUY_MIN_SCORE and trend == "bullish":
-            headroom = market.headroom_pct
-            if headroom is not None and headroom >= MIN_HEADROOM_PCT:
-                if score >= ACTION_STRONG_BUY_MIN_SCORE:
-                    return "Strong Buy"
-                return "Buy"
-            return "Buy on Breakout"
-        if score >= ACTION_WATCH_MIN_SCORE:
-            return "Watch"
-        if score >= ACTION_WAIT_MIN_SCORE:
-            return "Wait"
-        return "Avoid"
+    _ENTRY_BLOCKERS = (
+        narrative.LIMIT_TREND_BEARISH,
+        narrative.LIMIT_TREND_NOT_BULLISH,
+        narrative.LIMIT_OVERBOUGHT,
+        narrative.LIMIT_THIN_HEADROOM,
+        narrative.LIMIT_NO_LEVELS,
+        narrative.LIMIT_POOR_RISK_REWARD,
+        narrative.LIMIT_WEAK_EVIDENCE,
+    )
 
-    def _downgrade(self, trend: Trend, score: int) -> Action:
-        """Resolve a blocked entry into "Hold" (trend intact) or a wait state.
-
-        Existing holders keep a position while the trend and score still stand;
-        otherwise there is nothing to do yet.
-        """
-        if trend == "bullish" and score >= ACTION_WATCH_MIN_SCORE:
-            return "Hold"
-        if score >= ACTION_WATCH_MIN_SCORE:
-            return "Watch"
-        return "Wait"
-
-    # ---------- Beginner-facing entry condition (template-based, no LLM) ----------
-
-    def _entry_condition(
+    def _strategy(
         self,
         market: RecommendationInput,
         action: Action,
         levels: Optional[TradeLevels],
-    ) -> str:
-        """Return the one concrete thing a beginner should watch for next."""
-        if action in ("Strong Buy", "Buy") and levels is not None:
-            return (
-                f"Consider entering between {levels.entry_min:.2f} and "
-                f"{levels.entry_max:.2f} once the price stabilises, and exit if it "
-                f"closes below {levels.stop_loss:.2f}."
-            )
-        if action == "Buy on Breakout":
-            if market.resistance is not None:
-                return (
-                    "Wait for a daily close above resistance "
-                    f"{market.resistance:.2f} before entering."
-                )
-            return "Wait for a daily close above the recent high before entering."
-        if action == "Hold":
-            if levels is not None:
-                return (
-                    "No fresh entry here: hold and reassess if the price closes "
-                    f"below {levels.stop_loss:.2f}."
-                )
-            if market.support is not None:
-                return (
-                    "No fresh entry here: hold and reassess if the price closes "
-                    f"below support {market.support:.2f}."
-                )
-            return "No fresh entry here: hold and reassess on the next pullback."
-        if action == "Watch":
-            if levels is not None:
-                return (
-                    "Wait for the price to pull back into "
-                    f"{levels.entry_min:.2f}-{levels.entry_max:.2f} and hold there."
-                )
-            if market.ema20 is not None:
-                return (
-                    f"Wait for the price to stabilise near EMA20 {market.ema20:.2f} "
-                    "before considering an entry."
-                )
-            return "Wait for clearer support and resistance levels before acting."
-        if action == "Wait":
-            if market.rsi is not None and market.rsi >= RSI_OVERBOUGHT:
-                return "Wait for momentum to cool: RSI is above 80."
-            return "Wait for the setup to strengthen before considering an entry."
-        return "No trade: stay out until the price reclaims its moving averages."
+        limits: Limits,
+    ) -> Strategy:
+        """Describe *how* an entry would be taken, separately from the decision.
 
-    # ---------- Rationale (template-based, no LLM) ----------
+        Keeping this out of the action means a consumer switching on the action
+        never has to parse a strategy out of it.
+        """
+        if action in _ENTRY_ACTIONS:
+            return "Fresh Entry"
+        if action != "Watch":
+            return "No Entry Yet"
+        if narrative.LIMIT_THIN_HEADROOM in limits and market.resistance is not None:
+            return "Breakout"
+        if levels is not None:
+            return "Pullback"
+        return "No Entry Yet"
 
-    def _rationale(
-        self,
-        market: RecommendationInput,
-        trend: Trend,
-        action: Action,
-        rules_matched: List[str],
-    ) -> str:
-        parts: List[str] = []
+    def _action(self, trend: Trend, score: int, limits: Limits) -> Action:
+        """Answer "should I open a position today?" and nothing else.
 
-        # Line 1 — location relative to the EMA stack.
-        if "ema_stack_bullish" in rules_matched:
-            parts.append("EMA20 > EMA50 > EMA200 confirms an uptrend.")
-        elif trend == "bullish":
-            parts.append("Price holds above its available EMAs.")
-        elif trend == "bearish":
-            parts.append("Price is below every available EMA.")
-        else:
-            parts.append("Price is mixed against its EMAs.")
+        A fresh entry needs an intact uptrend, strong evidence, room to run, a
+        usable exit and a reward worth the risk.  Anything short of that is a
+        waiting state, graded by how much of the case is already in place.
 
-        # Line 2 — momentum via RSI.
-        if market.rsi is None:
-            parts.append("RSI is unavailable.")
-        elif market.rsi >= RSI_OVERBOUGHT:
-            parts.append("RSI is overbought; momentum is stretched.")
-        elif "rsi_healthy" in rules_matched:
-            parts.append("RSI sits in the healthy 55-70 zone.")
-        elif market.rsi <= RSI_OVERSOLD:
-            parts.append("RSI is oversold; momentum is weak.")
-        else:
-            parts.append("Momentum is neutral.")
-
-        # Line 3 — level structure.
-        headroom = market.headroom_pct
-        cushion = market.support_cushion_pct
-        if headroom is not None and cushion is not None:
-            parts.append(
-                f"Resistance is {headroom:.1f}% away with "
-                f"{cushion:.1f}% cushion above support."
-            )
-        else:
-            parts.append("Support and resistance levels are incomplete.")
-
-        # Line 4 — actionable close.
-        if action in ("Strong Buy", "Buy"):
-            parts.append("Buy inside the entry zone and trail the stop below support.")
-        elif action == "Buy on Breakout":
-            parts.append("Wait for a close above resistance before entering.")
-        elif action == "Hold":
-            parts.append("Existing holders can stay; no fresh entry here.")
-        elif action == "Watch":
-            parts.append("Track it for a cleaner entry.")
-        elif action == "Wait":
-            parts.append("Wait for momentum to reset.")
-        else:
-            parts.append("Avoid this setup for now.")
-
-        text = " ".join(parts)
-        words = text.split()
-        if len(words) > 60:
-            text = " ".join(words[:60])
-            if not text.endswith("."):
-                text += "."
-        return text
+        "Avoid" is reserved for a broken trend.  A stock whose longer-term
+        uptrend is intact is at worst something to wait on, however thin today's
+        evidence is, so a pullback is never mistaken for a stock to stay away
+        from.
+        """
+        if trend == "bearish":
+            return "Avoid"
+        if not any(limit in limits for limit in self._ENTRY_BLOCKERS):
+            if score >= ACTION_STRONG_BUY_MIN_SCORE:
+                return "Strong Buy"
+            return "Buy"
+        if score >= ACTION_WATCH_MIN_SCORE:
+            return "Watch"
+        return "Wait"
 
 
 # Module-level singleton — pure functions, thread-safe.

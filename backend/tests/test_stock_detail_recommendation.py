@@ -49,21 +49,82 @@ def test_recommendation_block_is_camel_cased_and_populated(seeded: None) -> None
     recommendation = _detail()["recommendation"]
 
     assert recommendation is not None
-    assert recommendation.keys() == {
+    v1_fields = {
         "action", "conviction", "score", "trend", "confidence", "dataQuality",
         "holdingPeriod", "entryCondition", "rationale", "rulesMatched",
         "warnings", "levels",
     }
-    assert recommendation["action"] in {
-        "Strong Buy", "Buy", "Buy on Breakout", "Hold", "Watch", "Wait", "Avoid"
+    v1_1_fields = {
+        "strategy", "verdict", "summary", "why", "positives", "risks",
+        "nextTrigger", "beginnerTip", "idealFor",
     }
-    assert 0 <= recommendation["confidence"] <= 1
+
+    assert recommendation.keys() == v1_fields | v1_1_fields
+    assert recommendation["action"] in {
+        "Strong Buy", "Buy", "Watch", "Wait", "Avoid"
+    }
+    assert recommendation["strategy"] in {
+        "Fresh Entry", "Pullback", "Breakout", "No Entry Yet"
+    }
+    assert 0 < recommendation["confidence"] < 1
     assert recommendation["holdingPeriod"]
     assert recommendation["entryCondition"]
     if recommendation["levels"] is not None:
         assert recommendation["levels"].keys() == {
             "entryMin", "entryMax", "stopLoss", "target1", "target2", "riskReward"
         }
+
+
+def test_recommendation_answers_the_five_beginner_questions(seeded: None) -> None:
+    recommendation = _detail()["recommendation"]
+
+    assert recommendation["verdict"]
+    assert recommendation["summary"]
+    assert recommendation["why"]
+    assert recommendation["risks"]
+    assert recommendation["nextTrigger"]
+    assert recommendation["beginnerTip"]
+    assert recommendation["idealFor"]
+    # The legacy alias must keep rendering the same text as `summary`.
+    assert recommendation["rationale"] == recommendation["summary"]
+
+
+def test_holding_period_is_a_trade_duration_not_a_status(seeded: None) -> None:
+    assert _detail()["recommendation"]["holdingPeriod"] not in {
+        "Wait", "No Trade", "Existing Holders"
+    }
+
+
+def test_legacy_analysis_fields_do_not_influence_the_recommendation(
+    seeded: None,
+) -> None:
+    """`suggestedAction` and friends stay on the payload but decide nothing."""
+    payload = _detail()
+    assert payload["suggestedAction"] and payload["classification"]
+
+    snapshot = {
+        "symbol": "RELIANCE",
+        "price": 110.0,
+        "ema20": 105.0,
+        "ema50": 100.0,
+        "ema200": 90.0,
+        "rsi": 60.0,
+        "support": 100.0,
+        "resistance": 120.0,
+    }
+    legacy = {
+        "suggestedAction": "Exit",
+        "classification": "Avoid",
+        "insight": "Seeded insight text.",
+        "score": 3,
+        "trend": "bearish",
+    }
+
+    clean = market_router._recommendation(snapshot, {})
+    contaminated = market_router._recommendation({**snapshot, **legacy}, {})
+
+    assert clean == contaminated
+    assert clean is not None and clean.action == "Strong Buy"
 
 
 def test_recommendation_ignores_the_seeded_score_and_trend(seeded: None) -> None:

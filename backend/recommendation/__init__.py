@@ -1,7 +1,8 @@
 """Pure, deterministic recommendation engine for TradeLens.
 
-Not yet wired into the REST API: the engine and its models are self-contained so
-they can be reviewed and unit tested before integration.
+The authoritative answer to "is this a good time to buy this stock today?",
+served additively on ``GET /api/stock/{symbol}``.  The package is self-contained
+and side-effect free so it can be unit tested without the API.
 """
 from .engine import RecommendationEngine, engine
 from .models import Recommendation, RecommendationInput, TradeLevels
