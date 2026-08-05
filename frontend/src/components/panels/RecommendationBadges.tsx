@@ -1,3 +1,4 @@
+import { HelpCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import type { RecommendationAction } from "@/types";
 
@@ -56,9 +57,11 @@ const ACTION_HEADLINE: Record<RecommendationAction, string> = {
 /** The action, as the loudest element on the panel. */
 export function ActionHeadline({
   action,
+  icon,
   testId,
 }: {
   action: RecommendationAction;
+  icon: ReactNode;
   testId?: string;
 }) {
   const tone = ACTION_TONE[action] ?? "muted";
@@ -66,9 +69,9 @@ export function ActionHeadline({
     <div
       data-testid={testId}
       data-action={action}
-      className={`flex items-center gap-2.5 ${TONE_TEXT[tone]}`}
+      className={`inline-flex items-center gap-3 px-4 py-2.5 rounded-[6px] border-2 ${TONE_STYLE[tone]}`}
     >
-      <span className={`w-3 h-3 rounded-full shrink-0 ${TONE_FILL[tone]}`} />
+      <span className="flex shrink-0">{icon}</span>
       <span className="text-xl md:text-2xl font-bold uppercase tracking-[0.08em] leading-none">
         {ACTION_HEADLINE[action] ?? action}
       </span>
@@ -81,20 +84,28 @@ export function MetaBadge({
   label,
   value,
   tone = "muted",
+  hint,
   testId,
 }: {
   label: string;
   value: string;
   tone?: Tone;
+  /** Hover/focus explanation, e.g. what confidence actually measures. */
+  hint?: string;
   testId?: string;
 }) {
   return (
     <span
       data-testid={testId}
-      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-[3px] border text-[10px] font-mono uppercase tracking-wider ${TONE_STYLE[tone]}`}
+      title={hint}
+      tabIndex={hint ? 0 : undefined}
+      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-[3px] border text-[10px] font-mono uppercase tracking-wider ${TONE_STYLE[tone]} ${
+        hint ? "cursor-help" : ""
+      }`}
     >
       <span className="text-[#787b86]">{label}</span>
       <span className="font-semibold">{value}</span>
+      {hint && <HelpCircle size={11} className="text-[#787b86]" />}
     </span>
   );
 }
@@ -103,25 +114,33 @@ export function MetaBadge({
 export function LevelTile({
   label,
   value,
-  valueClass = "text-[#d1d4dc]",
+  valueClass = "text-white",
+  note,
   testId,
 }: {
   label: string;
   value: ReactNode;
   valueClass?: string;
+  /** Plain-English reading of the number, e.g. "Below preferred threshold". */
+  note?: { text: string; tone: Tone };
   testId?: string;
 }) {
   return (
-    <div className="rounded-[4px] border border-[#2a2e39] bg-[#131722] px-3 py-2">
-      <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
+    <div className="rounded-[4px] border border-[#2a2e39] bg-[#1a1f2b] px-3 py-2.5">
+      <div className="text-[9px] uppercase tracking-widest text-[#787b86] mb-1">
         {label}
       </div>
       <div
-        className={`font-mono tabular-nums text-sm font-semibold ${valueClass}`}
+        className={`font-mono tabular-nums text-base md:text-lg font-bold leading-tight ${valueClass}`}
         data-testid={testId}
       >
         {value}
       </div>
+      {note && (
+        <div className={`text-[10px] mt-1 ${TONE_TEXT[note.tone]}`}>
+          {note.text}
+        </div>
+      )}
     </div>
   );
 }

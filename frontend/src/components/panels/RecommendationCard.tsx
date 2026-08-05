@@ -2,12 +2,17 @@ import {
   AlertTriangle,
   CheckCircle2,
   Compass,
+  Eye,
   GraduationCap,
+  Hourglass,
   Info,
+  Rocket,
   Target,
+  ThumbsUp,
+  XCircle,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Recommendation } from "@/types";
+import type { Recommendation, RecommendationAction } from "@/types";
 import {
   ACTION_TONE,
   ActionHeadline,
@@ -17,6 +22,31 @@ import {
   TONE_ACCENT,
   Tone,
 } from "@/components/panels/RecommendationBadges";
+
+const ACTION_ICON: Record<RecommendationAction, ReactNode> = {
+  "Strong Buy": <Rocket size={22} />,
+  Buy: <ThumbsUp size={22} />,
+  Watch: <Eye size={22} />,
+  Wait: <Hourglass size={22} />,
+  Avoid: <XCircle size={22} />,
+};
+
+const CONFIDENCE_HINT =
+  "Confidence represents how strongly the available technical indicators support " +
+  "the current recommendation. Higher confidence means more independent signals " +
+  "agree with it. It is not the probability that the trade will be profitable.";
+
+/** Presentation-only reading of the engine's risk/reward number. */
+function riskRewardNote(ratio: number): { text: string; tone: Tone } {
+  if (ratio >= 2.5) return { text: "Excellent", tone: "positive" };
+  if (ratio >= 1.5) return { text: "Good", tone: "positive" };
+  if (ratio >= 1) return { text: "Acceptable", tone: "warning" };
+  return { text: "Below preferred threshold", tone: "negative" };
+}
+
+function normalise(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
 
 const STRATEGY_TONE: Record<string, Tone> = {
   "Fresh Entry": "positive",
@@ -34,7 +64,6 @@ function money(value: number): string {
 
 interface RecommendationCardProps {
   recommendation: Recommendation;
-  symbol?: string;
 }
 
 /**
@@ -44,7 +73,6 @@ interface RecommendationCardProps {
  */
 export default function RecommendationCard({
   recommendation,
-  symbol,
 }: RecommendationCardProps) {
   const {
     action,
@@ -65,6 +93,10 @@ export default function RecommendationCard({
   } = recommendation;
 
   const tone = ACTION_TONE[action] ?? "muted";
+  /* The engine repeats several strengths inside `why`; each column should
+     carry its own point, so drop the ones already shown as a strength. */
+  const shown = new Set(positives.map(normalise));
+  const keyReasons = why.filter((reason) => !shown.has(normalise(reason)));
 
   return (
     <div className="flex flex-col gap-3" data-testid="recommendation-card">
@@ -74,13 +106,15 @@ export default function RecommendationCard({
           <div className="min-w-0">
             <ActionHeadline
               action={action}
+              icon={ACTION_ICON[action]}
               testId="recommendation-action"
             />
-            <div className="flex items-center gap-2 flex-wrap mt-2">
+            <div className="flex items-center gap-2 flex-wrap mt-2.5">
               <MetaBadge
                 label="Confidence"
                 value={`${Math.round(confidence * 100)}%`}
                 tone={tone}
+                hint={CONFIDENCE_HINT}
                 testId="recommendation-confidence"
               />
               <MetaBadge
@@ -97,14 +131,12 @@ export default function RecommendationCard({
               />
             </div>
           </div>
-          {symbol && (
-            <span className="text-[10px] uppercase tracking-widest text-[#787b86] font-mono shrink-0">
-              {symbol}
-            </span>
-          )}
         </div>
 
-        <div className="mt-3">
+        <div className="mt-4 border-t border-[#2a2e39] pt-3">
+          <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1.5">
+            Verdict
+          </div>
           <p
             className="text-white text-base md:text-lg font-semibold leading-snug"
             data-testid="recommendation-verdict"
@@ -146,6 +178,7 @@ export default function RecommendationCard({
               <LevelTile
                 label="Risk / Reward"
                 value={`1 : ${levels.riskReward.toFixed(2)}`}
+                note={riskRewardNote(levels.riskReward)}
                 testId="recommendation-risk-reward"
               />
               <LevelTile
@@ -178,15 +211,15 @@ export default function RecommendationCard({
         />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
           <ReasonList
-            title="Positives"
+            title="Strengths"
             items={positives}
             icon={<CheckCircle2 size={12} />}
             tone="positive"
             testId="recommendation-positives"
           />
           <ReasonList
-            title="Why"
-            items={why}
+            title="Key Reasons"
+            items={keyReasons}
             icon={<Compass size={12} />}
             tone="info"
             testId="recommendation-why"
