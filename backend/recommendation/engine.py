@@ -29,7 +29,6 @@ from .narrative import Limits
 from .config import (
     ACTION_BUY_MIN_SCORE,
     ACTION_STRONG_BUY_MIN_SCORE,
-    ACTION_WAIT_MIN_SCORE,
     ACTION_WATCH_MIN_SCORE,
     BEGINNER_TIPS,
     CONFIDENCE_BANDS,
@@ -174,9 +173,17 @@ class RecommendationEngine:
     def _data_quality(self, market: RecommendationInput) -> DataQuality:
         return "Complete" if not market.missing_indicators else "Partial"
 
-    # ---------- Trend (EMA stack only) ----------
+    # ---------- Trend (the three averages read together) ----------
 
     def _trend(self, market: RecommendationInput) -> Trend:
+        """Read the short, medium and long averages as one structure.
+
+        A single average cannot tell a pullback from a breakdown, so the three
+        are weighed together: while the price holds above its long-term average
+        the larger uptrend is intact and a dip under the shorter averages is a
+        pullback, never a downtrend.  Only a price that has lost the long-term
+        average — or every average, when there is no long-term one — is bearish.
+        """
         emas = [
             value
             for value in (market.ema20, market.ema50, market.ema200)
@@ -185,9 +192,13 @@ class RecommendationEngine:
         if not emas:
             return "neutral"
         above = sum(1 for ema in emas if market.price > ema)
-        if above == len(emas):
+
+        if above == len(emas) and not market.stack_falling:
             return "bullish"
-        if above == 0:
+        if market.ema200 is not None and market.price > market.ema200:
+            # Below a shorter average but still above the long-term one.
+            return "neutral"
+        if above == 0 or market.stack_falling:
             return "bearish"
         return "neutral"
 
@@ -330,6 +341,11 @@ class RecommendationEngine:
         A fresh entry needs an intact uptrend, strong evidence, room to run, a
         usable exit and a reward worth the risk.  Anything short of that is a
         waiting state, graded by how much of the case is already in place.
+
+        "Avoid" is reserved for a broken trend.  A stock whose longer-term
+        uptrend is intact is at worst something to wait on, however thin today's
+        evidence is, so a pullback is never mistaken for a stock to stay away
+        from.
         """
         if trend == "bearish":
             return "Avoid"
@@ -339,9 +355,7 @@ class RecommendationEngine:
             return "Buy"
         if score >= ACTION_WATCH_MIN_SCORE:
             return "Watch"
-        if score >= ACTION_WAIT_MIN_SCORE:
-            return "Wait"
-        return "Avoid"
+        return "Wait"
 
 
 # Module-level singleton — pure functions, thread-safe.

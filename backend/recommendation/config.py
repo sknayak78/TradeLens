@@ -137,9 +137,10 @@ STRATEGIES: tuple[str, ...] = (
 
 ACTION_STRONG_BUY_MIN_SCORE: int = 90
 ACTION_BUY_MIN_SCORE: int = 80
-# Also the floor a blocked entry must clear to stay a "Watch" rather than a "Wait".
+# The floor a blocked entry must clear to stay a "Watch" rather than a "Wait".
+# There is no floor below it: "Avoid" is decided by a broken trend, not by a
+# low score, so a pullback with thin evidence still lands on "Wait".
 ACTION_WATCH_MIN_SCORE: int = 60
-ACTION_WAIT_MIN_SCORE: int = 40
 
 
 # ---------- Confidence bands per action (inclusive, as a 0-1 fraction) ----------

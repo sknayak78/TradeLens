@@ -145,3 +145,33 @@ Make the Recommendation Engine the authoritative, beginner-friendly answer to
 - Confidence banded per action and never 100%.
 - Holding period always a trade duration, never a status.
 - Legacy fields retained but excluded from recommendation logic.
+---
+
+## ER-0014A
+
+### Title
+
+Recommendation Logic Calibration
+
+### Priority
+
+P0
+
+### Status
+
+Done
+
+### Business Goal
+
+Stop the engine from writing off healthy stocks that are simply having a bad
+week, and keep the narrative honest about what the indicators actually show.
+
+### Deliverables
+
+- Trend derived from EMA20/EMA50/EMA200 read together: while the price holds
+  its long-term average a dip under the shorter averages is a pullback.
+- `Avoid` reserved for a broken trend; a pullback is at worst a `Wait`,
+  however thin today's evidence is.
+- Narrative claims tied to available indicators: no "buyers are in control" or
+  "selling interest is weak" without support, and no long-term claims when the
+  long-term average is missing.

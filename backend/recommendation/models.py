@@ -136,6 +136,37 @@ class RecommendationInput:
         return (self.price - self.support) / self.price * 100
 
     @property
+    def stack_rising(self) -> bool:
+        """True when the short average leads the medium and the medium the long.
+
+        The shape of a trend that has been up for a while, regardless of where
+        today's price sits inside it.
+        """
+        if None in (self.ema20, self.ema50, self.ema200):
+            return False
+        return self.ema20 > self.ema50 > self.ema200  # type: ignore[operator]
+
+    @property
+    def stack_falling(self) -> bool:
+        """True when the averages are stacked the other way round."""
+        if None in (self.ema20, self.ema50, self.ema200):
+            return False
+        return self.ema20 < self.ema50 < self.ema200  # type: ignore[operator]
+
+    @property
+    def is_pullback(self) -> bool:
+        """A dip under a shorter average while the long-term uptrend holds.
+
+        Distinguishing this from a breakdown is what keeps a healthy stock
+        having a bad week out of the "Avoid" bucket.
+        """
+        if self.ema200 is None or self.price <= self.ema200:
+            return False
+        return any(
+            ema is not None and self.price <= ema for ema in (self.ema20, self.ema50)
+        )
+
+    @property
     def missing_indicators(self) -> List[str]:
         """Names of the optional indicators the provider did not supply."""
         return [

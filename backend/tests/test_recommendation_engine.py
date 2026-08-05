@@ -213,7 +213,8 @@ def test_a_nan_riddled_snapshot_stays_json_compliant():
     assert json.loads(json.dumps(payload, allow_nan=False))
     assert recommendation.data_quality == "Partial"
     assert recommendation.levels is None
-    assert recommendation.action == "Avoid"
+    # Nothing is known, which is a reason to wait, not evidence of a downtrend.
+    assert recommendation.action == "Wait"
 
 
 def test_every_numeric_output_is_finite_across_degraded_inputs():
@@ -284,6 +285,54 @@ def test_from_snapshot_tolerates_missing_indicators_but_requires_price():
         RecommendationInput.from_snapshot({"symbol": "SBIN", "price": None})
 
 
+# ---------- Trend: the three averages read together (ER-0014A) ----------
+
+def test_price_above_every_average_is_an_uptrend():
+    assert engine.recommend(_bullish()).trend == "bullish"
+
+
+@pytest.mark.parametrize(
+    "price, label",
+    [
+        (102.0, "below the short average only"),
+        (95.0, "below the short and medium averages"),
+        (90.5, "barely above the long-term average"),
+    ],
+)
+def test_a_dip_that_holds_the_long_term_average_is_never_a_downtrend(
+    price: float, label: str
+):
+    """ER-0014A: a shorter average alone cannot turn a pullback into a downtrend."""
+    recommendation = engine.recommend(_bullish(price=price))
+
+    assert recommendation.trend == "neutral", label
+    assert recommendation.action in ("Watch", "Wait"), label
+
+
+def test_losing_the_long_term_average_is_a_downtrend():
+    assert engine.recommend(_bullish(price=89.0)).trend == "bearish"
+
+
+def test_a_bounce_inside_a_falling_structure_is_not_an_uptrend():
+    """Price above all three averages is not enough while they point down."""
+    recovering = _bullish(price=110.0, ema20=90.0, ema50=100.0, ema200=105.0)
+
+    assert recovering.stack_falling
+    assert engine.recommend(recovering).trend == "neutral"
+
+
+def test_trend_falls_back_to_the_averages_that_exist():
+    below_the_only_average = RecommendationInput(
+        symbol="INFY", price=95.0, ema20=100.0
+    )
+    above_the_only_average = RecommendationInput(
+        symbol="INFY", price=105.0, ema20=100.0
+    )
+
+    assert engine.recommend(below_the_only_average).trend == "bearish"
+    assert engine.recommend(above_the_only_average).trend == "bullish"
+
+
 # ---------- Actions: one test per recommendation state ----------
 
 def test_a_flawless_setup_is_a_strong_buy():
@@ -331,15 +380,46 @@ def test_a_trend_pinned_under_resistance_is_a_watch_until_it_breaks_out():
     )
 
 
-def test_a_directionless_stock_is_a_wait():
+def test_a_pullback_inside_an_uptrend_is_a_wait_not_an_avoid():
+    """ER-0014A: a dip below the short average is not a broken trend."""
     recommendation = engine.recommend(WAIT)
 
     assert recommendation.trend == "neutral"
     assert recommendation.score == 55
     assert recommendation.action == "Wait"
     assert recommendation.verdict == (
+        "The uptrend is intact, but let the pullback steady before starting a "
+        "position."
+    )
+    assert "pullback rather than a breakdown" in recommendation.summary
+
+
+def test_a_deep_pullback_with_thin_evidence_still_only_waits():
+    """Low score cannot produce an Avoid while the long-term trend holds."""
+    recommendation = engine.recommend(
+        _bullish(price=91.0, support=None, resistance=None, rsi=None)
+    )
+
+    assert recommendation.trend == "neutral"
+    assert recommendation.score < 40
+    assert recommendation.action == "Wait"
+
+
+def test_a_directionless_stock_is_a_wait():
+    """No long-term average and averages in conflict: nothing to lean on."""
+    recommendation = engine.recommend(
+        RecommendationInput(
+            symbol="INFY", price=102.0, ema20=100.0, ema50=104.0,
+            support=95.0, resistance=130.0,
+        )
+    )
+
+    assert recommendation.trend == "neutral"
+    assert recommendation.action == "Wait"
+    assert recommendation.verdict == (
         "Wait for a better entry before initiating a new position."
     )
+    assert "no clear trend to lean on" in recommendation.summary
 
 
 def test_a_downtrend_is_avoided_and_never_priced():
@@ -379,7 +459,7 @@ def test_missing_indicators_are_reported_and_block_an_entry():
 
     assert recommendation.trend == "bullish"
     assert recommendation.score == 30  # only two rules can fire
-    assert recommendation.action == "Avoid"
+    assert recommendation.action == "Wait"
     assert recommendation.data_quality == "Partial"
     assert recommendation.levels is None
     assert recommendation.warnings[0].startswith(
@@ -533,6 +613,51 @@ def test_a_strong_buy_still_refuses_to_promise_an_outcome():
     assert any("probability rather than a promise" in line
                for line in recommendation.why)
     assert any("closes below 99.00" in risk for risk in recommendation.risks)
+
+
+#: Claims about who is "in control" or how strong an interest is cannot be read
+#: off price-versus-average and RSI, so the engine must never make them.
+UNSUPPORTED = (
+    "buyers are in control",
+    "buyers are firmly in control",
+    "sellers are in control",
+    "selling interest is weak",
+    "buying interest is weak",
+    "buying interest is strong",
+    "no sign that buyers",
+)
+
+
+@pytest.mark.parametrize("action", BY_ACTION)
+def test_no_state_claims_more_than_the_indicators_support(action: str):
+    """ER-0014A: every sentence must be backed by an available indicator."""
+    for text in _prose(engine.recommend(BY_ACTION[action])):
+        lowered = text.lower()
+        for claim in UNSUPPORTED:
+            assert claim not in lowered, text
+
+
+def test_prose_never_invokes_a_long_term_trend_it_cannot_see():
+    """With only a short average present, nothing may be said about the long run."""
+    recommendation = engine.recommend(
+        RecommendationInput(symbol="INFY", price=110.0, ema20=105.0, rsi=60.0)
+    )
+
+    for text in _prose(recommendation):
+        assert "long-term" not in text.lower(), text
+        assert "every horizon" not in text.lower(), text
+
+
+def test_prose_never_calls_a_pullback_a_downtrend():
+    """The narrative must not contradict a price that is still above its trend."""
+    recommendation = engine.recommend(_bullish(price=95.0))
+
+    assert recommendation.action in ("Watch", "Wait")
+    for text in _prose(recommendation):
+        lowered = text.lower()
+        assert "downtrend" not in lowered, text
+        assert "sold into" not in lowered, text
+    assert "pullback rather than a breakdown" in recommendation.why[0]
 
 
 def test_a_downtrend_is_never_dressed_up_with_encouraging_detail():

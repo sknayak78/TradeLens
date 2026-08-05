@@ -70,22 +70,45 @@ def _recent_average(market: RecommendationInput) -> str:
 
 # ---------- Individual observations ----------
 
-def _trend_observation(trend: Trend, rules_matched: Sequence[str]) -> str:
+def _trend_observation(market: RecommendationInput, trend: Trend) -> str:
+    """Describe the trend using only what the available averages support.
+
+    Each branch is tied to indicators that are actually present, so the prose
+    never claims more than the snapshot can back up.
+    """
     if trend == "bullish":
-        if "ema_stack_bullish" in rules_matched:
+        if market.ema200 is not None and market.stack_rising:
             return (
-                "Buyers are firmly in control and the uptrend is intact on both "
-                "the short and the long view."
+                "The stock is trading above its short, medium and long-term "
+                "averages, so the uptrend is intact on every horizon."
             )
-        return "Buyers are in control and the stock is trading in an uptrend."
-    if trend == "bearish":
+        if market.ema200 is not None:
+            return (
+                "The stock is trading above its long-term average, so the "
+                "broader uptrend is on the buyers' side."
+            )
         return (
-            "Sellers are in control and the stock is in a downtrend, so every "
-            "bounce is likely to be sold into."
+            "The price is holding above the averages available, so the trend "
+            "is up as far as this reading can see."
+        )
+    if trend == "bearish":
+        if market.ema200 is not None:
+            return (
+                "The price has lost its long-term average, so the larger trend "
+                "is down and rallies are likely to be sold into."
+            )
+        return (
+            "The price is below every average available, so the trend is down "
+            "as far as this reading can see."
+        )
+    if market.is_pullback:
+        return (
+            "The longer-term uptrend is still intact, but the price has slipped "
+            "back below its recent average: a pullback rather than a breakdown."
         )
     return (
-        "Neither buyers nor sellers are in control, so the stock is drifting "
-        "without a clear direction."
+        "The averages are pointing in different directions, so there is no "
+        "clear trend to lean on yet."
     )
 
 
@@ -98,13 +121,13 @@ def _momentum_observation(rsi: Optional[float]) -> Optional[str]:
             "makes buying today an expensive way to join the move."
         )
     if RSI_HEALTHY_MIN <= rsi <= RSI_HEALTHY_MAX:
-        return "Buying interest is steady without the move looking overheated."
+        return "Recent buying has been steady without the move looking overheated."
     if rsi <= RSI_OVERSOLD:
         return (
-            "Selling pressure is heavy and there is still no sign that buyers "
-            "are stepping in."
+            "The stock has been sold down hard and has not steadied yet, so "
+            "buying here means catching it mid-fall."
         )
-    return "Buying interest is lukewarm rather than convincing."
+    return "Recent buying has been lukewarm rather than convincing."
 
 
 def _headroom_observation(market: RecommendationInput) -> Optional[str]:
@@ -184,16 +207,21 @@ def _positives(
         return []
     positives: List[str] = []
     if trend == "bullish":
-        positives.append(_trend_observation(trend, rules_matched))
-    elif trend == "neutral" and "price_above_ema200" in rules_matched:
+        positives.append(_trend_observation(market, trend))
+    elif market.is_pullback:
         positives.append(
-            "The stock is still above where it has traded over the past year, "
-            "so the longer-term picture has not broken down."
+            "The price is still above its long-term average, so the bigger "
+            "uptrend has not broken down — this is a dip inside it."
+        )
+    elif "price_above_ema200" in rules_matched:
+        positives.append(
+            "The price is still above its long-term average, so the longer-term "
+            "picture has not broken down."
         )
 
     if "rsi_healthy" in rules_matched:
         positives.append(
-            "Buying interest is steady without the move looking overheated."
+            "Recent buying has been steady without the move looking overheated."
         )
 
     headroom = market.headroom_pct
@@ -223,6 +251,11 @@ def _risks(
             "The downtrend can continue far longer than it looks like it should, "
             "and buying into one is how beginners lose money fastest."
         )
+    elif market.is_pullback:
+        risks.append(
+            "A pullback only becomes a buying opportunity once it stops falling; "
+            "until it steadies it can just as easily keep going."
+        )
     elif trend == "neutral":
         risks.append(
             "Without a clear trend the stock can swing both ways, so an entry "
@@ -236,8 +269,8 @@ def _risks(
         )
     if market.rsi is not None and market.rsi <= RSI_OVERSOLD:
         risks.append(
-            "Heavy selling is still in charge, and a stock this weak usually "
-            "needs time to steady before it can rise again."
+            "A stock sold down this hard usually needs time to steady before it "
+            "can rise again."
         )
     if LIMIT_THIN_HEADROOM in limits and market.resistance is not None:
         risks.append(
@@ -335,11 +368,10 @@ def _why(
     trend: Trend,
     action: Action,
     score: int,
-    rules_matched: Sequence[str],
     levels: Optional[TradeLevels],
     limits: Limits,
 ) -> List[str]:
-    why: List[str] = [_trend_observation(trend, rules_matched)]
+    why: List[str] = [_trend_observation(market, trend)]
 
     momentum = _momentum_observation(market.rsi)
     if momentum:
@@ -406,18 +438,23 @@ def _verdict(
             )
         return f"{opening}, but today is not the day to start a position."
     if action == "Wait":
+        if market.is_pullback:
+            return (
+                "The uptrend is intact, but let the pullback steady before "
+                "starting a position."
+            )
         return "Wait for a better entry before initiating a new position."
     return "This is not a stock to buy today."
 
 
 def _summary(
+    market: RecommendationInput,
     trend: Trend,
     action: Action,
-    rules_matched: Sequence[str],
     levels: Optional[TradeLevels],
     next_trigger: str,
 ) -> str:
-    opening = _trend_observation(trend, rules_matched)
+    opening = _trend_observation(market, trend)
     if action in ("Strong Buy", "Buy") and levels is not None:
         middle = (
             f"A position taken between {_price(levels.entry_min)} and "
@@ -432,7 +469,11 @@ def _summary(
         )
     elif action == "Wait":
         middle = (
-            "There is not enough evidence yet to justify putting money at risk."
+            "The dip is worth tracking, but it needs to steady before an entry "
+            "makes sense."
+            if market.is_pullback
+            else "There is not enough evidence yet to justify putting money at "
+            "risk."
         )
     else:
         middle = (
@@ -548,10 +589,10 @@ def build(
     next_trigger = _next_trigger(market, action, levels, limits)
     return Narrative(
         verdict=_verdict(market, trend, action, limits),
-        summary=_summary(trend, action, rules_matched, levels, next_trigger),
+        summary=_summary(market, trend, action, levels, next_trigger),
         next_trigger=next_trigger,
         entry_condition=_entry_condition(market, action, levels, limits),
-        why=_why(market, trend, action, score, rules_matched, levels, limits),
+        why=_why(market, trend, action, score, levels, limits),
         positives=_positives(market, trend, rules_matched, levels),
         risks=_risks(market, trend, action, levels, limits),
     )
