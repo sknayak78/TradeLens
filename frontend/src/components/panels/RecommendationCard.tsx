@@ -6,13 +6,15 @@ import {
   Info,
   Target,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import type { Recommendation } from "@/types";
 import {
   ACTION_TONE,
-  ActionBadge,
+  ActionHeadline,
   LevelTile,
   MetaBadge,
   ReasonList,
+  TONE_ACCENT,
   Tone,
 } from "@/components/panels/RecommendationBadges";
 
@@ -36,8 +38,9 @@ interface RecommendationCardProps {
 }
 
 /**
- * The decision-first view of a stock: what to do today, why, at what price and
- * what to watch next.  Renders the API's `recommendation` block verbatim.
+ * The decision-first view of a stock, as three stacked cards: the decision,
+ * the trading plan, then the reasoning.  Renders the API's `recommendation`
+ * block verbatim.
  */
 export default function RecommendationCard({
   recommendation,
@@ -62,68 +65,63 @@ export default function RecommendationCard({
   } = recommendation;
 
   const tone = ACTION_TONE[action] ?? "muted";
-  const accent = {
-    positive: "border-l-[#26a69a]",
-    info: "border-l-[#2962ff]",
-    warning: "border-l-[#f5a623]",
-    negative: "border-l-[#ef5350]",
-    muted: "border-l-[#2a2e39]",
-  }[tone];
 
   return (
-    <section
-      data-testid="recommendation-card"
-      data-action={action}
-      className={`rounded-[4px] border border-[#2a2e39] border-l-2 ${accent} bg-[#131722] flex flex-col gap-4 p-4`}
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          <ActionBadge action={action} testId="recommendation-action" />
-          <MetaBadge
-            label="Strategy"
-            value={strategy}
-            tone={STRATEGY_TONE[strategy] ?? "muted"}
-            testId="recommendation-strategy"
-          />
+    <div className="flex flex-col gap-3" data-testid="recommendation-card">
+      {/* 1 · The decision */}
+      <Card accent={tone} testId="recommendation-decision">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <ActionHeadline
+              action={action}
+              testId="recommendation-action"
+            />
+            <div className="flex items-center gap-2 flex-wrap mt-2">
+              <MetaBadge
+                label="Confidence"
+                value={`${Math.round(confidence * 100)}%`}
+                tone={tone}
+                testId="recommendation-confidence"
+              />
+              <MetaBadge
+                label="Data Quality"
+                value={dataQuality}
+                tone={dataQuality === "Complete" ? "muted" : "warning"}
+                testId="recommendation-data-quality"
+              />
+              <MetaBadge
+                label="Strategy"
+                value={strategy}
+                tone={STRATEGY_TONE[strategy] ?? "muted"}
+                testId="recommendation-strategy"
+              />
+            </div>
+          </div>
+          {symbol && (
+            <span className="text-[10px] uppercase tracking-widest text-[#787b86] font-mono shrink-0">
+              {symbol}
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <MetaBadge
-            label="Confidence"
-            value={`${Math.round(confidence * 100)}%`}
-            tone={tone}
-            testId="recommendation-confidence"
-          />
-          <MetaBadge
-            label="Data"
-            value={dataQuality}
-            tone={dataQuality === "Complete" ? "muted" : "warning"}
-            testId="recommendation-data-quality"
-          />
-        </div>
-      </div>
 
-      {/* Verdict — the first thing a user reads */}
-      <div>
-        <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
-          {symbol ? `${symbol} · Verdict` : "Verdict"}
+        <div className="mt-3">
+          <p
+            className="text-white text-base md:text-lg font-semibold leading-snug"
+            data-testid="recommendation-verdict"
+          >
+            {verdict}
+          </p>
+          <p
+            className="text-[13px] text-[#d1d4dc] leading-relaxed mt-1.5"
+            data-testid="recommendation-summary"
+          >
+            {summary}
+          </p>
         </div>
-        <p
-          className="text-white text-base md:text-lg font-semibold leading-snug"
-          data-testid="recommendation-verdict"
-        >
-          {verdict}
-        </p>
-        <p
-          className="text-[13px] text-[#d1d4dc] leading-relaxed mt-1.5"
-          data-testid="recommendation-summary"
-        >
-          {summary}
-        </p>
-      </div>
+      </Card>
 
-      {/* Trading plan */}
-      <div data-testid="recommendation-plan">
+      {/* 2 · The trading plan */}
+      <Card testId="recommendation-plan">
         <SectionTitle icon={<Target size={12} />} label="Trading Plan" />
         <p
           className="text-[13px] text-[#d1d4dc] leading-relaxed mb-2"
@@ -170,10 +168,10 @@ export default function RecommendationCard({
             testId="recommendation-holding-period"
           />
         </div>
-      </div>
+      </Card>
 
-      {/* Why this recommendation? */}
-      <div>
+      {/* 3 · The reasoning */}
+      <Card testId="recommendation-reasoning">
         <SectionTitle
           icon={<Info size={12} />}
           label="Why This Recommendation?"
@@ -201,40 +199,61 @@ export default function RecommendationCard({
             testId="recommendation-risks"
           />
         </div>
-      </div>
 
-      {/* Beginner section */}
-      <div
-        className="rounded-[4px] border border-[#2962ff]/25 bg-[#2962ff]/[0.07] p-3 flex flex-col gap-2"
-        data-testid="recommendation-beginner"
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-[#2962ff] flex">
-            <GraduationCap size={14} />
-          </span>
-          <span className="text-[10px] uppercase tracking-widest text-[#787b86]">
-            For Beginners
-          </span>
-        </div>
-        <p
-          className="text-[13px] text-[#d1d4dc] leading-relaxed"
-          data-testid="recommendation-beginner-tip"
+        <div
+          className="rounded-[4px] border border-[#2962ff]/25 bg-[#2962ff]/[0.07] p-3 flex flex-col gap-2 mt-3"
+          data-testid="recommendation-beginner"
         >
-          {beginnerTip}
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <BeginnerFact
-            label="Watch Next"
-            value={nextTrigger}
-            testId="recommendation-next-trigger"
-          />
-          <BeginnerFact
-            label="Ideal For"
-            value={idealFor}
-            testId="recommendation-ideal-for"
-          />
+          <div className="flex items-center gap-2">
+            <span className="text-[#2962ff] flex">
+              <GraduationCap size={14} />
+            </span>
+            <span className="text-[10px] uppercase tracking-widest text-[#787b86]">
+              What should I do next?
+            </span>
+          </div>
+          <p
+            className="text-[13px] text-[#d1d4dc] leading-relaxed"
+            data-testid="recommendation-beginner-tip"
+          >
+            {beginnerTip}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <BeginnerFact
+              label="Watch Next"
+              value={nextTrigger}
+              testId="recommendation-next-trigger"
+            />
+            <BeginnerFact
+              label="Ideal For"
+              value={idealFor}
+              testId="recommendation-ideal-for"
+            />
+          </div>
         </div>
-      </div>
+      </Card>
+    </div>
+  );
+}
+
+/** One soft-bordered card, optionally accented with the action's colour. */
+function Card({
+  children,
+  accent,
+  testId,
+}: {
+  children: ReactNode;
+  accent?: Tone;
+  testId?: string;
+}) {
+  return (
+    <section
+      data-testid={testId}
+      className={`rounded-[4px] border border-[#2a2e39] bg-[#131722] p-4 ${
+        accent ? `border-l-2 ${TONE_ACCENT[accent]}` : ""
+      }`}
+    >
+      {children}
     </section>
   );
 }
@@ -243,7 +262,7 @@ function SectionTitle({
   icon,
   label,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
 }) {
   return (

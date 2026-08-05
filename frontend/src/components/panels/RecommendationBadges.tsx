@@ -20,6 +20,14 @@ const TONE_FILL: Record<Tone, string> = {
   muted: "bg-[#787b86]",
 };
 
+export const TONE_ACCENT: Record<Tone, string> = {
+  positive: "border-l-[#26a69a]",
+  info: "border-l-[#2962ff]",
+  warning: "border-l-[#f5a623]",
+  negative: "border-l-[#ef5350]",
+  muted: "border-l-[#2a2e39]",
+};
+
 export const ACTION_TONE: Record<RecommendationAction, Tone> = {
   "Strong Buy": "positive",
   Buy: "positive",
@@ -28,8 +36,25 @@ export const ACTION_TONE: Record<RecommendationAction, Tone> = {
   Avoid: "negative",
 };
 
-/** The headline verdict pill — the loudest element on the card. */
-export function ActionBadge({
+const TONE_TEXT: Record<Tone, string> = {
+  positive: "text-[#26a69a]",
+  info: "text-[#2962ff]",
+  warning: "text-[#f5a623]",
+  negative: "text-[#ef5350]",
+  muted: "text-[#d1d4dc]",
+};
+
+/** "Buy today" phrasing, so the action reads as an instruction. */
+const ACTION_HEADLINE: Record<RecommendationAction, string> = {
+  "Strong Buy": "Strong Buy Today",
+  Buy: "Buy Today",
+  Watch: "Watch",
+  Wait: "Wait",
+  Avoid: "Avoid",
+};
+
+/** The action, as the loudest element on the panel. */
+export function ActionHeadline({
   action,
   testId,
 }: {
@@ -38,13 +63,16 @@ export function ActionBadge({
 }) {
   const tone = ACTION_TONE[action] ?? "muted";
   return (
-    <span
+    <div
       data-testid={testId}
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-[4px] border text-sm font-semibold uppercase tracking-[0.12em] ${TONE_STYLE[tone]}`}
+      data-action={action}
+      className={`flex items-center gap-2.5 ${TONE_TEXT[tone]}`}
     >
-      <span className={`w-2 h-2 rounded-full ${TONE_FILL[tone]}`} />
-      {action}
-    </span>
+      <span className={`w-3 h-3 rounded-full shrink-0 ${TONE_FILL[tone]}`} />
+      <span className="text-xl md:text-2xl font-bold uppercase tracking-[0.08em] leading-none">
+        {ACTION_HEADLINE[action] ?? action}
+      </span>
+    </div>
   );
 }
 
