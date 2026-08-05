@@ -111,3 +111,35 @@ Display:
 - Response Time
 - Data Quality
 - Latest Candle Timestamp
+
+---
+
+## ER-0014
+
+### Title
+
+Recommendation Engine v1.1
+
+### Priority
+
+P0
+
+### Status
+
+Done
+
+### Business Goal
+
+Make the Recommendation Engine the authoritative, beginner-friendly answer to
+"is this a good time to buy this stock today?", per `docs/PRODUCT_VISION.md`.
+
+### Deliverables
+
+- Actions restricted to Strong Buy, Buy, Watch, Wait and Avoid; position
+  management deferred to a future Portfolio Advisor.
+- Additive fields: `verdict`, `summary`, `why[]`, `positives[]`, `risks[]`,
+  `nextTrigger`, `beginnerTip`, `idealFor`.
+- Plain-English explanations in place of indicator readings.
+- Confidence banded per action and never 100%.
+- Holding period always a trade duration, never a status.
+- Legacy fields retained but excluded from recommendation logic.

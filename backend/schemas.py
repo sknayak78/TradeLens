@@ -146,18 +146,33 @@ class RecommendationOut(BaseModel):
     """Recommendation derived from live indicators only.
 
     Additive: consumers that ignore this block see the unchanged contract.
+    This block is the authoritative answer to "is this a good time to buy this
+    stock today?"; the legacy `suggestedAction` / `insight` / `classification`
+    fields on the response are retained for compatibility only.
     """
-    action: Literal[
-        "Strong Buy", "Buy", "Buy on Breakout", "Hold", "Watch", "Wait", "Avoid"
-    ]
+    # Position management (Hold, Add More, Book Profit, Exit) needs portfolio
+    # context the engine does not have, so it is out of scope here.
+    action: Literal["Strong Buy", "Buy", "Watch", "Wait", "Avoid"]
+    verdict: str
+    summary: str
     conviction: Literal["High", "Medium", "Low"]
     score: int
     trend: Literal["bullish", "bearish", "neutral"]
+    # TradeLens' confidence in its own call, not the odds of a profitable trade.
     confidence: float
     # "Partial" when any live indicator was missing; `warnings` says which.
     dataQuality: Literal["Complete", "Partial"]
+    # Expected duration of the trade once a valid entry is taken.
     holdingPeriod: str
+    nextTrigger: str
+    beginnerTip: str
+    idealFor: str
+    why: List[str]
+    positives: List[str]
+    risks: List[str]
+    # Superseded by `nextTrigger`; kept for v1.0 consumers.
     entryCondition: str
+    # Deprecated alias of `summary`.
     rationale: str
     rulesMatched: List[str]
     warnings: List[str]

@@ -11,9 +11,10 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Literal, Mapping, Optional
 
 Trend = Literal["bullish", "bearish", "neutral"]
-Action = Literal[
-    "Strong Buy", "Buy", "Buy on Breakout", "Hold", "Watch", "Wait", "Avoid"
-]
+#: The engine answers "should I open a position today?" and has no portfolio
+#: context, so position-management verdicts (Hold, Add More, Book Profit, Exit)
+#: belong to a future Portfolio Advisor and are deliberately absent here.
+Action = Literal["Strong Buy", "Buy", "Watch", "Wait", "Avoid"]
 Conviction = Literal["High", "Medium", "Low"]
 #: "Partial" whenever any live indicator was unavailable, so consumers can flag
 #: the recommendation instead of trusting a silently degraded one.
@@ -170,20 +171,41 @@ class TradeLevels:
 
 @dataclass(frozen=True)
 class Recommendation:
-    """Deterministic recommendation derived from live indicators only."""
+    """Deterministic recommendation derived from live indicators only.
+
+    The decision fields a consumer should render are ``action``, ``verdict``,
+    ``summary``, ``levels`` and ``next_trigger``; the remaining fields explain
+    that decision or preserve the v1.0 contract.
+    """
 
     symbol: str
     action: Action
+    #: One line a trader can act on without reading anything else.
+    verdict: str
+    #: Two or three plain-English sentences: the call, the catch, the next step.
+    summary: str
     conviction: Conviction
     score: int
     trend: Trend
+    #: TradeLens' confidence in its own call (0-1), never the odds of a profit
+    #: and never 1.0.
     confidence: float
     data_quality: DataQuality
+    #: Expected duration of the trade once a valid entry is taken.
     holding_period: str
+    #: The single thing that has to happen before this call changes.
+    next_trigger: str
+    beginner_tip: str
+    ideal_for: str
     #: Plain-language next step for a beginner, e.g. "Wait for a daily close
-    #: above resistance 120.00 before entering."
+    #: above resistance 120.00 before entering."  Superseded by ``next_trigger``.
     entry_condition: str
+    #: Deprecated alias of ``summary``, kept so v1.0 consumers keep rendering.
     rationale: str
+    #: Why this call was made, including why it was not upgraded further.
+    why: List[str] = field(default_factory=list)
+    positives: List[str] = field(default_factory=list)
+    risks: List[str] = field(default_factory=list)
     rules_matched: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     levels: Optional[TradeLevels] = None
