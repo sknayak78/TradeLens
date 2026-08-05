@@ -6,6 +6,7 @@ import type {
   Trend,
   Insight,
   Ranking,
+  Recommendation,
 } from "@/types";
 
 export interface MarketSummary {
@@ -33,6 +34,8 @@ export interface StockDetail extends Stock {
   riskLevel: "Low" | "Medium" | "High";
   suggestedAction: "Watch" | "Buy on Breakout" | "Wait" | "Avoid";
   insight: string;
+  /** Authoritative decision block; absent on older backends or unusable data. */
+  recommendation?: Recommendation | null;
 }
 
 export interface StockSummary {

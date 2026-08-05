@@ -16,6 +16,7 @@ import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import EmptyState from "@/components/common/EmptyState";
 import AnalysisBadges, { Stars, ActionPill } from "@/components/panels/AnalysisBadges";
+import RecommendationCard from "@/components/panels/RecommendationCard";
 import { Sparkles, TrendingUp, TrendingDown } from "lucide-react";
 
 interface ChartCardProps {
@@ -59,7 +60,7 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
 
   return (
     <PanelCard
-      title="Chart & AI Insight"
+      title="Recommendation & Chart"
       subtitle={stock ? `${stock.symbol} · Intraday` : "Loading…"}
       testId="card-chart"
       action={
@@ -160,6 +161,18 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
               </div>
             </div>
           </div>
+
+          {/* Recommendation — the primary answer to "should I buy today?".
+              Falls back to the legacy insight panel when the engine could not
+              produce a decision. */}
+          {stock.recommendation ? (
+            <RecommendationCard
+              recommendation={stock.recommendation}
+              symbol={stock.symbol}
+            />
+          ) : (
+            <InsightPanel insight={stock.insight} />
+          )}
 
           {/* Chart */}
           <div
@@ -293,28 +306,34 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
             />
           </div>
 
-          <div
-            className="rounded-[4px] border border-[#2a2e39] bg-[#131722] p-3 flex gap-3"
-            data-testid="ai-insight"
-          >
-            <span className="mt-0.5 shrink-0 w-7 h-7 rounded-md bg-[#2962ff]/15 border border-[#2962ff]/30 text-[#2962ff] flex items-center justify-center">
-              <Sparkles size={14} />
-            </span>
-            <div>
-              <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
-                Insight
-              </div>
-              <p
-                className="text-sm text-[#d1d4dc] leading-relaxed"
-                data-testid="detail-insight"
-              >
-                {stock.insight}
-              </p>
-            </div>
-          </div>
         </div>
       )}
     </PanelCard>
+  );
+}
+
+/** Legacy technical insight, kept as the fallback when no recommendation. */
+function InsightPanel({ insight }: { insight: string }) {
+  return (
+    <div
+      className="rounded-[4px] border border-[#2a2e39] bg-[#131722] p-3 flex gap-3"
+      data-testid="ai-insight"
+    >
+      <span className="mt-0.5 shrink-0 w-7 h-7 rounded-md bg-[#2962ff]/15 border border-[#2962ff]/30 text-[#2962ff] flex items-center justify-center">
+        <Sparkles size={14} />
+      </span>
+      <div>
+        <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
+          Insight
+        </div>
+        <p
+          className="text-sm text-[#d1d4dc] leading-relaxed"
+          data-testid="detail-insight"
+        >
+          {insight}
+        </p>
+      </div>
+    </div>
   );
 }
 

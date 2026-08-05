@@ -8,6 +8,55 @@ export type TradeSetup =
   | "Consolidation";
 export type SuggestedAction = "Watch" | "Buy on Breakout" | "Wait" | "Avoid";
 
+export type RecommendationAction =
+  | "Strong Buy"
+  | "Buy"
+  | "Watch"
+  | "Wait"
+  | "Avoid";
+export type RecommendationStrategy =
+  | "Fresh Entry"
+  | "Pullback"
+  | "Breakout"
+  | "No Entry Yet";
+export type Conviction = "High" | "Medium" | "Low";
+export type DataQuality = "Complete" | "Partial";
+
+export interface RecommendationLevels {
+  entryMin: number;
+  entryMax: number;
+  stopLoss: number;
+  target1: number;
+  target2: number;
+  riskReward: number;
+}
+
+/** The engine's answer to "is this a good time to buy this stock today?". */
+export interface Recommendation {
+  action: RecommendationAction;
+  strategy: RecommendationStrategy;
+  verdict: string;
+  summary: string;
+  conviction: Conviction;
+  score: number;
+  trend: Trend;
+  /** TradeLens' confidence in its own call (0–1), not the odds of a profit. */
+  confidence: number;
+  dataQuality: DataQuality;
+  holdingPeriod: string;
+  nextTrigger: string;
+  beginnerTip: string;
+  idealFor: string;
+  why: string[];
+  positives: string[];
+  risks: string[];
+  entryCondition: string;
+  rationale: string;
+  rulesMatched: string[];
+  warnings: string[];
+  levels: RecommendationLevels | null;
+}
+
 export interface Stock {
   symbol: string;
   name: string;
