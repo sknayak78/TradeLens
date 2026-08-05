@@ -116,6 +116,7 @@ export function LevelTile({
   value,
   valueClass = "text-white",
   note,
+  emphasis = false,
   testId,
 }: {
   label: string;
@@ -123,15 +124,23 @@ export function LevelTile({
   valueClass?: string;
   /** Plain-English reading of the number, e.g. "Below preferred threshold". */
   note?: { text: string; tone: Tone };
+  /** Marks a value a trader acts on directly (entry, stop, targets). */
+  emphasis?: boolean;
   testId?: string;
 }) {
   return (
-    <div className="rounded-[4px] border border-[#2a2e39] bg-[#1a1f2b] px-3 py-2.5">
+    <div
+      className={`rounded-[4px] border bg-[#1a1f2b] px-3 py-2.5 ${
+        emphasis ? "border-[#3a3f4b]" : "border-[#2a2e39]"
+      }`}
+    >
       <div className="text-[9px] uppercase tracking-widest text-[#787b86] mb-1">
         {label}
       </div>
       <div
-        className={`font-mono tabular-nums text-base md:text-lg font-bold leading-tight ${valueClass}`}
+        className={`font-mono tabular-nums font-bold leading-tight ${
+          emphasis ? "text-lg md:text-xl" : "text-base md:text-lg"
+        } ${valueClass}`}
         data-testid={testId}
       >
         {value}

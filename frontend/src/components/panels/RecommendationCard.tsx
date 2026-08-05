@@ -2,39 +2,19 @@ import {
   AlertTriangle,
   CheckCircle2,
   Compass,
-  Eye,
   GraduationCap,
-  Hourglass,
   Info,
-  Rocket,
   Target,
-  ThumbsUp,
-  XCircle,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Recommendation, RecommendationAction } from "@/types";
+import type { Recommendation } from "@/types";
 import {
   ACTION_TONE,
-  ActionHeadline,
   LevelTile,
-  MetaBadge,
   ReasonList,
   TONE_ACCENT,
   Tone,
 } from "@/components/panels/RecommendationBadges";
-
-const ACTION_ICON: Record<RecommendationAction, ReactNode> = {
-  "Strong Buy": <Rocket size={22} />,
-  Buy: <ThumbsUp size={22} />,
-  Watch: <Eye size={22} />,
-  Wait: <Hourglass size={22} />,
-  Avoid: <XCircle size={22} />,
-};
-
-const CONFIDENCE_HINT =
-  "Confidence represents how strongly the available technical indicators support " +
-  "the current recommendation. Higher confidence means more independent signals " +
-  "agree with it. It is not the probability that the trade will be profitable.";
 
 /** Presentation-only reading of the engine's risk/reward number. */
 function riskRewardNote(ratio: number): { text: string; tone: Tone } {
@@ -47,13 +27,6 @@ function riskRewardNote(ratio: number): { text: string; tone: Tone } {
 function normalise(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
-
-const STRATEGY_TONE: Record<string, Tone> = {
-  "Fresh Entry": "positive",
-  Pullback: "info",
-  Breakout: "warning",
-  "No Entry Yet": "muted",
-};
 
 function money(value: number): string {
   return `₹${value.toLocaleString("en-IN", {
@@ -76,11 +49,8 @@ export default function RecommendationCard({
 }: RecommendationCardProps) {
   const {
     action,
-    strategy,
     verdict,
     summary,
-    confidence,
-    dataQuality,
     holdingPeriod,
     entryCondition,
     nextTrigger,
@@ -100,40 +70,9 @@ export default function RecommendationCard({
 
   return (
     <div className="flex flex-col gap-3" data-testid="recommendation-card">
-      {/* 1 · The decision */}
+      {/* 1 · The verdict (the action itself sits in the stock header) */}
       <Card accent={tone} testId="recommendation-decision">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div className="min-w-0">
-            <ActionHeadline
-              action={action}
-              icon={ACTION_ICON[action]}
-              testId="recommendation-action"
-            />
-            <div className="flex items-center gap-2 flex-wrap mt-2.5">
-              <MetaBadge
-                label="Confidence"
-                value={`${Math.round(confidence * 100)}%`}
-                tone={tone}
-                hint={CONFIDENCE_HINT}
-                testId="recommendation-confidence"
-              />
-              <MetaBadge
-                label="Data Quality"
-                value={dataQuality}
-                tone={dataQuality === "Complete" ? "muted" : "warning"}
-                testId="recommendation-data-quality"
-              />
-              <MetaBadge
-                label="Strategy"
-                value={strategy}
-                tone={STRATEGY_TONE[strategy] ?? "muted"}
-                testId="recommendation-strategy"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 border-t border-[#2a2e39] pt-3">
+        <div>
           <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1.5">
             Verdict
           </div>
@@ -167,12 +106,14 @@ export default function RecommendationCard({
               <LevelTile
                 label="Entry Range"
                 value={`${money(levels.entryMin)} – ${money(levels.entryMax)}`}
+                emphasis
                 testId="recommendation-entry-range"
               />
               <LevelTile
                 label="Stop Loss"
                 value={money(levels.stopLoss)}
                 valueClass="text-[#ef5350]"
+                emphasis
                 testId="recommendation-stop-loss"
               />
               <LevelTile
@@ -185,12 +126,14 @@ export default function RecommendationCard({
                 label="Target 1"
                 value={money(levels.target1)}
                 valueClass="text-[#26a69a]"
+                emphasis
                 testId="recommendation-target-1"
               />
               <LevelTile
                 label="Target 2"
                 value={money(levels.target2)}
                 valueClass="text-[#26a69a]"
+                emphasis
                 testId="recommendation-target-2"
               />
             </>
