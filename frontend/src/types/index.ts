@@ -76,6 +76,10 @@ export interface Recommendation {
   nextTrigger: string;
   beginnerTip: string;
   idealFor: string;
+  /** Insight v2 — one trading principle this setup teaches. */
+  mentorLesson: string;
+  /** Insight v2 — what would invalidate the mentor's thesis. */
+  whatWouldChangeMyView: string;
   why: string[];
   positives: string[];
   risks: string[];

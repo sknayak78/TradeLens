@@ -60,12 +60,17 @@ def test_recommendation_block_is_camel_cased_and_populated(seeded: None) -> None
         "nextTrigger", "beginnerTip", "idealFor",
     }
     mentor_fields = {"setup", "progress"}
+    insight_v2_fields = {"mentorLesson", "whatWouldChangeMyView"}
 
-    assert recommendation.keys() == v1_fields | v1_1_fields | mentor_fields
+    assert recommendation.keys() == (
+        v1_fields | v1_1_fields | mentor_fields | insight_v2_fields
+    )
     assert recommendation["setup"] is not None
     assert recommendation["progress"] is not None
     assert recommendation["setup"]["structureKey"]
     assert recommendation["progress"]["nextEvent"] == recommendation["nextTrigger"]
+    assert recommendation["mentorLesson"]
+    assert recommendation["whatWouldChangeMyView"]
     assert recommendation["action"] in {
         "Strong Buy", "Buy", "Watch", "Wait", "Avoid"
     }
@@ -91,6 +96,8 @@ def test_recommendation_answers_the_five_beginner_questions(seeded: None) -> Non
     assert recommendation["nextTrigger"]
     assert recommendation["beginnerTip"]
     assert recommendation["idealFor"]
+    assert recommendation["mentorLesson"]
+    assert recommendation["whatWouldChangeMyView"]
     # The legacy alias must keep rendering the same text as `summary`.
     assert recommendation["rationale"] == recommendation["summary"]
 
