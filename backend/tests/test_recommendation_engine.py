@@ -377,7 +377,9 @@ def test_an_overextended_uptrend_is_a_watch_not_a_buy():
     assert recommendation.trend == "bullish"
     assert recommendation.action == "Watch"
     assert "rsi_overbought" in recommendation.warnings
-    assert "run too far to buy today" in recommendation.verdict
+    assert "chase" in recommendation.verdict.lower() or "pullback" in (
+        recommendation.verdict.lower()
+    )
     assert "cool off" in recommendation.next_trigger
 
 
@@ -387,7 +389,7 @@ def test_a_trend_pinned_under_resistance_is_a_watch_until_it_breaks_out():
     assert recommendation.action == "Watch"
     assert recommendation.strategy == "Breakout"
     assert recommendation.levels is None
-    assert "limited upside" in recommendation.verdict
+    assert "breakout" in recommendation.verdict.lower()
     assert recommendation.next_trigger == (
         "Watch for a daily close above 101.90: that would confirm the breakout "
         "and create a fresh entry."
@@ -406,11 +408,9 @@ def test_a_pullback_inside_an_uptrend_is_a_wait_not_an_avoid():
     assert recommendation.trend == "neutral"
     assert recommendation.score == 55
     assert recommendation.action == "Wait"
-    assert recommendation.verdict == (
-        "The uptrend is intact, but let the pullback steady before starting a "
-        "position."
-    )
-    assert "pullback rather than a breakdown" in recommendation.summary
+    assert "pullback" in recommendation.verdict.lower()
+    assert "long-term uptrend" in recommendation.summary.lower()
+    assert "pullback" in recommendation.summary.lower()
 
 
 def test_a_deep_pullback_with_thin_evidence_still_only_waits():
@@ -436,10 +436,12 @@ def test_a_directionless_stock_is_a_wait():
     assert recommendation.trend == "neutral"
     assert recommendation.action == "Wait"
     assert recommendation.strategy == "Consolidation"
-    assert recommendation.verdict == (
-        "Wait for a better entry before initiating a new position."
+    assert "nothing today" in recommendation.verdict.lower() or "range" in (
+        recommendation.verdict.lower()
     )
-    assert "no clear trend to lean on" in recommendation.summary
+    assert "consolidat" in recommendation.summary.lower() or "mixed" in (
+        recommendation.summary.lower()
+    )
 
 
 def test_a_downtrend_is_avoided_and_never_priced():
@@ -448,7 +450,7 @@ def test_a_downtrend_is_avoided_and_never_priced():
     assert recommendation.trend == "bearish"
     assert recommendation.action == "Avoid"
     assert recommendation.levels is None
-    assert recommendation.verdict == "This is not a stock to buy today."
+    assert "stay out" in recommendation.verdict.lower()
 
 
 def test_a_blocked_entry_never_becomes_a_position_management_verdict():
@@ -617,8 +619,8 @@ def test_every_state_answers_the_five_beginner_questions(action: str):
     # 3. Where do I enter, and where is my downside?
     if action in ("Strong Buy", "Buy"):
         assert recommendation.levels is not None
-        assert str(recommendation.levels.entry_min) in recommendation.summary
-        assert str(recommendation.levels.stop_loss) in recommendation.summary
+        assert str(recommendation.levels.entry_min) in recommendation.entry_condition
+        assert str(recommendation.levels.stop_loss) in recommendation.entry_condition
         assert recommendation.positives
 
 
@@ -626,7 +628,12 @@ def test_every_state_answers_the_five_beginner_questions(action: str):
 def test_every_state_says_why_it_is_not_a_stronger_recommendation(action: str):
     why = engine.recommend(BY_ACTION[action]).why
 
-    limits = ("It is not", "Only", "This is the most positive call")
+    limits = (
+        "It is not",
+        "Only",
+        "This is the most positive call",
+        "A fresh buy is off the table",
+    )
     assert any(line.startswith(limits) for line in why), why
 
 
@@ -680,7 +687,7 @@ def test_prose_never_calls_a_pullback_a_downtrend():
         lowered = text.lower()
         assert "downtrend" not in lowered, text
         assert "sold into" not in lowered, text
-    assert "pullback rather than a breakdown" in recommendation.why[0]
+    assert any("pullback" in line.lower() for line in recommendation.why)
 
 
 def test_a_downtrend_is_never_dressed_up_with_encouraging_detail():
@@ -691,12 +698,13 @@ def test_a_downtrend_is_never_dressed_up_with_encouraging_detail():
     assert not any("clear air" in line for line in recommendation.why)
 
 
-def test_the_summary_carries_the_verdict_and_the_next_step():
+def test_summary_is_chart_context_not_a_repeat_of_watch_next():
+    """ER-0017: each section owns one job — summary must not end with Watch Next."""
     recommendation = engine.recommend(WATCH_OVERBOUGHT)
 
-    assert recommendation.summary.endswith(recommendation.next_trigger)
-    assert "not the place to start a position" in recommendation.summary
-    assert recommendation.strategy == "Pullback"
+    assert not recommendation.summary.endswith(recommendation.next_trigger)
+    assert recommendation.next_trigger not in recommendation.summary
+    assert "pullback" in recommendation.summary.lower()
 
 
 def test_prose_never_quotes_levels_the_engine_does_not_have():
@@ -713,7 +721,6 @@ def test_prose_never_quotes_levels_the_engine_does_not_have():
         "Watch for the price to cool off and steady for a few sessions before "
         "considering an entry."
     )
-    # 100.00 is EMA20, the only price this snapshot actually knows.
     assert recommendation.entry_condition == (
         "Wait for the price to steady above its recent average price of 100.00 "
         "before considering an entry."

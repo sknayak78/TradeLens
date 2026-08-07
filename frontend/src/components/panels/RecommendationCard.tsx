@@ -70,11 +70,11 @@ export default function RecommendationCard({
 
   return (
     <div className="flex flex-col gap-3" data-testid="recommendation-card">
-      {/* 1 · The verdict (the action itself sits in the stock header) */}
+      {/* 1 · Verdict (today) + market context (what the chart means) */}
       <Card accent={tone} testId="recommendation-decision">
         <div>
           <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1.5">
-            Verdict
+            Verdict · What should I do today?
           </div>
           <p
             className="text-white text-base md:text-lg font-semibold leading-snug"
@@ -82,8 +82,11 @@ export default function RecommendationCard({
           >
             {verdict}
           </p>
+          <div className="text-[10px] uppercase tracking-widest text-[#787b86] mt-3 mb-1.5">
+            Market Context · What am I seeing on the chart?
+          </div>
           <p
-            className="text-[13px] text-[#d1d4dc] leading-relaxed mt-1.5"
+            className="text-[13px] text-[#d1d4dc] leading-relaxed"
             data-testid="recommendation-summary"
           >
             {summary}
@@ -93,7 +96,10 @@ export default function RecommendationCard({
 
       {/* 2 · The trading plan */}
       <Card testId="recommendation-plan">
-        <SectionTitle icon={<Target size={12} />} label="Trading Plan" />
+        <SectionTitle
+          icon={<Target size={12} />}
+          label="Trading Plan · How should I execute?"
+        />
         <p
           className="text-[13px] text-[#d1d4dc] leading-relaxed mb-2"
           data-testid="recommendation-entry-condition"
@@ -161,14 +167,14 @@ export default function RecommendationCard({
             testId="recommendation-positives"
           />
           <ReasonList
-            title="Key Reasons"
+            title="Key Reasons · What is the evidence?"
             items={keyReasons}
             icon={<Compass size={12} />}
             tone="info"
             testId="recommendation-why"
           />
           <ReasonList
-            title="Risks"
+            title="Risks · What could go wrong?"
             items={risks}
             icon={<AlertTriangle size={12} />}
             tone="negative"
@@ -185,7 +191,7 @@ export default function RecommendationCard({
               <GraduationCap size={14} />
             </span>
             <span className="text-[10px] uppercase tracking-widest text-[#787b86]">
-              What should I do next?
+              What should I learn next?
             </span>
           </div>
           <p
@@ -196,7 +202,7 @@ export default function RecommendationCard({
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <BeginnerFact
-              label="Watch Next"
+              label="Watch Next · When should I revisit?"
               value={nextTrigger}
               testId="recommendation-next-trigger"
             />
