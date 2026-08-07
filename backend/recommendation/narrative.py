@@ -25,6 +25,7 @@ from .config import (
     RSI_OVERBOUGHT,
     RSI_OVERSOLD,
 )
+from . import insight
 from .models import Action, RecommendationInput, Strategy, TradeLevels, Trend
 
 if TYPE_CHECKING:
@@ -46,12 +47,28 @@ Limits = Tuple[str, ...]
 
 @dataclass(frozen=True)
 class Narrative:
-    """Everything a consumer renders as prose for one recommendation."""
+    """Everything a consumer renders as prose for one recommendation.
+
+    Insight v2 section purposes (no cross-section repetition):
+
+    * verdict — one-line decision
+    * summary — conversational opening (what to do now)
+    * entry_condition — how to execute the plan
+    * why — evidence for the call
+    * positives — strengths (API / legacy; UI may omit when why covers them)
+    * risks — what can go wrong (general)
+    * mentor_lesson — one trading principle taught by this setup
+    * what_would_change_my_view — thesis invalidation
+    * next_trigger — future operational event to watch
+    """
 
     verdict: str
     summary: str
     next_trigger: str
     entry_condition: str
+    mentor_lesson: str
+    what_would_change_my_view: str
+    who_is_this_for: str
     why: List[str] = field(default_factory=list)
     positives: List[str] = field(default_factory=list)
     risks: List[str] = field(default_factory=list)
@@ -303,16 +320,18 @@ def _risks(
             "Part of the usual market history was unavailable, so this reading is "
             "less complete than normal."
         )
+    # Specific invalidation prices live in "What would change my view?" —
+    # keep risks educational and free of the same stop-loss sentence.
     if levels is not None:
         if action in ("Strong Buy", "Buy"):
             risks.append(
-                f"If the price closes below {_price(levels.stop_loss)} the idea "
-                "has failed and the position should be closed."
+                "Even a well-defined plan can fail; size so one loss does not "
+                "derail the account."
             )
         else:
             risks.append(
-                f"If the price closes below {_price(levels.stop_loss)} the setup "
-                "breaks down and the stock comes off the shortlist."
+                "Setups expire — if structure breaks, remove the stock from the "
+                "shortlist rather than hoping it recovers."
             )
     return risks
 
@@ -491,50 +510,55 @@ def _summary(
     levels: Optional[TradeLevels],
     next_trigger: str,
 ) -> str:
-    opening = _trend_observation(market, trend)
+    """Conversational opening: what to do now — not evidence, plan, or lesson.
+
+    Must not repeat the trend essay used in ``why``, the levels in the Trading
+    Plan, or the Watch Next line.
+    """
+    del next_trigger  # reserved so callers cannot accidentally embed it
     if strategy == "Trend Continuation" and levels is not None:
-        middle = (
-            f"A position taken between {_price(levels.entry_min)} and "
-            f"{_price(levels.entry_max)} can be protected with an exit below "
-            f"{_price(levels.stop_loss)}, with the first target near "
-            f"{_price(levels.target1)}."
-        )
-    elif strategy == "Breakout":
-        middle = (
-            "The stock deserves attention, but today's price is not the place "
-            "to start a position — wait for the breakout to confirm."
-        )
-    elif strategy == "Pullback":
-        if levels is not None:
-            middle = (
-                "The stock deserves attention, but today's price is not the "
-                "place to start a position — wait for the pullback into the "
-                "buy zone."
+        if action == "Strong Buy":
+            return (
+                "This is a join-the-move moment: buyers still own the trend and "
+                "a planned zone already defines where to enter and where to bail."
             )
-        elif market.is_pullback:
-            middle = (
+        return (
+            "A sensible continuation entry is available if you size to the "
+            "defined exit — do not stretch beyond the planned zone."
+        )
+    if strategy == "Breakout":
+        return (
+            "Keep this on the shortlist, but do not buy underneath the ceiling — "
+            "confirmation through resistance comes first."
+        )
+    if strategy == "Pullback":
+        if levels is not None:
+            return (
+                "Let price come to the structural buy zone instead of chasing "
+                "today's print — patience is the edge on this setup."
+            )
+        if market.is_pullback:
+            return (
                 "The dip is worth tracking, but it needs to steady before an "
                 "entry makes sense."
             )
-        else:
-            middle = (
-                "The stock deserves attention, but today's price is not the "
-                "place to start a position."
-            )
-    elif strategy == "Consolidation":
-        middle = (
-            "There is not enough evidence yet to justify putting money at risk."
+        return (
+            "Worth tracking, but today's price is not the place to start a "
+            "position."
         )
-    else:
-        middle = (
+    if strategy == "Consolidation":
+        return (
+            "There is not enough directional evidence yet to justify putting "
+            "money at risk — sit this one out for now."
+        )
+    if trend == "bearish":
+        return (
             "Buying weakness like this usually means adding to the loss before "
-            "the stock recovers."
-            if trend == "bearish"
-            else "There is not enough evidence yet to justify putting money at "
-            "risk."
+            "the stock recovers — stay flat."
         )
-    # Mentor Engine: summary is market context only — never repeat Watch Next.
-    return f"{opening} {middle}"
+    return (
+        "There is not enough evidence yet to justify putting money at risk."
+    )
 
 
 def _entry_condition(
@@ -610,13 +634,24 @@ def build(
     else:
         next_trigger = _legacy_next_trigger(market, strategy, levels, limits)
 
+    why = _why(market, trend, action, score, levels, limits)
+    positives = _positives(market, trend, rules_matched, levels)
+    # Drop strengths that already appear as evidence — one purpose per line.
+    evidence = {line.casefold() for line in why}
+    positives = [line for line in positives if line.casefold() not in evidence]
+
     return Narrative(
         verdict=_verdict(market, trend, action, strategy, limits),
         summary=_summary(market, trend, action, strategy, levels, next_trigger),
         next_trigger=next_trigger,
         entry_condition=_entry_condition(market, strategy, levels, trend, setup),
-        why=_why(market, trend, action, score, levels, limits),
-        positives=_positives(market, trend, rules_matched, levels),
+        mentor_lesson=insight.mentor_lesson(strategy),
+        what_would_change_my_view=insight.what_would_change_my_view(
+            strategy, trend, levels, progress, setup
+        ),
+        who_is_this_for=insight.who_is_this_for(strategy),
+        why=why,
+        positives=positives,
         risks=_risks(market, trend, action, strategy, levels, limits),
     )
 

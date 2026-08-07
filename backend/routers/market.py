@@ -58,6 +58,8 @@ def _recommendation_out(recommendation: Recommendation) -> RecommendationOut:
         nextTrigger=recommendation.next_trigger,
         beginnerTip=recommendation.beginner_tip,
         idealFor=recommendation.ideal_for,
+        mentorLesson=recommendation.mentor_lesson,
+        whatWouldChangeMyView=recommendation.what_would_change_my_view,
         why=recommendation.why,
         positives=recommendation.positives,
         risks=recommendation.risks,

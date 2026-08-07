@@ -273,3 +273,32 @@ Trading Setup while daily price only updates Setup Progress.
 - Additive `setup` / `progress` API fields
 - Regression tests for all strategies + setup stability
 - ADR-003 and `MENTOR_ENGINE_SETUP_PROGRESS.md`
+
+---
+
+## ER-0020
+
+### Title
+
+TradeLens Insight v2: Educational Narrative
+
+### Priority
+
+P0
+
+### Status
+
+Done
+
+### Business Goal
+
+Replace repetitive recommendation narrative with a concise educational mentor
+conversation that teaches one trading principle per insight.
+
+### Deliverables
+
+- Mentor's Lesson / What would change my view? / Who is this setup for?
+- Non-repetitive narrative assembly (`insight.py` + narrative refactor)
+- Concise Recommendation Card mentor UI
+- Regression tests for section uniqueness
+- ADR-004 and `ER-0020-INSIGHT-V2-EDUCATIONAL-NARRATIVE.md`

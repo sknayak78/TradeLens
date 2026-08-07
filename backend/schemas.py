@@ -226,6 +226,9 @@ class RecommendationOut(BaseModel):
     nextTrigger: str
     beginnerTip: str
     idealFor: str
+    # Insight v2 educational narrative (additive).
+    mentorLesson: str
+    whatWouldChangeMyView: str
     why: List[str]
     positives: List[str]
     risks: List[str]

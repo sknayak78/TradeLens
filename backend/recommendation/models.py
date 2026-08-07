@@ -247,6 +247,10 @@ class Recommendation:
     next_trigger: str
     beginner_tip: str
     ideal_for: str
+    #: Insight v2 — one trading principle this setup teaches.
+    mentor_lesson: str
+    #: Insight v2 — what would invalidate the mentor's thesis.
+    what_would_change_my_view: str
     #: Plain-language execution line (Trading Plan).
     entry_condition: str
     #: Deprecated alias of ``summary``, kept so v1.0 consumers keep rendering.

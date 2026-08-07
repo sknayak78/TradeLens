@@ -1,17 +1,16 @@
 import {
   AlertTriangle,
-  CheckCircle2,
-  Compass,
-  GraduationCap,
-  Info,
+  BookOpen,
+  Eye,
+  RefreshCw,
   Target,
+  Users,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Recommendation } from "@/types";
 import {
   ACTION_TONE,
   LevelTile,
-  ReasonList,
   TONE_ACCENT,
   Tone,
 } from "@/components/panels/RecommendationBadges";
@@ -22,10 +21,6 @@ function riskRewardNote(ratio: number): { text: string; tone: Tone } {
   if (ratio >= 1.5) return { text: "Good", tone: "positive" };
   if (ratio >= 1) return { text: "Acceptable", tone: "warning" };
   return { text: "Below preferred threshold", tone: "negative" };
-}
-
-function normalise(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 function money(value: number): string {
@@ -40,9 +35,15 @@ interface RecommendationCardProps {
 }
 
 /**
- * The decision-first view of a stock, as three stacked cards: the decision,
- * the trading plan, then the reasoning.  Renders the API's `recommendation`
- * block verbatim.
+ * Insight v2 — educational mentor conversation.
+ *
+ * Section purposes (one job each):
+ * 1. Opening — verdict + summary (what to do)
+ * 2. Mentor's Lesson — one trading principle
+ * 3. Trading Plan — how to execute
+ * 4. Evidence — why this call (compact)
+ * 5. What would change my view? — thesis invalidation
+ * 6. Who is this for? + Watch Next — audience + operational trigger
  */
 export default function RecommendationCard({
   recommendation,
@@ -54,27 +55,25 @@ export default function RecommendationCard({
     holdingPeriod,
     entryCondition,
     nextTrigger,
-    beginnerTip,
     idealFor,
+    mentorLesson,
+    whatWouldChangeMyView,
     why,
-    positives,
     risks,
     levels,
   } = recommendation;
 
   const tone = ACTION_TONE[action] ?? "muted";
-  /* The engine repeats several strengths inside `why`; each column should
-     carry its own point, so drop the ones already shown as a strength. */
-  const shown = new Set(positives.map(normalise));
-  const keyReasons = why.filter((reason) => !shown.has(normalise(reason)));
+  const evidence = why.slice(0, 3);
+  const riskLines = risks.slice(0, 2);
 
   return (
     <div className="flex flex-col gap-3" data-testid="recommendation-card">
-      {/* 1 · The verdict (the action itself sits in the stock header) */}
+      {/* 1 · Mentor opening */}
       <Card accent={tone} testId="recommendation-decision">
         <div>
           <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1.5">
-            Verdict
+            Mentor
           </div>
           <p
             className="text-white text-base md:text-lg font-semibold leading-snug"
@@ -91,7 +90,18 @@ export default function RecommendationCard({
         </div>
       </Card>
 
-      {/* 2 · The trading plan */}
+      {/* 2 · Mentor's Lesson */}
+      <Card testId="recommendation-lesson">
+        <SectionTitle icon={<BookOpen size={12} />} label="Mentor's Lesson" />
+        <p
+          className="text-[13px] text-[#d1d4dc] leading-relaxed"
+          data-testid="recommendation-mentor-lesson"
+        >
+          {mentorLesson}
+        </p>
+      </Card>
+
+      {/* 3 · Trading Plan */}
       <Card testId="recommendation-plan">
         <SectionTitle icon={<Target size={12} />} label="Trading Plan" />
         <p
@@ -146,66 +156,74 @@ export default function RecommendationCard({
         </div>
       </Card>
 
-      {/* 3 · The reasoning */}
+      {/* 4 · Evidence + risks (compact, not a three-column dump) */}
       <Card testId="recommendation-reasoning">
-        <SectionTitle
-          icon={<Info size={12} />}
-          label="Why This Recommendation?"
-        />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-          <ReasonList
-            title="Strengths"
-            items={positives}
-            icon={<CheckCircle2 size={12} />}
-            tone="positive"
-            testId="recommendation-positives"
-          />
-          <ReasonList
-            title="Key Reasons"
-            items={keyReasons}
-            icon={<Compass size={12} />}
-            tone="info"
-            testId="recommendation-why"
-          />
-          <ReasonList
-            title="Risks"
-            items={risks}
-            icon={<AlertTriangle size={12} />}
-            tone="negative"
-            testId="recommendation-risks"
-          />
-        </div>
-
-        <div
-          className="rounded-[4px] border border-[#2962ff]/25 bg-[#2962ff]/[0.07] p-3 flex flex-col gap-2 mt-3"
-          data-testid="recommendation-beginner"
+        <SectionTitle icon={<Eye size={12} />} label="Why this call" />
+        <ul
+          className="flex flex-col gap-1.5 mb-3"
+          data-testid="recommendation-why"
         >
-          <div className="flex items-center gap-2">
-            <span className="text-[#2962ff] flex">
-              <GraduationCap size={14} />
-            </span>
-            <span className="text-[10px] uppercase tracking-widest text-[#787b86]">
-              What should I do next?
-            </span>
-          </div>
-          <p
-            className="text-[13px] text-[#d1d4dc] leading-relaxed"
-            data-testid="recommendation-beginner-tip"
-          >
-            {beginnerTip}
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <BeginnerFact
-              label="Watch Next"
-              value={nextTrigger}
-              testId="recommendation-next-trigger"
+          {evidence.map((line) => (
+            <li
+              key={line}
+              className="text-[13px] text-[#d1d4dc] leading-relaxed pl-3 border-l border-[#2a2e39]"
+            >
+              {line}
+            </li>
+          ))}
+        </ul>
+        {riskLines.length > 0 && (
+          <>
+            <SectionTitle
+              icon={<AlertTriangle size={12} />}
+              label="Risks to respect"
             />
-            <BeginnerFact
-              label="Ideal For"
-              value={idealFor}
-              testId="recommendation-ideal-for"
-            />
-          </div>
+            <ul
+              className="flex flex-col gap-1.5"
+              data-testid="recommendation-risks"
+            >
+              {riskLines.map((line) => (
+                <li
+                  key={line}
+                  className="text-[13px] text-[#d1d4dc] leading-relaxed pl-3 border-l border-[#ef5350]/40"
+                >
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </Card>
+
+      {/* 5 · What would change my view? */}
+      <Card testId="recommendation-change-view">
+        <SectionTitle
+          icon={<RefreshCw size={12} />}
+          label="What would change my view?"
+        />
+        <p
+          className="text-[13px] text-[#d1d4dc] leading-relaxed"
+          data-testid="recommendation-what-would-change-my-view"
+        >
+          {whatWouldChangeMyView}
+        </p>
+      </Card>
+
+      {/* 6 · Who + Watch Next */}
+      <Card testId="recommendation-audience">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <MentorFact
+            icon={<Users size={12} />}
+            label="Who is this setup for?"
+            value={idealFor}
+            testId="recommendation-ideal-for"
+          />
+          <MentorFact
+            icon={<Eye size={12} />}
+            label="Watch Next"
+            value={nextTrigger}
+            testId="recommendation-next-trigger"
+          />
         </div>
       </Card>
     </div>
@@ -251,19 +269,24 @@ function SectionTitle({
   );
 }
 
-function BeginnerFact({
+function MentorFact({
+  icon,
   label,
   value,
   testId,
 }: {
+  icon: ReactNode;
   label: string;
   value: string;
   testId?: string;
 }) {
   return (
-    <div className="rounded-[3px] border border-[#2a2e39] bg-[#131722] px-3 py-2 min-w-0">
-      <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
-        {label}
+    <div className="rounded-[3px] border border-[#2a2e39] bg-[#0f1318] px-3 py-2.5 min-w-0">
+      <div className="flex items-center gap-1.5 mb-1">
+        <span className="text-[#787b86] flex">{icon}</span>
+        <span className="text-[10px] uppercase tracking-widest text-[#787b86]">
+          {label}
+        </span>
       </div>
       <div className="text-[13px] text-[#d1d4dc] leading-relaxed" data-testid={testId}>
         {value}

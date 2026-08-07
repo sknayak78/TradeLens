@@ -142,9 +142,46 @@ See `docs/05-engineering/MENTOR_ENGINE_SETUP_PROGRESS.md`.
 
 ---
 
+## ADR-004: Insight v2 Educational Narrative Sections
+
+**Status:** Accepted
+
+**Date:** 07-Aug-2026
+
+**Request:** ER-0020 (product: TradeLens Insight v2)
+
+### Context
+
+The Recommendation Card stacked Strengths / Key Reasons / Risks / beginner tip
+with overlapping sentences (trend essay in both summary and why; stop-loss
+invalidation repeated in risks and Watch Next). Mentors teach one idea at a
+time.
+
+### Decision
+
+Each narrative field has a single purpose. New additive fields:
+
+- `mentorLesson` — one strategy-keyed trading principle
+- `whatWouldChangeMyView` — thesis invalidation in mentor voice
+- `idealFor` — strategy audience ("Who is this setup for?")
+
+Summary must not repeat the trend evidence used in `why`. Risks stay educational
+and must not duplicate the stop-loss invalidation sentence owned by
+`whatWouldChangeMyView`. Watch Next remains Progress-owned and operational.
+
+### Consequences
+
+- Card UI becomes a short mentor conversation instead of a three-column dump
+- Regression tests enforce no identical prose across sections
+- Existing v1.1 fields remain; Insight v2 fields are additive
+
+See `docs/05-engineering/ER-0020-INSIGHT-V2-EDUCATIONAL-NARRATIVE.md`.
+
+---
+
 ## Future ADRs
 
-- ADR-004 Market Data Provider Strategy
-- ADR-005 Technical Indicator Engine
-- ADR-006 AI Decision Engine
-- ADR-007 Paper Trading / Setup Persistence
+- ADR-005 Market Data Provider Strategy
+- ADR-006 Technical Indicator Engine
+- ADR-007 AI Decision Engine
+- ADR-008 Paper Trading / Setup Persistence

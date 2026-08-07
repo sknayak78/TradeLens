@@ -419,7 +419,9 @@ def test_a_pullback_inside_an_uptrend_is_a_wait_not_an_avoid():
         "The uptrend is intact, but let the pullback steady before starting a "
         "position."
     )
-    assert "pullback rather than a breakdown" in recommendation.summary
+    # Insight v2: summary is the conversational opening; evidence lives in why.
+    assert "dip is worth tracking" in recommendation.summary
+    assert "pullback rather than a breakdown" in recommendation.why[0]
 
 
 def test_a_deep_pullback_with_thin_evidence_still_only_waits():
@@ -448,7 +450,9 @@ def test_a_directionless_stock_is_a_wait():
     assert recommendation.verdict == (
         "Wait for a better entry before initiating a new position."
     )
-    assert "no clear trend to lean on" in recommendation.summary
+    # Insight v2: trend essay lives in why; summary stays an opening.
+    assert "not enough directional evidence" in recommendation.summary
+    assert "no clear trend to lean on" in recommendation.why[0]
 
 
 def test_a_downtrend_is_avoided_and_never_priced():
@@ -587,6 +591,8 @@ def _prose(recommendation: Recommendation) -> list[str]:
         recommendation.next_trigger,
         recommendation.beginner_tip,
         recommendation.ideal_for,
+        recommendation.mentor_lesson,
+        recommendation.what_would_change_my_view,
         recommendation.entry_condition,
         *recommendation.why,
         *recommendation.positives,
@@ -615,6 +621,7 @@ def test_every_state_answers_the_five_beginner_questions(action: str):
     assert recommendation.why
     assert recommendation.next_trigger
     assert recommendation.beginner_tip and recommendation.ideal_for
+    assert recommendation.mentor_lesson and recommendation.what_would_change_my_view
     # 4. What could go wrong?  Every state carries at least one risk.
     assert recommendation.risks
     # 3. Where do I enter, and where is my downside?
@@ -638,7 +645,9 @@ def test_a_strong_buy_still_refuses_to_promise_an_outcome():
 
     assert any("probability rather than a promise" in line
                for line in recommendation.why)
-    assert any("closes below 99.00" in risk for risk in recommendation.risks)
+    # Insight v2: stop invalidation lives in "What would change my view?"
+    assert "closes below 99.00" in recommendation.what_would_change_my_view
+    assert not any("closes below 99.00" in risk for risk in recommendation.risks)
 
 
 #: Claims about who is "in control" or how strong an interest is cannot be read
@@ -698,7 +707,7 @@ def test_the_summary_is_context_without_repeating_watch_next():
     recommendation = engine.recommend(WATCH_OVERBOUGHT)
 
     assert recommendation.next_trigger not in recommendation.summary
-    assert "not the place to start a position" in recommendation.summary
+    assert "structural buy zone" in recommendation.summary
     assert recommendation.strategy == "Pullback"
 
 
