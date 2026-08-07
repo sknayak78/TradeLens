@@ -15,9 +15,16 @@ Trend = Literal["bullish", "bearish", "neutral"]
 #: context, so position-management verdicts (Hold, Add More, Book Profit, Exit)
 #: belong to a future Portfolio Advisor and are deliberately absent here.
 Action = Literal["Strong Buy", "Buy", "Watch", "Wait", "Avoid"]
-#: How an entry would be taken.  Trading strategy is deliberately kept out of
-#: ``Action`` so the action stays a pure decision.
-Strategy = Literal["Fresh Entry", "Pullback", "Breakout", "No Entry Yet"]
+#: The trading thesis for this recommendation.  Strategy is the parent decision:
+#: action, levels, Watch Next and narrative are all derived from it so a single
+#: recommendation can never carry two conflicting plans.
+Strategy = Literal[
+    "Trend Continuation",
+    "Pullback",
+    "Breakout",
+    "Consolidation",
+    "No Entry Yet",
+]
 Conviction = Literal["High", "Medium", "Low"]
 #: "Partial" whenever any live indicator was unavailable, so consumers can flag
 #: the recommendation instead of trusting a silently degraded one.
@@ -186,6 +193,11 @@ class RecommendationInput:
 class TradeLevels:
     """Entry/exit geometry for a long setup.
 
+    Published only when the parent strategy's thesis includes a buy zone
+    (Trend Continuation or Pullback).  Breakout / Consolidation / No Entry Yet
+    never carry levels, so the card cannot invite a buy-now entry while also
+    asking the trader to wait.
+
     The entry is a zone rather than a single price: ``entry_min`` is the higher
     of EMA20 and support (the level a pullback should hold) and ``entry_max`` is
     the last price.  ``risk_reward`` is measured from the midpoint of the zone,
@@ -214,8 +226,7 @@ class Recommendation:
 
     symbol: str
     action: Action
-    #: The shape of the entry, if any: immediate, on a pullback, or only once a
-    #: breakout confirms.  Never folded into ``action``.
+    #: Parent trading thesis.  Drives action, levels, Watch Next and narrative.
     strategy: Strategy
     #: One line a trader can act on without reading anything else.
     verdict: str
@@ -231,6 +242,7 @@ class Recommendation:
     #: Expected duration of the trade once a valid entry is taken.
     holding_period: str
     #: The single thing that has to happen before this call changes.
+    #: Always consistent with ``strategy`` — never a second thesis.
     next_trigger: str
     beginner_tip: str
     ideal_for: str

@@ -47,9 +47,50 @@ Trade-offs
 
 ---
 
+## ADR-002: Strategy is the Parent Trading Thesis
+
+**Status:** Accepted
+
+**Date:** 07-Aug-2026
+
+**Request:** ER-0016
+
+### Context
+
+The Recommendation Engine scored action, computed a pullback-style entry zone,
+labelled a strategy afterwards, and built Watch Next from action + limits.
+That produced contradictory cards — e.g. Strategy = Breakout with Entry Range =
+buy 3294–3445 **and** Watch Next = wait for a close above 3485.
+
+### Decision
+
+**Strategy is the parent decision.** Pipeline order:
+
+```
+score → trend → candidate zone → limits → STRATEGY
+                                         ↓
+                   action · published levels · narrative · risks
+```
+
+- One recommendation = one strategy = one thesis.
+- Levels publish only for `Trend Continuation` and `Pullback`.
+- `Breakout`, `Consolidation`, and `No Entry Yet` never publish a buy-now entry.
+- Narrative receives `strategy` and derives Watch Next / entry condition from it.
+- `Fresh Entry` is renamed to `Trend Continuation` (timing is not a strategy).
+
+### Consequences
+
+- Cards cannot invite a buy-now entry while also asking the trader to wait.
+- Strategy vocabulary matches the product brief (plus `No Entry Yet` for Avoid).
+- Frontend / schema literals updated in the same change; no other API shape moves.
+
+See `docs/ER-0016-STRATEGY-DRIVEN.md` for before/after examples.
+
+---
+
 ## Future ADRs
 
-- ADR-002 Market Data Provider Strategy
-- ADR-003 Technical Indicator Engine
-- ADR-004 AI Decision Engine
-- ADR-005 Paper Trading Architecture
+- ADR-003 Market Data Provider Strategy
+- ADR-004 Technical Indicator Engine
+- ADR-005 AI Decision Engine
+- ADR-006 Paper Trading Architecture

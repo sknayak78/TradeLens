@@ -167,9 +167,16 @@ class RecommendationOut(BaseModel):
     # Position management (Hold, Add More, Book Profit, Exit) needs portfolio
     # context the engine does not have, so it is out of scope here.
     action: Literal["Strong Buy", "Buy", "Watch", "Wait", "Avoid"]
-    # How an entry would be taken.  Trading strategy is kept out of `action` so
-    # the action stays a pure decision.
-    strategy: Literal["Fresh Entry", "Pullback", "Breakout", "No Entry Yet"]
+    # Parent trading thesis.  Drives action, levels, Watch Next and narrative
+    # so one recommendation never carries two conflicting plans (ER-0016).
+    # "Fresh Entry" was renamed to "Trend Continuation" — timing is not a strategy.
+    strategy: Literal[
+        "Trend Continuation",
+        "Pullback",
+        "Breakout",
+        "Consolidation",
+        "No Entry Yet",
+    ]
     verdict: str
     summary: str
     conviction: Literal["High", "Medium", "Low"]

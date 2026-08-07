@@ -6,12 +6,16 @@ position-management verdict (Hold, Add More, Book Profit, Exit); those belong to
 a future Portfolio Advisor.  The five answers it can give are Strong Buy, Buy,
 Watch, Wait and Avoid.
 
+**Strategy is the parent decision (ER-0016).**  The engine first classifies the
+trading thesis (Trend Continuation, Pullback, Breakout, Consolidation, or
+No Entry Yet).  Action, published levels, Watch Next and narrative are all
+derived from that thesis so a recommendation can never carry two conflicting
+plans (e.g. a buy-now entry range alongside "wait for the breakout").
+
 The engine is pure: no network access, no database access, no LLM, no clock or
 randomness.  It consumes a :class:`~recommendation.models.RecommendationInput`
 (price, EMA20/50/200, RSI, support, resistance) and returns a
-:class:`~recommendation.models.Recommendation` carrying the action, a one-line
-verdict, a plain-English summary, the reasoning, the trade levels and the next
-thing to watch.
+:class:`~recommendation.models.Recommendation`.
 
 Trend is derived from the EMA stack rather than taken from any snapshot field so
 seeded trend values — and every legacy analysis field — cannot influence the
@@ -37,6 +41,7 @@ from .config import (
     HOLDING_PERIODS,
     IDEAL_FOR,
     INDICATOR_LABELS,
+    LEVEL_STRATEGIES,
     MAX_SCORE,
     MIN_HEADROOM_PCT,
     MIN_RISK_REWARD,
@@ -77,19 +82,23 @@ class RecommendationEngine:
     def recommend(self, market: RecommendationInput) -> Recommendation:
         rules_matched, score = self._score(market)
         trend = self._trend(market)
-        levels = self._levels(market)
-        limits = self._limits(market, trend, score, levels)
-        action = self._action(trend, score, limits)
-        published_levels = None if action == "Avoid" else levels
-        strategy = self._strategy(market, action, published_levels, limits)
+        # Candidate geometry only — publishing is gated by strategy below.
+        zone = self._entry_zone(market)
+        limits = self._limits(market, trend, score, zone)
+
+        # Parent decision: one thesis for the whole recommendation.
+        strategy = self._strategy(market, trend, limits, zone)
+        action = self._action(strategy, trend, score)
+        levels = self._levels_for(strategy, zone)
 
         story = narrative.build(
             market=market,
             trend=trend,
             action=action,
+            strategy=strategy,
             score=score,
             rules_matched=rules_matched,
-            levels=published_levels,
+            levels=levels,
             limits=limits,
         )
         summary = story.summary
@@ -118,12 +127,13 @@ class RecommendationEngine:
             risks=story.risks,
             rules_matched=rules_matched,
             warnings=self._warnings(market, limits),
-            levels=published_levels,
+            levels=levels,
         )
         logger.debug(_event(
             "recommendation.generated",
             symbol=recommendation.symbol,
             action=recommendation.action,
+            strategy=recommendation.strategy,
             score=recommendation.score,
             trend=recommendation.trend,
         ))
@@ -226,9 +236,14 @@ class RecommendationEngine:
             warnings.append("risk_reward_below_minimum")
         return warnings
 
-    # ---------- Trade levels ----------
+    # ---------- Candidate entry zone (not yet published) ----------
 
-    def _levels(self, market: RecommendationInput) -> Optional[TradeLevels]:
+    def _entry_zone(self, market: RecommendationInput) -> Optional[TradeLevels]:
+        """Compute pullback/continuation geometry if the numbers support it.
+
+        This is a *candidate* only.  Whether it appears on the recommendation is
+        decided by :meth:`_levels_for` after the strategy is known.
+        """
         if not market.has_valid_levels:
             return None
         support = market.support
@@ -267,6 +282,14 @@ class RecommendationEngine:
             risk_reward=round(risk_reward, 2),
         )
 
+    def _levels_for(
+        self, strategy: Strategy, zone: Optional[TradeLevels]
+    ) -> Optional[TradeLevels]:
+        """Publish levels only when the strategy's thesis includes a buy zone."""
+        if strategy in LEVEL_STRATEGIES:
+            return zone
+        return None
+
     # ---------- Blockers ----------
 
     def _limits(
@@ -278,7 +301,7 @@ class RecommendationEngine:
     ) -> Limits:
         """Everything standing between this snapshot and a fresh entry today.
 
-        The same list decides the action and drives the "why not stronger?"
+        The same list feeds strategy classification and the "why not stronger?"
         explanation, so the two can never disagree.
         """
         limits: List[str] = []
@@ -301,7 +324,7 @@ class RecommendationEngine:
             limits.append(narrative.LIMIT_PARTIAL_DATA)
         return tuple(limits)
 
-    # ---------- Action ----------
+    # ---------- Strategy (parent) then Action ----------
 
     _ENTRY_BLOCKERS = (
         narrative.LIMIT_TREND_BEARISH,
@@ -316,45 +339,69 @@ class RecommendationEngine:
     def _strategy(
         self,
         market: RecommendationInput,
-        action: Action,
-        levels: Optional[TradeLevels],
+        trend: Trend,
         limits: Limits,
+        zone: Optional[TradeLevels],
     ) -> Strategy:
-        """Describe *how* an entry would be taken, separately from the decision.
+        """Classify the single trading thesis for this snapshot.
 
-        Keeping this out of the action means a consumer switching on the action
-        never has to parse a strategy out of it.
+        Strategy is decided before action and before levels are published, so
+        every downstream field describes the same plan.
         """
-        if action in _ENTRY_ACTIONS:
-            return "Fresh Entry"
-        if action != "Watch":
+        if trend == "bearish":
             return "No Entry Yet"
-        if narrative.LIMIT_THIN_HEADROOM in limits and market.resistance is not None:
-            return "Breakout"
-        if levels is not None:
+
+        # Pullback wins over Breakout when the price has already slipped under a
+        # shorter average: the thesis is "let the dip steady", not "buy a break".
+        if market.is_pullback or narrative.LIMIT_OVERBOUGHT in limits:
             return "Pullback"
-        return "No Entry Yet"
 
-    def _action(self, trend: Trend, score: int, limits: Limits) -> Action:
-        """Answer "should I open a position today?" and nothing else.
+        # Breakout: still trending, but pressed against resistance — only a
+        # confirmed break creates an entry.  Must win over a buy-now zone so we
+        # never publish Entry Range alongside "wait for the breakout".
+        if (
+            narrative.LIMIT_THIN_HEADROOM in limits
+            and market.resistance is not None
+        ):
+            return "Breakout"
 
-        A fresh entry needs an intact uptrend, strong evidence, room to run, a
-        usable exit and a reward worth the risk.  Anything short of that is a
-        waiting state, graded by how much of the case is already in place.
+        # Better-price wait inside a healthy uptrend (poor reward at last price).
+        if (
+            zone is not None
+            and trend == "bullish"
+            and narrative.LIMIT_POOR_RISK_REWARD in limits
+        ):
+            return "Pullback"
 
-        "Avoid" is reserved for a broken trend.  A stock whose longer-term
-        uptrend is intact is at worst something to wait on, however thin today's
-        evidence is, so a pullback is never mistaken for a stock to stay away
-        from.
+        # Trend Continuation: clear path for a fresh entry with the trend today.
+        if trend == "bullish" and not any(
+            limit in limits for limit in self._ENTRY_BLOCKERS
+        ):
+            return "Trend Continuation"
+
+        # Bullish but incomplete — either no zone at all, or wait for price.
+        if trend == "bullish":
+            return "No Entry Yet" if zone is None else "Pullback"
+
+        # Neutral without a classified pullback: range / unclear.
+        return "Consolidation"
+
+    def _action(self, strategy: Strategy, trend: Trend, score: int) -> Action:
+        """Derive the decision from the parent strategy.
+
+        Strategy owns the thesis; action is the strength of that thesis today.
         """
         if trend == "bearish":
             return "Avoid"
-        if not any(limit in limits for limit in self._ENTRY_BLOCKERS):
+        if strategy == "Trend Continuation":
             if score >= ACTION_STRONG_BUY_MIN_SCORE:
                 return "Strong Buy"
             return "Buy"
-        if score >= ACTION_WATCH_MIN_SCORE:
-            return "Watch"
+        if strategy in ("Breakout", "Pullback"):
+            if score >= ACTION_WATCH_MIN_SCORE:
+                return "Watch"
+            return "Wait"
+        # Consolidation, or No Entry Yet on a non-bearish (incomplete) tape.
         return "Wait"
 
 
