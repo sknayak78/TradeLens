@@ -88,9 +88,41 @@ See `docs/ER-0016-STRATEGY-DRIVEN.md` for before/after examples.
 
 ---
 
+## ADR-003: Multi-Timeframe Narrative Intelligence
+
+**Status:** Accepted
+
+**Date:** 07-Aug-2026
+
+**Request:** ER-0017
+
+### Context
+
+A stock rising for several sessions can still be below its long-term average.
+The engine correctly avoided buying, but the narrative only described the
+downtrend — so beginners felt the chart contradicted TradeLens.
+
+### Decision
+
+- Keep the trading **decision** unchanged.
+- Add a pure `TimeframeContext` that labels short vs long structure
+  (including counter-trend rally and pullback).
+- Narrative sections each answer one beginner question; summary never repeats
+  Watch Next.
+- Teach the disagreement explicitly in chart-aware language.
+
+### Consequences
+
+- Cards explain *why* short-term candles can rise inside a long-term downtrend.
+- No public API field changes.
+
+See `docs/ER-0017-MULTI-TIMEFRAME-NARRATIVE.md`.
+
+---
+
 ## Future ADRs
 
-- ADR-003 Market Data Provider Strategy
-- ADR-004 Technical Indicator Engine
-- ADR-005 AI Decision Engine
-- ADR-006 Paper Trading Architecture
+- ADR-004 Market Data Provider Strategy
+- ADR-005 Technical Indicator Engine
+- ADR-006 AI Decision Engine
+- ADR-007 Paper Trading Architecture
