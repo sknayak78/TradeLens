@@ -159,8 +159,8 @@ def test_trend_continuation_publishes_a_buy_now_plan():
     assert recommendation.strategy == "Trend Continuation"
     assert recommendation.action in ("Strong Buy", "Buy")
     assert recommendation.levels is not None
-    assert str(recommendation.levels.entry_min) in recommendation.summary
-    assert str(recommendation.levels.stop_loss) in recommendation.summary
+    assert str(recommendation.levels.entry_min) in recommendation.entry_condition
+    assert str(recommendation.levels.stop_loss) in recommendation.entry_condition
     assert "close below" in recommendation.next_trigger.lower()
     assert "confirm the breakout" not in recommendation.next_trigger.lower()
     assert "pullback into" not in recommendation.next_trigger.lower()

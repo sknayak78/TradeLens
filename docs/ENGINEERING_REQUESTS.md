@@ -243,3 +243,34 @@ contradict each other.
 - Consistency tests for Breakout, Pullback, Trend Continuation, Consolidation,
   Avoid.
 - Architecture notes in `docs/ER-0016-STRATEGY-DRIVEN.md` and ADR-002.
+
+---
+
+## ER-0017
+
+### Title
+
+Multi-Timeframe Narrative Intelligence
+
+### Priority
+
+P0
+
+### Status
+
+Done
+
+### Business Goal
+
+Teach beginners why a stock can rise for several sessions while remaining in a
+long-term downtrend (and the reverse). The Recommendation Card must never feel
+like it contradicts the chart.
+
+### Deliverables
+
+- `recommendation/timeframe.py` — short vs long horizon structure labels
+- Narrative sections each answer one question; no repeated Watch Next in summary
+- Counter-trend rally and pullback language with explicit timeframes
+- Recommendation Card section labels refined for mentor clarity
+- Unit tests in `tests/test_multi_timeframe_narrative.py`
+- Notes in `docs/ER-0017-MULTI-TIMEFRAME-NARRATIVE.md`
