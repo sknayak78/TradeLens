@@ -138,6 +138,8 @@ owned by Progress.
 - Persistence of setups across days is a future step; within a snapshot, the
   stability contract is proven by holding structure fixed and varying price.
 
+See `docs/05-engineering/MENTOR_ENGINE_SETUP_PROGRESS.md`.
+
 ---
 
 ## ADR-004: Insight v2 Educational Narrative Sections
@@ -173,14 +175,13 @@ and must not duplicate the stop-loss invalidation sentence owned by
 - Regression tests enforce no identical prose across sections
 - Existing v1.1 fields remain; Insight v2 fields are additive
 
----
-See `docs/05-engineering/MENTOR_ENGINE_SETUP_PROGRESS.md`.
+See `docs/05-engineering/ER-0020-INSIGHT-V2-EDUCATIONAL-NARRATIVE.md`.
 
 ---
 
 ## Future ADRs
 
-- ADR-004 Market Data Provider Strategy
-- ADR-005 Technical Indicator Engine
-- ADR-006 AI Decision Engine
-- ADR-007 Paper Trading / Setup Persistence
+- ADR-005 Market Data Provider Strategy
+- ADR-006 Technical Indicator Engine
+- ADR-007 AI Decision Engine
+- ADR-008 Paper Trading / Setup Persistence
