@@ -12,8 +12,7 @@ from .config import (
     ACTION_STRONG_BUY_MIN_SCORE,
     ACTION_WATCH_MIN_SCORE,
 )
-from .models import Action
-from .models import RecommendationInput, Strategy, TradeLevels
+from .models import Action, RecommendationInput, TradeLevels
 from .setup import (
     LIMIT_OVERBOUGHT,
     TradingSetup,
