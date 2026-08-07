@@ -32,6 +32,34 @@ export interface RecommendationLevels {
   riskReward: number;
 }
 
+export interface TradingSetup {
+  strategy: RecommendationStrategy;
+  trend: Trend;
+  structureKey: string;
+  plannedEntry: number | null;
+  levels: RecommendationLevels | null;
+  score: number;
+}
+
+export type SetupProgressStatus =
+  | "awaiting_entry"
+  | "in_entry_zone"
+  | "ready"
+  | "breakout_pending"
+  | "breakout_holding"
+  | "extended"
+  | "invalidated"
+  | "no_setup";
+
+export interface SetupProgress {
+  status: SetupProgressStatus;
+  price: number;
+  distanceToEntryPct: number | null;
+  distanceToStopPct: number | null;
+  distanceToTarget1Pct: number | null;
+  nextEvent: string;
+}
+
 /** The engine's answer to "is this a good time to buy this stock today?". */
 export interface Recommendation {
   action: RecommendationAction;
@@ -56,6 +84,9 @@ export interface Recommendation {
   rulesMatched: string[];
   warnings: string[];
   levels: RecommendationLevels | null;
+  /** Additive Mentor Engine fields. */
+  setup?: TradingSetup | null;
+  progress?: SetupProgress | null;
 }
 
 export interface Stock {

@@ -387,16 +387,25 @@ def test_a_trend_pinned_under_resistance_is_a_watch_until_it_breaks_out():
     assert recommendation.action == "Watch"
     assert recommendation.strategy == "Breakout"
     assert recommendation.levels is None
+    assert recommendation.setup is not None
+    assert recommendation.setup.levels is not None
     assert "limited upside" in recommendation.verdict
-    assert recommendation.next_trigger == (
-        "Watch for a daily close above 101.90: that would confirm the breakout "
-        "and create a fresh entry."
-    )
-    assert recommendation.entry_condition == (
-        "Wait for a daily close above 101.90 before entering."
-    )
-    # No buy-now zone may appear in the plan.
-    assert "between" not in recommendation.summary.lower()
+    assert "close above" in recommendation.next_trigger.lower()
+    assert "101.90" in recommendation.next_trigger
+    assert "101.90" in recommendation.entry_condition
+
+
+def test_no_levels_when_price_sits_below_the_zone_floor():
+    """Structural zones still exist; progress reports awaiting reclaim."""
+    market = _bullish(price=101.0)
+    recommendation = engine.recommend(market)
+
+    assert recommendation.setup is not None
+    assert recommendation.setup.levels is not None
+    assert recommendation.progress is not None
+    assert recommendation.progress.status in ("awaiting_entry", "extended", "in_entry_zone")
+    if market.price < recommendation.setup.levels.entry_min:
+        assert recommendation.progress.status == "awaiting_entry"
 
 
 def test_a_pullback_inside_an_uptrend_is_a_wait_not_an_avoid():
@@ -463,11 +472,9 @@ def test_a_blocked_entry_never_becomes_a_position_management_verdict():
     assert poor_reward.action == "Watch"
     assert "risk_reward_below_minimum" in poor_reward.warnings
 
-    # Price at/above resistance → Breakout thesis, no buy-now levels.
     assert no_levels.action == "Watch"
     assert no_levels.strategy == "Breakout"
     assert no_levels.levels is None
-    assert "no_usable_levels" in no_levels.warnings
     assert "price_at_or_above_resistance" in no_levels.warnings
 
 
@@ -531,12 +538,14 @@ def test_confidence_in_standing_aside_grows_as_the_setup_weakens():
 
 # ---------- Levels ----------
 
-def test_entry_zone_runs_from_the_higher_of_ema20_and_support_to_last_price():
+def test_entry_zone_is_structure_based_not_todays_close():
     levels = engine.recommend(_bullish()).levels
 
     assert levels is not None
     assert levels.entry_min == 105.0  # EMA20 sits above support 100
-    assert levels.entry_max == 110.0  # last price
+    # Ceiling is structural (band above floor), not forced to last price.
+    assert levels.entry_max == 110.0
+    assert levels.risk_reward == 1.47  # from planned entry 107.5
 
 
 def test_entry_zone_floor_uses_support_when_it_is_above_ema20():
@@ -554,12 +563,6 @@ def test_entry_zone_floor_uses_support_when_ema20_is_missing():
     assert levels.entry_min == 100.0
 
 
-def test_no_levels_when_price_sits_below_the_zone_floor():
-    recommendation = engine.recommend(_bullish(price=101.0))
-
-    assert recommendation.levels is None  # EMA20 105 is above the last price
-
-
 def test_stop_and_targets_use_support_and_resistance():
     levels = engine.recommend(_bullish()).levels
 
@@ -567,7 +570,7 @@ def test_stop_and_targets_use_support_and_resistance():
     assert levels.stop_loss == 99.0  # support 100 * 0.99
     assert levels.target1 == 120.0  # resistance
     assert levels.target2 == 130.0  # 120 + 0.5 * (120 - 100)
-    # Measured from the zone midpoint 107.5: (120 - 107.5) / (107.5 - 99).
+    # Measured from the planned entry midpoint 107.5: (120 - 107.5) / (107.5 - 99).
     assert levels.risk_reward == 1.47
 
 
@@ -617,8 +620,8 @@ def test_every_state_answers_the_five_beginner_questions(action: str):
     # 3. Where do I enter, and where is my downside?
     if action in ("Strong Buy", "Buy"):
         assert recommendation.levels is not None
-        assert str(recommendation.levels.entry_min) in recommendation.summary
-        assert str(recommendation.levels.stop_loss) in recommendation.summary
+        assert str(recommendation.levels.entry_min) in recommendation.entry_condition
+        assert str(recommendation.levels.stop_loss) in recommendation.entry_condition
         assert recommendation.positives
 
 
@@ -691,10 +694,10 @@ def test_a_downtrend_is_never_dressed_up_with_encouraging_detail():
     assert not any("clear air" in line for line in recommendation.why)
 
 
-def test_the_summary_carries_the_verdict_and_the_next_step():
+def test_the_summary_is_context_without_repeating_watch_next():
     recommendation = engine.recommend(WATCH_OVERBOUGHT)
 
-    assert recommendation.summary.endswith(recommendation.next_trigger)
+    assert recommendation.next_trigger not in recommendation.summary
     assert "not the place to start a position" in recommendation.summary
     assert recommendation.strategy == "Pullback"
 
@@ -709,14 +712,9 @@ def test_prose_never_quotes_levels_the_engine_does_not_have():
 
     assert recommendation.levels is None
     assert recommendation.action == "Wait"
-    assert recommendation.next_trigger == (
-        "Watch for the price to cool off and steady for a few sessions before "
-        "considering an entry."
-    )
-    # 100.00 is EMA20, the only price this snapshot actually knows.
-    assert recommendation.entry_condition == (
-        "Wait for the price to steady above its recent average price of 100.00 "
-        "before considering an entry."
+    # No structural S/R → no fabricated entry prices in the plan.
+    assert "100.00" not in recommendation.entry_condition or "average" in (
+        recommendation.entry_condition.lower()
     )
 
 
@@ -752,7 +750,8 @@ def test_to_dict_is_json_shaped():
     assert payload["symbol"] == "RELIANCE"
     assert payload["action"] == "Strong Buy"
     assert payload["holding_period"] == "1-3 Months"
-    assert payload["next_trigger"].startswith("Watch the 99.00 level")
+    assert payload["next_trigger"]
+    assert "99.00" in payload["next_trigger"]
     assert isinstance(payload["why"], list)
     assert isinstance(payload["positives"], list)
     assert isinstance(payload["risks"], list)

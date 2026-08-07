@@ -8,7 +8,11 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Literal, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Mapping, Optional
+
+if TYPE_CHECKING:
+    from .progress import SetupProgress
+    from .setup import TradingSetup
 
 Trend = Literal["bullish", "bearish", "neutral"]
 #: The engine answers "should I open a position today?" and has no portfolio
@@ -193,15 +197,13 @@ class RecommendationInput:
 class TradeLevels:
     """Entry/exit geometry for a long setup.
 
-    Published only when the parent strategy's thesis includes a buy zone
-    (Trend Continuation or Pullback).  Breakout / Consolidation / No Entry Yet
-    never carry levels, so the card cannot invite a buy-now entry while also
-    asking the trader to wait.
+    Built from **market structure** (support, resistance, EMA floor) — never from
+    today's close as the entry ceiling.  ``risk_reward`` is measured from the
+    planned entry (midpoint of the structural zone), so quiet sessions cannot
+    rewrite the trade's maths.
 
-    The entry is a zone rather than a single price: ``entry_min`` is the higher
-    of EMA20 and support (the level a pullback should hold) and ``entry_max`` is
-    the last price.  ``risk_reward`` is measured from the midpoint of the zone,
-    the representative fill.
+    Published on the legacy ``levels`` field for Trend Continuation and Pullback.
+    Breakout plans live on ``TradingSetup.levels`` and surface through Progress.
     """
 
     entry_min: float
@@ -217,20 +219,20 @@ class TradeLevels:
 
 @dataclass(frozen=True)
 class Recommendation:
-    """Deterministic recommendation derived from live indicators only.
+    """Mentor insight composed from a stable Trading Setup + daily Progress.
 
     The decision fields a consumer should render are ``action``, ``verdict``,
-    ``summary``, ``levels`` and ``next_trigger``; the remaining fields explain
-    that decision or preserve the v1.0 contract.
+    ``summary``, ``levels`` and ``next_trigger``; ``setup`` / ``progress`` expose
+    the Mentor Engine split additively.
     """
 
     symbol: str
     action: Action
-    #: Parent trading thesis.  Drives action, levels, Watch Next and narrative.
+    #: Parent trading thesis — mirrors ``setup.strategy``.
     strategy: Strategy
     #: One line a trader can act on without reading anything else.
     verdict: str
-    #: Two or three plain-English sentences: the call, the catch, the next step.
+    #: Chart-aware context; must not repeat Watch Next.
     summary: str
     conviction: Conviction
     score: int
@@ -241,13 +243,11 @@ class Recommendation:
     data_quality: DataQuality
     #: Expected duration of the trade once a valid entry is taken.
     holding_period: str
-    #: The single thing that has to happen before this call changes.
-    #: Always consistent with ``strategy`` — never a second thesis.
+    #: Future-only event from Setup Progress.
     next_trigger: str
     beginner_tip: str
     ideal_for: str
-    #: Plain-language next step for a beginner, e.g. "Wait for a daily close
-    #: above resistance 120.00 before entering."  Superseded by ``next_trigger``.
+    #: Plain-language execution line (Trading Plan).
     entry_condition: str
     #: Deprecated alias of ``summary``, kept so v1.0 consumers keep rendering.
     rationale: str
@@ -258,6 +258,10 @@ class Recommendation:
     rules_matched: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     levels: Optional[TradeLevels] = None
+    #: Additive Mentor Engine fields.
+    setup: Optional["TradingSetup"] = None
+    progress: Optional["SetupProgress"] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        return payload

@@ -81,6 +81,14 @@ STOP_SUPPORT_MULTIPLIER: float = 0.99
 SECOND_TARGET_BAND_SHARE: float = 0.5
 # Fresh entries whose reward:risk is below this become "Hold" or "Watch".
 MIN_RISK_REWARD: float = 1.2
+# Structural width of a buy zone above the floor (EMA20/support).  Never uses
+# today's close — the Mentor Engine keeps entry geometry stable across sessions.
+# Floor uses the larger of a percent band and a share of the S/R span so a
+# healthy trend-continuation price inside the range can still sit in-zone.
+ENTRY_ZONE_BAND_PCT: float = 0.015
+ENTRY_ZONE_SPAN_SHARE: float = 0.25
+# Breakout planned-entry band above resistance once the break triggers.
+BREAKOUT_ENTRY_BAND_PCT: float = 0.01
 
 
 SCORING_RULES: list[Rule] = [

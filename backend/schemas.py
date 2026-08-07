@@ -156,6 +156,41 @@ class RecommendationLevels(BaseModel):
     riskReward: float
 
 
+class TradingSetupOut(BaseModel):
+    """Stable mentor thesis derived from market structure (additive)."""
+    strategy: Literal[
+        "Trend Continuation",
+        "Pullback",
+        "Breakout",
+        "Consolidation",
+        "No Entry Yet",
+    ]
+    trend: Literal["bullish", "bearish", "neutral"]
+    structureKey: str
+    plannedEntry: Optional[float] = None
+    levels: Optional[RecommendationLevels] = None
+    score: int
+
+
+class SetupProgressOut(BaseModel):
+    """Daily progress against the stable Trading Setup (additive)."""
+    status: Literal[
+        "awaiting_entry",
+        "in_entry_zone",
+        "ready",
+        "breakout_pending",
+        "breakout_holding",
+        "extended",
+        "invalidated",
+        "no_setup",
+    ]
+    price: float
+    distanceToEntryPct: Optional[float] = None
+    distanceToStopPct: Optional[float] = None
+    distanceToTarget1Pct: Optional[float] = None
+    nextEvent: str
+
+
 class RecommendationOut(BaseModel):
     """Recommendation derived from live indicators only.
 
@@ -201,6 +236,9 @@ class RecommendationOut(BaseModel):
     rulesMatched: List[str]
     warnings: List[str]
     levels: Optional[RecommendationLevels] = None
+    # Mentor Engine split (additive).
+    setup: Optional[TradingSetupOut] = None
+    progress: Optional[SetupProgressOut] = None
 
 
 class StockDetail(MarketMetadata):

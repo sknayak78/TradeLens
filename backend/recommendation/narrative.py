@@ -12,7 +12,7 @@ The module is pure and template-based: no LLM, no clock, no randomness.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, List, Optional, Sequence, Tuple
 
 from .config import (
     COMFORTABLE_HEADROOM_PCT,
@@ -26,6 +26,10 @@ from .config import (
     RSI_OVERSOLD,
 )
 from .models import Action, RecommendationInput, Strategy, TradeLevels, Trend
+
+if TYPE_CHECKING:
+    from .progress import SetupProgress
+    from .setup import TradingSetup
 
 #: Reasons a stronger action was blocked, produced by the engine.
 LIMIT_OVERBOUGHT = "overbought"
@@ -529,73 +533,8 @@ def _summary(
             else "There is not enough evidence yet to justify putting money at "
             "risk."
         )
-    return f"{opening} {middle} {next_trigger}"
-
-
-def _next_trigger(
-    market: RecommendationInput,
-    strategy: Strategy,
-    levels: Optional[TradeLevels],
-    limits: Limits,
-) -> str:
-    """The single next step — owned by strategy so it cannot fight the entry."""
-    if strategy == "Trend Continuation" and levels is not None:
-        return (
-            f"Watch the {_price(levels.stop_loss)} level: a daily close below it "
-            "means the idea has failed, while a push through "
-            f"{_price(levels.target1)} opens the way to "
-            f"{_price(levels.target2)}."
-        )
-    if strategy == "Breakout":
-        if market.resistance is not None:
-            return (
-                "Watch for a daily close above "
-                f"{_price(market.resistance)}: that would confirm the breakout "
-                "and create a fresh entry."
-            )
-        return (
-            "Watch for a decisive daily close through overhead resistance "
-            "before considering an entry."
-        )
-    if strategy == "Pullback":
-        if LIMIT_OVERBOUGHT in limits and levels is not None:
-            return (
-                "Watch for the price to cool off and settle back into "
-                f"{_price(levels.entry_min)}-{_price(levels.entry_max)}, which "
-                "would offer a far safer entry."
-            )
-        if LIMIT_OVERBOUGHT in limits:
-            return (
-                "Watch for the price to cool off and steady for a few sessions "
-                "before considering an entry."
-            )
-        if levels is not None:
-            return (
-                "Watch for a pullback into "
-                f"{_price(levels.entry_min)}-{_price(levels.entry_max)} that "
-                "holds, which would be the entry to act on."
-            )
-        return (
-            f"Watch for the price to steady above {_recent_average(market)} and "
-            "for clear support to form before considering an entry."
-        )
-    if strategy == "Consolidation":
-        return (
-            f"Watch for the price to steady above {_recent_average(market)} and "
-            "for a clear direction to emerge from the range before considering "
-            "an entry."
-        )
-    # No Entry Yet
-    if market.ema20 is not None:
-        return (
-            "Watch for the price to reclaim "
-            f"{_recent_average(market)} and hold it for a few sessions; until "
-            "then there is nothing to do."
-        )
-    return (
-        "Watch for buyers to defend a level and push the price back above its "
-        "recent average before revisiting this stock."
-    )
+    # Mentor Engine: summary is market context only — never repeat Watch Next.
+    return f"{opening} {middle}"
 
 
 def _entry_condition(
@@ -603,27 +542,38 @@ def _entry_condition(
     strategy: Strategy,
     levels: Optional[TradeLevels],
     trend: Trend,
+    setup: Optional["TradingSetup"] = None,
 ) -> str:
-    """Legacy one-liner kept for v1.0 consumers; ``next_trigger`` supersedes it."""
-    if strategy == "Trend Continuation" and levels is not None:
+    """Trading Plan — how to execute the stable setup."""
+    plan_levels = levels
+    if plan_levels is None and setup is not None:
+        plan_levels = setup.levels
+
+    if strategy == "Trend Continuation" and plan_levels is not None:
+        planned = (
+            setup.planned_entry
+            if setup is not None and setup.planned_entry is not None
+            else (plan_levels.entry_min + plan_levels.entry_max) / 2
+        )
         return (
-            f"Consider entering between {_price(levels.entry_min)} and "
-            f"{_price(levels.entry_max)}, and exit if the price closes below "
-            f"{_price(levels.stop_loss)}."
+            f"Plan the entry between {_price(plan_levels.entry_min)} and "
+            f"{_price(plan_levels.entry_max)} (planned fill near {_price(planned)}), "
+            f"and exit if the price closes below {_price(plan_levels.stop_loss)}."
         )
     if strategy == "Breakout":
         if market.resistance is not None:
             return (
                 "Wait for a daily close above "
-                f"{_price(market.resistance)} before entering."
+                f"{_price(market.resistance)} before entering the planned "
+                "breakout zone."
             )
         return "Wait for a confirmed breakout above resistance before entering."
     if strategy == "Pullback":
-        if levels is not None:
+        if plan_levels is not None:
             return (
-                "Wait for the price to pull back into "
-                f"{_price(levels.entry_min)}-{_price(levels.entry_max)} and hold "
-                "there."
+                "Wait for the price to pull back into the structural zone "
+                f"{_price(plan_levels.entry_min)}-{_price(plan_levels.entry_max)} "
+                "and hold there."
             )
         return (
             f"Wait for the price to steady above {_recent_average(market)} "
@@ -651,15 +601,64 @@ def build(
     rules_matched: Sequence[str],
     levels: Optional[TradeLevels],
     limits: Limits,
+    progress: Optional["SetupProgress"] = None,
+    setup: Optional["TradingSetup"] = None,
 ) -> Narrative:
-    """Assemble every prose field for one recommendation from its strategy."""
-    next_trigger = _next_trigger(market, strategy, levels, limits)
+    """Assemble prose: each section answers one question, no repetition."""
+    if progress is not None:
+        next_trigger = progress.next_event
+    else:
+        next_trigger = _legacy_next_trigger(market, strategy, levels, limits)
+
     return Narrative(
         verdict=_verdict(market, trend, action, strategy, limits),
         summary=_summary(market, trend, action, strategy, levels, next_trigger),
         next_trigger=next_trigger,
-        entry_condition=_entry_condition(market, strategy, levels, trend),
+        entry_condition=_entry_condition(market, strategy, levels, trend, setup),
         why=_why(market, trend, action, score, levels, limits),
         positives=_positives(market, trend, rules_matched, levels),
         risks=_risks(market, trend, action, strategy, levels, limits),
+    )
+
+
+def _legacy_next_trigger(
+    market: RecommendationInput,
+    strategy: Strategy,
+    levels: Optional[TradeLevels],
+    limits: Limits,
+) -> str:
+    """Fallback when Progress is not supplied (unit helpers / older callers)."""
+    if strategy == "Trend Continuation" and levels is not None:
+        return (
+            f"Watch the {_price(levels.stop_loss)} level: a daily close below it "
+            "means the idea has failed, while a push through "
+            f"{_price(levels.target1)} opens the way to "
+            f"{_price(levels.target2)}."
+        )
+    if strategy == "Breakout":
+        if market.resistance is not None:
+            return (
+                "Watch for a daily close above "
+                f"{_price(market.resistance)}: that would confirm the breakout "
+                "and create a fresh entry."
+            )
+        return (
+            "Watch for a decisive daily close through overhead resistance "
+            "before considering an entry."
+        )
+    if strategy == "Pullback" and levels is not None:
+        return (
+            "Watch for a pullback toward "
+            f"{_price(levels.entry_min)} that holds, which would be the entry "
+            "to act on."
+        )
+    if market.ema20 is not None:
+        return (
+            "Watch for the price to reclaim "
+            f"{_recent_average(market)} and hold it for a few sessions; until "
+            "then there is nothing to do."
+        )
+    return (
+        "Watch for buyers to defend a level and push the price back above its "
+        "recent average before revisiting this stock."
     )

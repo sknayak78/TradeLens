@@ -59,8 +59,13 @@ def test_recommendation_block_is_camel_cased_and_populated(seeded: None) -> None
         "strategy", "verdict", "summary", "why", "positives", "risks",
         "nextTrigger", "beginnerTip", "idealFor",
     }
+    mentor_fields = {"setup", "progress"}
 
-    assert recommendation.keys() == v1_fields | v1_1_fields
+    assert recommendation.keys() == v1_fields | v1_1_fields | mentor_fields
+    assert recommendation["setup"] is not None
+    assert recommendation["progress"] is not None
+    assert recommendation["setup"]["structureKey"]
+    assert recommendation["progress"]["nextEvent"] == recommendation["nextTrigger"]
     assert recommendation["action"] in {
         "Strong Buy", "Buy", "Watch", "Wait", "Avoid"
     }

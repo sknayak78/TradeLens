@@ -243,3 +243,33 @@ contradict each other.
 - Consistency tests for Breakout, Pullback, Trend Continuation, Consolidation,
   Avoid.
 - Architecture notes in `docs/ER-0016-STRATEGY-DRIVEN.md` and ADR-002.
+
+---
+
+## ER-0019
+
+### Title
+
+Mentor Engine — Trading Setup vs Setup Progress
+
+### Priority
+
+P0
+
+### Status
+
+Done
+
+### Business Goal
+
+Refactor the recommendation engine into a Mentor Engine that tracks a stable
+Trading Setup while daily price only updates Setup Progress.
+
+### Deliverables
+
+- Structure fingerprint + structure-based entry zones
+- R:R from planned entry (zone midpoint), never today's close
+- Setup Progress statuses and future-only Watch Next
+- Additive `setup` / `progress` API fields
+- Regression tests for all strategies + setup stability
+- ADR-003 and `MENTOR_ENGINE_SETUP_PROGRESS.md`
