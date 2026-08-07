@@ -121,16 +121,21 @@ CONVICTION_BANDS: list[dict] = [
 ACTIONS: tuple[str, ...] = ("Strong Buy", "Buy", "Watch", "Wait", "Avoid")
 
 
-# ---------- Strategy ----------
+# ---------- Strategy (parent thesis) ----------
 
-#: How an entry would be taken, kept out of the action so the action stays a
-#: pure decision.  "No Entry Yet" means there is no entry plan to describe.
+#: The trading thesis for a recommendation.  Strategy is decided before action,
+#: levels and narrative so every field describes the same plan.
+#: "No Entry Yet" means there is no entry plan to describe (including Avoid).
 STRATEGIES: tuple[str, ...] = (
-    "Fresh Entry",
+    "Trend Continuation",
     "Pullback",
     "Breakout",
+    "Consolidation",
     "No Entry Yet",
 )
+
+#: Strategies whose thesis includes a buy zone the card may publish.
+LEVEL_STRATEGIES: frozenset[str] = frozenset({"Trend Continuation", "Pullback"})
 
 
 # ---------- Action thresholds ----------

@@ -1,11 +1,11 @@
 """Plain-English narrative for a recommendation.
 
-Everything a trader reads is built here, from the same facts the engine scored,
-so the explanation can never disagree with the action.  The wording is
-deliberately human: it describes what buyers and sellers are doing and what it
-means for a fresh position, rather than reciting indicator values.  An indicator
-number appears only when it is a price a trader can act on (an entry, a stop, a
-level to watch).
+Everything a trader reads is built here from the same parent **strategy** the
+engine classified, so the explanation can never disagree with the trading
+thesis.  The wording is deliberately human: it describes what buyers and
+sellers are doing and what it means for a fresh position, rather than reciting
+indicator values.  An indicator number appears only when it is a price a trader
+can act on (an entry, a stop, a level to watch).
 
 The module is pure and template-based: no LLM, no clock, no randomness.
 """
@@ -25,7 +25,7 @@ from .config import (
     RSI_OVERBOUGHT,
     RSI_OVERSOLD,
 )
-from .models import Action, RecommendationInput, TradeLevels, Trend
+from .models import Action, RecommendationInput, Strategy, TradeLevels, Trend
 
 #: Reasons a stronger action was blocked, produced by the engine.
 LIMIT_OVERBOUGHT = "overbought"
@@ -242,6 +242,7 @@ def _risks(
     market: RecommendationInput,
     trend: Trend,
     action: Action,
+    strategy: Strategy,
     levels: Optional[TradeLevels],
     limits: Limits,
 ) -> List[str]:
@@ -251,15 +252,20 @@ def _risks(
             "The downtrend can continue far longer than it looks like it should, "
             "and buying into one is how beginners lose money fastest."
         )
-    elif market.is_pullback:
+    elif strategy == "Pullback" or market.is_pullback:
         risks.append(
             "A pullback only becomes a buying opportunity once it stops falling; "
             "until it steadies it can just as easily keep going."
         )
-    elif trend == "neutral":
+    elif strategy == "Consolidation" or trend == "neutral":
         risks.append(
             "Without a clear trend the stock can swing both ways, so an entry "
             "here is closer to a coin toss than a plan."
+        )
+    elif strategy == "Breakout":
+        risks.append(
+            "A failed breakout often snaps back quickly, so buying before the "
+            "close confirms the move is how breakout traders get trapped."
         )
 
     if LIMIT_OVERBOUGHT in limits:
@@ -283,7 +289,7 @@ def _risks(
             "The realistic upside is no bigger than the loss you would take if "
             "you are wrong."
         )
-    if LIMIT_NO_LEVELS in limits:
+    if LIMIT_NO_LEVELS in limits and strategy not in ("Breakout", "Consolidation"):
         risks.append(
             "There is no reliable place to put an exit, so a position here could "
             "not be risk-managed properly."
@@ -397,137 +403,189 @@ def _why(
     return why
 
 
-# ---------- Verdict, summary, triggers ----------
+# ---------- Verdict, summary, triggers (strategy-driven) ----------
 
 def _verdict(
     market: RecommendationInput,
     trend: Trend,
     action: Action,
+    strategy: Strategy,
     limits: Limits,
 ) -> str:
     """One line a trader can act on without reading anything else."""
-    if action == "Strong Buy":
-        return "The setup supports a fresh entry today with clearly defined risk."
-    if action == "Buy":
+    if strategy == "Trend Continuation":
+        if action == "Strong Buy":
+            return (
+                "The setup supports a fresh entry today with clearly defined risk."
+            )
         return (
             "A fresh entry is reasonable here, provided the position is sized "
             "sensibly."
         )
-    if action == "Watch":
+    if strategy == "Breakout":
         opening = (
             "The trend is healthy"
             if trend == "bullish"
             else "The stock is worth tracking"
         )
-        if LIMIT_OVERBOUGHT in limits:
-            return f"{opening}, but the price has run too far to buy today."
-        if LIMIT_NO_LEVELS in limits:
-            return (
-                f"{opening}, but there is no dependable exit level yet, so a "
-                "position cannot be protected."
-            )
-        if LIMIT_THIN_HEADROOM in limits and market.resistance is not None:
+        if market.resistance is not None:
             return (
                 f"{opening}, but the price is pressed against resistance, so "
                 "today's entry offers limited upside."
             )
-        if LIMIT_POOR_RISK_REWARD in limits:
-            return (
-                f"{opening}, but today's price leaves too little reward for the "
-                "risk involved."
+        return f"{opening}, but a breakout still needs to confirm before buying."
+    if strategy == "Pullback":
+        if LIMIT_OVERBOUGHT in limits:
+            opening = (
+                "The trend is healthy"
+                if trend == "bullish"
+                else "The stock is worth tracking"
             )
-        return f"{opening}, but today is not the day to start a position."
-    if action == "Wait":
-        if market.is_pullback:
+            return f"{opening}, but the price has run too far to buy today."
+        if market.is_pullback and action == "Wait":
             return (
                 "The uptrend is intact, but let the pullback steady before "
                 "starting a position."
             )
+        if LIMIT_POOR_RISK_REWARD in limits:
+            opening = (
+                "The trend is healthy"
+                if trend == "bullish"
+                else "The stock is worth tracking"
+            )
+            return (
+                f"{opening}, but today's price leaves too little reward for the "
+                "risk involved."
+            )
+        if LIMIT_NO_LEVELS in limits:
+            opening = (
+                "The trend is healthy"
+                if trend == "bullish"
+                else "The stock is worth tracking"
+            )
+            return (
+                f"{opening}, but there is no dependable exit level yet, so a "
+                "position cannot be protected."
+            )
+        return (
+            "The stock is worth tracking, but today is not the day to start a "
+            "position."
+        )
+    if strategy == "Consolidation":
         return "Wait for a better entry before initiating a new position."
-    return "This is not a stock to buy today."
+    # No Entry Yet
+    if trend == "bearish":
+        return "This is not a stock to buy today."
+    return "Wait for a better entry before initiating a new position."
 
 
 def _summary(
     market: RecommendationInput,
     trend: Trend,
     action: Action,
+    strategy: Strategy,
     levels: Optional[TradeLevels],
     next_trigger: str,
 ) -> str:
     opening = _trend_observation(market, trend)
-    if action in ("Strong Buy", "Buy") and levels is not None:
+    if strategy == "Trend Continuation" and levels is not None:
         middle = (
             f"A position taken between {_price(levels.entry_min)} and "
             f"{_price(levels.entry_max)} can be protected with an exit below "
             f"{_price(levels.stop_loss)}, with the first target near "
             f"{_price(levels.target1)}."
         )
-    elif action == "Watch":
+    elif strategy == "Breakout":
         middle = (
             "The stock deserves attention, but today's price is not the place "
-            "to start a position."
+            "to start a position — wait for the breakout to confirm."
         )
-    elif action == "Wait":
+    elif strategy == "Pullback":
+        if levels is not None:
+            middle = (
+                "The stock deserves attention, but today's price is not the "
+                "place to start a position — wait for the pullback into the "
+                "buy zone."
+            )
+        elif market.is_pullback:
+            middle = (
+                "The dip is worth tracking, but it needs to steady before an "
+                "entry makes sense."
+            )
+        else:
+            middle = (
+                "The stock deserves attention, but today's price is not the "
+                "place to start a position."
+            )
+    elif strategy == "Consolidation":
         middle = (
-            "The dip is worth tracking, but it needs to steady before an entry "
-            "makes sense."
-            if market.is_pullback
-            else "There is not enough evidence yet to justify putting money at "
-            "risk."
+            "There is not enough evidence yet to justify putting money at risk."
         )
     else:
         middle = (
             "Buying weakness like this usually means adding to the loss before "
             "the stock recovers."
+            if trend == "bearish"
+            else "There is not enough evidence yet to justify putting money at "
+            "risk."
         )
     return f"{opening} {middle} {next_trigger}"
 
 
 def _next_trigger(
     market: RecommendationInput,
-    action: Action,
+    strategy: Strategy,
     levels: Optional[TradeLevels],
     limits: Limits,
 ) -> str:
-    if action in ("Strong Buy", "Buy") and levels is not None:
+    """The single next step — owned by strategy so it cannot fight the entry."""
+    if strategy == "Trend Continuation" and levels is not None:
         return (
             f"Watch the {_price(levels.stop_loss)} level: a daily close below it "
             "means the idea has failed, while a push through "
             f"{_price(levels.target1)} opens the way to "
             f"{_price(levels.target2)}."
         )
-    if LIMIT_OVERBOUGHT in limits:
-        if levels is not None:
+    if strategy == "Breakout":
+        if market.resistance is not None:
+            return (
+                "Watch for a daily close above "
+                f"{_price(market.resistance)}: that would confirm the breakout "
+                "and create a fresh entry."
+            )
+        return (
+            "Watch for a decisive daily close through overhead resistance "
+            "before considering an entry."
+        )
+    if strategy == "Pullback":
+        if LIMIT_OVERBOUGHT in limits and levels is not None:
             return (
                 "Watch for the price to cool off and settle back into "
                 f"{_price(levels.entry_min)}-{_price(levels.entry_max)}, which "
                 "would offer a far safer entry."
             )
-        return (
-            "Watch for the price to cool off and steady for a few sessions "
-            "before considering an entry."
-        )
-    if (
-        action == "Watch"
-        and LIMIT_THIN_HEADROOM in limits
-        and market.resistance is not None
-    ):
-        return (
-            "Watch for a daily close above "
-            f"{_price(market.resistance)}: that would confirm the breakout and "
-            "create a fresh entry."
-        )
-    if action == "Watch" and levels is not None:
-        return (
-            "Watch for a pullback into "
-            f"{_price(levels.entry_min)}-{_price(levels.entry_max)} that holds, "
-            "which would be the entry to act on."
-        )
-    if action in ("Watch", "Wait"):
+        if LIMIT_OVERBOUGHT in limits:
+            return (
+                "Watch for the price to cool off and steady for a few sessions "
+                "before considering an entry."
+            )
+        if levels is not None:
+            return (
+                "Watch for a pullback into "
+                f"{_price(levels.entry_min)}-{_price(levels.entry_max)} that "
+                "holds, which would be the entry to act on."
+            )
         return (
             f"Watch for the price to steady above {_recent_average(market)} and "
             "for clear support to form before considering an entry."
         )
+    if strategy == "Consolidation":
+        return (
+            f"Watch for the price to steady above {_recent_average(market)} and "
+            "for a clear direction to emerge from the range before considering "
+            "an entry."
+        )
+    # No Entry Yet
     if market.ema20 is not None:
         return (
             "Watch for the price to reclaim "
@@ -542,57 +600,66 @@ def _next_trigger(
 
 def _entry_condition(
     market: RecommendationInput,
-    action: Action,
+    strategy: Strategy,
     levels: Optional[TradeLevels],
-    limits: Limits,
+    trend: Trend,
 ) -> str:
     """Legacy one-liner kept for v1.0 consumers; ``next_trigger`` supersedes it."""
-    if action in ("Strong Buy", "Buy") and levels is not None:
+    if strategy == "Trend Continuation" and levels is not None:
         return (
             f"Consider entering between {_price(levels.entry_min)} and "
             f"{_price(levels.entry_max)}, and exit if the price closes below "
             f"{_price(levels.stop_loss)}."
         )
-    if (
-        action == "Watch"
-        and LIMIT_THIN_HEADROOM in limits
-        and market.resistance is not None
-    ):
-        return (
-            "Wait for a daily close above "
-            f"{_price(market.resistance)} before entering."
-        )
-    if action == "Watch" and levels is not None:
-        return (
-            "Wait for the price to pull back into "
-            f"{_price(levels.entry_min)}-{_price(levels.entry_max)} and hold "
-            "there."
-        )
-    if action in ("Watch", "Wait"):
+    if strategy == "Breakout":
+        if market.resistance is not None:
+            return (
+                "Wait for a daily close above "
+                f"{_price(market.resistance)} before entering."
+            )
+        return "Wait for a confirmed breakout above resistance before entering."
+    if strategy == "Pullback":
+        if levels is not None:
+            return (
+                "Wait for the price to pull back into "
+                f"{_price(levels.entry_min)}-{_price(levels.entry_max)} and hold "
+                "there."
+            )
         return (
             f"Wait for the price to steady above {_recent_average(market)} "
             "before considering an entry."
         )
-    return "No trade: stay out until buyers take back control."
+    if strategy == "Consolidation":
+        return (
+            f"Wait for the price to steady above {_recent_average(market)} "
+            "before considering an entry."
+        )
+    if trend == "bearish":
+        return "No trade: stay out until buyers take back control."
+    return (
+        f"Wait for the price to steady above {_recent_average(market)} "
+        "before considering an entry."
+    )
 
 
 def build(
     market: RecommendationInput,
     trend: Trend,
     action: Action,
+    strategy: Strategy,
     score: int,
     rules_matched: Sequence[str],
     levels: Optional[TradeLevels],
     limits: Limits,
 ) -> Narrative:
-    """Assemble every prose field for one recommendation."""
-    next_trigger = _next_trigger(market, action, levels, limits)
+    """Assemble every prose field for one recommendation from its strategy."""
+    next_trigger = _next_trigger(market, strategy, levels, limits)
     return Narrative(
-        verdict=_verdict(market, trend, action, limits),
-        summary=_summary(market, trend, action, levels, next_trigger),
+        verdict=_verdict(market, trend, action, strategy, limits),
+        summary=_summary(market, trend, action, strategy, levels, next_trigger),
         next_trigger=next_trigger,
-        entry_condition=_entry_condition(market, action, levels, limits),
+        entry_condition=_entry_condition(market, strategy, levels, trend),
         why=_why(market, trend, action, score, levels, limits),
         positives=_positives(market, trend, rules_matched, levels),
-        risks=_risks(market, trend, action, levels, limits),
+        risks=_risks(market, trend, action, strategy, levels, limits),
     )

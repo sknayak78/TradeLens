@@ -209,3 +209,37 @@ never disagree with the `recommendation` block beneath it.
   schema; retained on the wire and still not inputs to the engine.
 - Field-by-field provenance and the migration plan documented in
   `docs/DATA_PROVENANCE.md`.
+
+---
+
+## ER-0016
+
+### Title
+
+Strategy-Driven Recommendation Engine
+
+### Priority
+
+P0
+
+### Status
+
+Done
+
+### Business Goal
+
+Every recommendation represents exactly one trading thesis. Strategy is the
+parent decision so Entry, Stop, Targets, Watch Next and narrative can never
+contradict each other.
+
+### Deliverables
+
+- Strategy classified before action and before levels are published.
+- Levels published only for Trend Continuation and Pullback.
+- Breakout / Consolidation / No Entry Yet never publish a buy-now entry range.
+- Narrative receives strategy and derives Watch Next / entry condition from it.
+- Strategy vocabulary: Trend Continuation (was Fresh Entry), Pullback, Breakout,
+  Consolidation, No Entry Yet.
+- Consistency tests for Breakout, Pullback, Trend Continuation, Consolidation,
+  Avoid.
+- Architecture notes in `docs/ER-0016-STRATEGY-DRIVEN.md` and ADR-002.

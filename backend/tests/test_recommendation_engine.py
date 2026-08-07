@@ -85,7 +85,13 @@ def test_no_action_encodes_a_trading_strategy():
     """Breakout/pullback context lives in `strategy`, never in the action."""
     for action in ACTIONS:
         assert not any(word in action.lower() for word in ("breakout", "pullback"))
-    assert STRATEGIES == ("Fresh Entry", "Pullback", "Breakout", "No Entry Yet")
+    assert STRATEGIES == (
+        "Trend Continuation",
+        "Pullback",
+        "Breakout",
+        "Consolidation",
+        "No Entry Yet",
+    )
 
 
 @pytest.mark.parametrize("action", BY_ACTION)
@@ -93,9 +99,9 @@ def test_every_state_reports_a_known_strategy(action: str):
     assert engine.recommend(BY_ACTION[action]).strategy in STRATEGIES
 
 
-def test_an_entry_call_is_taken_immediately():
+def test_an_entry_call_follows_the_trend():
     for entry in (STRONG_BUY, BUY):
-        assert engine.recommend(entry).strategy == "Fresh Entry"
+        assert engine.recommend(entry).strategy == "Trend Continuation"
 
 
 def test_an_overextended_stock_is_bought_back_on_a_pullback():
@@ -110,10 +116,16 @@ def test_a_stock_pinned_under_resistance_needs_the_breakout_to_confirm():
 
     assert recommendation.action == "Watch"
     assert recommendation.strategy == "Breakout"
+    # Breakout never publishes a buy-now entry zone (ER-0016).
+    assert recommendation.levels is None
 
 
-def test_a_waiting_call_has_no_entry_plan_to_describe():
-    assert engine.recommend(WAIT).strategy == "No Entry Yet"
+def test_a_waiting_pullback_keeps_the_pullback_thesis():
+    """A Wait inside an uptrend is still a Pullback — not a second thesis."""
+    assert engine.recommend(WAIT).strategy == "Pullback"
+
+
+def test_a_downtrend_has_no_entry_plan():
     assert engine.recommend(AVOID).strategy == "No Entry Yet"
 
 
@@ -373,11 +385,18 @@ def test_a_trend_pinned_under_resistance_is_a_watch_until_it_breaks_out():
     recommendation = engine.recommend(WATCH_AT_RESISTANCE)
 
     assert recommendation.action == "Watch"
+    assert recommendation.strategy == "Breakout"
+    assert recommendation.levels is None
     assert "limited upside" in recommendation.verdict
     assert recommendation.next_trigger == (
         "Watch for a daily close above 101.90: that would confirm the breakout "
         "and create a fresh entry."
     )
+    assert recommendation.entry_condition == (
+        "Wait for a daily close above 101.90 before entering."
+    )
+    # No buy-now zone may appear in the plan.
+    assert "between" not in recommendation.summary.lower()
 
 
 def test_a_pullback_inside_an_uptrend_is_a_wait_not_an_avoid():
@@ -416,6 +435,7 @@ def test_a_directionless_stock_is_a_wait():
 
     assert recommendation.trend == "neutral"
     assert recommendation.action == "Wait"
+    assert recommendation.strategy == "Consolidation"
     assert recommendation.verdict == (
         "Wait for a better entry before initiating a new position."
     )
@@ -437,12 +457,15 @@ def test_a_blocked_entry_never_becomes_a_position_management_verdict():
     no_levels = engine.recommend(_bullish(resistance=105.0))
 
     assert poor_reward.score == 100
+    assert poor_reward.strategy == "Pullback"
     assert poor_reward.levels is not None
     assert poor_reward.levels.risk_reward < MIN_RISK_REWARD
     assert poor_reward.action == "Watch"
     assert "risk_reward_below_minimum" in poor_reward.warnings
 
+    # Price at/above resistance → Breakout thesis, no buy-now levels.
     assert no_levels.action == "Watch"
+    assert no_levels.strategy == "Breakout"
     assert no_levels.levels is None
     assert "no_usable_levels" in no_levels.warnings
     assert "price_at_or_above_resistance" in no_levels.warnings
@@ -673,6 +696,7 @@ def test_the_summary_carries_the_verdict_and_the_next_step():
 
     assert recommendation.summary.endswith(recommendation.next_trigger)
     assert "not the place to start a position" in recommendation.summary
+    assert recommendation.strategy == "Pullback"
 
 
 def test_prose_never_quotes_levels_the_engine_does_not_have():

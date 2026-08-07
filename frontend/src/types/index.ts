@@ -15,9 +15,10 @@ export type RecommendationAction =
   | "Wait"
   | "Avoid";
 export type RecommendationStrategy =
-  | "Fresh Entry"
+  | "Trend Continuation"
   | "Pullback"
   | "Breakout"
+  | "Consolidation"
   | "No Entry Yet";
 export type Conviction = "High" | "Medium" | "Low";
 export type DataQuality = "Complete" | "Partial";

@@ -17,9 +17,10 @@ const ACTION_ICON: Record<RecommendationAction, ReactNode> = {
 };
 
 const STRATEGY_TONE: Record<string, Tone> = {
-  "Fresh Entry": "positive",
+  "Trend Continuation": "positive",
   Pullback: "info",
   Breakout: "warning",
+  Consolidation: "muted",
   "No Entry Yet": "muted",
 };
 
