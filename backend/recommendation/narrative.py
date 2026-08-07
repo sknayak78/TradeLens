@@ -26,6 +26,7 @@ from .config import (
     RSI_OVERSOLD,
 )
 from .models import Action, RecommendationInput, Strategy, TradeLevels, Trend
+from .triggers import resolve_entry_condition, resolve_watch_next
 
 #: Reasons a stronger action was blocked, produced by the engine.
 LIMIT_OVERBOUGHT = "overbought"
@@ -537,65 +538,10 @@ def _next_trigger(
     strategy: Strategy,
     levels: Optional[TradeLevels],
     limits: Limits,
+    trend: Trend,
 ) -> str:
-    """The single next step — owned by strategy so it cannot fight the entry."""
-    if strategy == "Trend Continuation" and levels is not None:
-        return (
-            f"Watch the {_price(levels.stop_loss)} level: a daily close below it "
-            "means the idea has failed, while a push through "
-            f"{_price(levels.target1)} opens the way to "
-            f"{_price(levels.target2)}."
-        )
-    if strategy == "Breakout":
-        if market.resistance is not None:
-            return (
-                "Watch for a daily close above "
-                f"{_price(market.resistance)}: that would confirm the breakout "
-                "and create a fresh entry."
-            )
-        return (
-            "Watch for a decisive daily close through overhead resistance "
-            "before considering an entry."
-        )
-    if strategy == "Pullback":
-        if LIMIT_OVERBOUGHT in limits and levels is not None:
-            return (
-                "Watch for the price to cool off and settle back into "
-                f"{_price(levels.entry_min)}-{_price(levels.entry_max)}, which "
-                "would offer a far safer entry."
-            )
-        if LIMIT_OVERBOUGHT in limits:
-            return (
-                "Watch for the price to cool off and steady for a few sessions "
-                "before considering an entry."
-            )
-        if levels is not None:
-            return (
-                "Watch for a pullback into "
-                f"{_price(levels.entry_min)}-{_price(levels.entry_max)} that "
-                "holds, which would be the entry to act on."
-            )
-        return (
-            f"Watch for the price to steady above {_recent_average(market)} and "
-            "for clear support to form before considering an entry."
-        )
-    if strategy == "Consolidation":
-        return (
-            f"Watch for the price to steady above {_recent_average(market)} and "
-            "for a clear direction to emerge from the range before considering "
-            "an entry."
-        )
-    # No Entry Yet
-    if market.ema20 is not None:
-        return (
-            "Watch for the price to reclaim "
-            f"{_recent_average(market)} and hold it for a few sessions; until "
-            "then there is nothing to do."
-        )
-    return (
-        "Watch for buyers to defend a level and push the price back above its "
-        "recent average before revisiting this stock."
-    )
+    """Delegate to the future-only trigger state machine (ER-0018)."""
+    return resolve_watch_next(market, strategy, levels, limits, trend)
 
 
 def _entry_condition(
@@ -605,41 +551,7 @@ def _entry_condition(
     trend: Trend,
 ) -> str:
     """Legacy one-liner kept for v1.0 consumers; ``next_trigger`` supersedes it."""
-    if strategy == "Trend Continuation" and levels is not None:
-        return (
-            f"Consider entering between {_price(levels.entry_min)} and "
-            f"{_price(levels.entry_max)}, and exit if the price closes below "
-            f"{_price(levels.stop_loss)}."
-        )
-    if strategy == "Breakout":
-        if market.resistance is not None:
-            return (
-                "Wait for a daily close above "
-                f"{_price(market.resistance)} before entering."
-            )
-        return "Wait for a confirmed breakout above resistance before entering."
-    if strategy == "Pullback":
-        if levels is not None:
-            return (
-                "Wait for the price to pull back into "
-                f"{_price(levels.entry_min)}-{_price(levels.entry_max)} and hold "
-                "there."
-            )
-        return (
-            f"Wait for the price to steady above {_recent_average(market)} "
-            "before considering an entry."
-        )
-    if strategy == "Consolidation":
-        return (
-            f"Wait for the price to steady above {_recent_average(market)} "
-            "before considering an entry."
-        )
-    if trend == "bearish":
-        return "No trade: stay out until buyers take back control."
-    return (
-        f"Wait for the price to steady above {_recent_average(market)} "
-        "before considering an entry."
-    )
+    return resolve_entry_condition(market, strategy, levels, trend)
 
 
 def build(
@@ -653,7 +565,7 @@ def build(
     limits: Limits,
 ) -> Narrative:
     """Assemble every prose field for one recommendation from its strategy."""
-    next_trigger = _next_trigger(market, strategy, levels, limits)
+    next_trigger = _next_trigger(market, strategy, levels, limits, trend)
     return Narrative(
         verdict=_verdict(market, trend, action, strategy, limits),
         summary=_summary(market, trend, action, strategy, levels, next_trigger),

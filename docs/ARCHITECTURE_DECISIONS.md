@@ -88,9 +88,39 @@ See `docs/ER-0016-STRATEGY-DRIVEN.md` for before/after examples.
 
 ---
 
+## ADR-003: Future-Only Watch Next Triggers
+
+**Status:** Accepted
+
+**Date:** 07-Aug-2026
+
+**Request:** ER-0018
+
+### Context
+
+Watch Next could instruct users to wait for a reclaim/break that the latest
+price had already satisfied (e.g. price ₹1,326 watching reclaim of ₹1,300).
+
+### Decision
+
+Treat triggers as a finite state machine in `recommendation/triggers.py`:
+
+- Validate every hurdle against `market.price` before publishing.
+- Advance to the next logical future event (or a hold/cancel confirmation).
+- Keep Trading Plan (`entry_condition`) on the same advanced thesis.
+
+### Consequences
+
+- Stale “wait for X” copy cannot ship when X has already happened.
+- Recommendation, plan, and Watch Next stay consistent.
+
+See `docs/ER-0018-TRIGGER-VALIDATION.md`.
+
+---
+
 ## Future ADRs
 
-- ADR-003 Market Data Provider Strategy
-- ADR-004 Technical Indicator Engine
-- ADR-005 AI Decision Engine
-- ADR-006 Paper Trading Architecture
+- ADR-004 Market Data Provider Strategy
+- ADR-005 Technical Indicator Engine
+- ADR-006 AI Decision Engine
+- ADR-007 Paper Trading Architecture

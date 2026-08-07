@@ -243,3 +243,32 @@ contradict each other.
 - Consistency tests for Breakout, Pullback, Trend Continuation, Consolidation,
   Avoid.
 - Architecture notes in `docs/ER-0016-STRATEGY-DRIVEN.md` and ADR-002.
+
+---
+
+## ER-0018
+
+### Title
+
+Trigger Validation & State Consistency
+
+### Priority
+
+P0
+
+### Status
+
+Done
+
+### Business Goal
+
+Watch Next must always describe a future market event. Never ask the trader to
+wait for a level the latest price has already cleared.
+
+### Deliverables
+
+- `recommendation/triggers.py` — trigger state machine validated against price
+- Narrative Watch Next / entry condition delegated to the resolver
+- Regression tests for already-satisfied reclaim, breakout, consolidation,
+  pullback, and target advancement
+- Notes in `docs/ER-0018-TRIGGER-VALIDATION.md` and ADR-003

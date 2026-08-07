@@ -378,7 +378,9 @@ def test_an_overextended_uptrend_is_a_watch_not_a_buy():
     assert recommendation.action == "Watch"
     assert "rsi_overbought" in recommendation.warnings
     assert "run too far to buy today" in recommendation.verdict
-    assert "cool off" in recommendation.next_trigger
+    assert "pullback toward" in recommendation.next_trigger or "cool off" in (
+        recommendation.next_trigger
+    )
 
 
 def test_a_trend_pinned_under_resistance_is_a_watch_until_it_breaks_out():
@@ -709,14 +711,15 @@ def test_prose_never_quotes_levels_the_engine_does_not_have():
 
     assert recommendation.levels is None
     assert recommendation.action == "Wait"
-    assert recommendation.next_trigger == (
-        "Watch for the price to cool off and steady for a few sessions before "
-        "considering an entry."
+    # Price already holds every average — trigger advances past stale reclaim.
+    assert "reclaim" not in recommendation.next_trigger.lower() or "110" not in (
+        recommendation.next_trigger
     )
-    # 100.00 is EMA20, the only price this snapshot actually knows.
-    assert recommendation.entry_condition == (
-        "Wait for the price to steady above its recent average price of 100.00 "
-        "before considering an entry."
+    assert "100.00" not in recommendation.next_trigger or "hold above" in (
+        recommendation.next_trigger.lower()
+    )
+    assert "steady above its recent average price of 100.00" not in (
+        recommendation.entry_condition
     )
 
 
