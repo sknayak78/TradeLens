@@ -179,9 +179,42 @@ See `docs/05-engineering/ER-0020-INSIGHT-V2-EDUCATIONAL-NARRATIVE.md`.
 
 ---
 
+## ADR-005: Stock-Detail Single Setup Authority
+
+**Status:** Accepted
+
+**Date:** 09-Aug-2026
+
+**Request:** ER-0021
+
+### Context
+
+After ER-0019/ER-0020, the Recommendation Card and Watch Next correctly followed
+TradingSetup + SetupProgress, but Chart Suggested Action still read legacy
+`suggestedAction`, and Trading Plan ignored `progress.status`. That produced
+WATCH headlines next to BUY ON BREAKOUT chips, and in-zone Pullbacks that still
+told traders to wait for a pullback.
+
+### Decision
+
+On the stock-detail ChartCard, `recommendation.action` /
+`recommendation.strategy` are authoritative when present. Trading Plan prose is
+generated with `SetupProgress.status`. Legacy analysis fields remain on the API
+for rankings and fallbacks.
+
+### Consequences
+
+- Chart chips cannot disagree with the Recommendation headline
+- In-zone Pullback plans acknowledge the zone without forcing a BUY
+- Rankings/TopOpportunities stay on legacy fields until a later ER
+
+See `docs/05-engineering/ER-0021-SINGLE-SETUP-AUTHORITY.md`.
+
+---
+
 ## Future ADRs
 
-- ADR-005 Market Data Provider Strategy
-- ADR-006 Technical Indicator Engine
-- ADR-007 AI Decision Engine
-- ADR-008 Paper Trading / Setup Persistence
+- ADR-006 Market Data Provider Strategy
+- ADR-007 Technical Indicator Engine
+- ADR-008 AI Decision Engine
+- ADR-009 Paper Trading / Setup Persistence

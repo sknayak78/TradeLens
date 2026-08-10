@@ -298,6 +298,24 @@ class Ranking(MarketMetadata):
         ..., description="Recommendation trend for this stock."
     )
     reason: str
+    # ER-0021 rankings authority — Mentor Engine decision chips (additive).
+    # Absent only when the snapshot cannot produce a recommendation.
+    action: Optional[Literal[
+        "Strong Buy", "Buy", "Watch", "Wait", "Avoid"
+    ]] = Field(
+        default=None,
+        description="Recommendation action. Authoritative for UI Action column.",
+    )
+    strategy: Optional[Literal[
+        "Trend Continuation",
+        "Pullback",
+        "Breakout",
+        "Consolidation",
+        "No Entry Yet",
+    ]] = Field(
+        default=None,
+        description="Recommendation strategy. Authoritative for UI Setup column.",
+    )
     # Legacy analysis fields — deprecated, never inputs to the engine.
     strengthScore: int = _legacy_field()
     stars: int = _legacy_field()

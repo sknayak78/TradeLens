@@ -143,12 +143,14 @@ def opportunities() -> List[Ranking]:
             continue
 
         analysis = analysis_service.analyse(stock)
+        # One Mentor Engine call per symbol — trend/action/strategy all from it.
+        decision = decide(stock)
         rows.append({
             "symbol": symbol,
             "name": stock["name"],
             "price": stock["price"],
             "changePct": stock["changePct"],
-            "trend": decide(stock).trend,
+            "decision": decision,
             "analysis": analysis,
         })
 
@@ -161,6 +163,8 @@ def opportunities() -> List[Ranking]:
     result: List[Ranking] = []
     for idx, r in enumerate(rows, start=1):
         a = r["analysis"]
+        decision = r["decision"]
+        recommendation = decision.recommendation
         reason = reason_by_symbol.get(
             r["symbol"],
             a.classification + " — " + a.trade_setup,
@@ -175,7 +179,9 @@ def opportunities() -> List[Ranking]:
             strengthScore=a.strength_score,
             stars=a.stars,
             classification=a.classification,
-            trend=r["trend"],
+            trend=decision.trend,
+            action=None if recommendation is None else recommendation.action,
+            strategy=None if recommendation is None else recommendation.strategy,
             tradeSetup=a.trade_setup,
             riskLevel=a.risk_level,
             suggestedAction=a.suggested_action,

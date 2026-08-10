@@ -4,6 +4,10 @@ import ErrorState from "@/components/common/ErrorState";
 import EmptyState from "@/components/common/EmptyState";
 import { Stars, ActionPill } from "@/components/panels/AnalysisBadges";
 import TrendBadge from "@/components/panels/TrendBadge";
+import {
+  resolveRankingAction,
+  resolveRankingSetup,
+} from "@/components/panels/stockDetailAuthority";
 import { useRankings } from "@/hooks/useMarket";
 import type { RiskLevel } from "@/types";
 
@@ -151,7 +155,7 @@ export default function TodaysRankings({
                       data-testid={`ranking-setup-${r.symbol}`}
                       className="inline-flex items-center px-1.5 py-0.5 rounded-[3px] border text-[10px] font-mono uppercase tracking-wider text-[#f5a623] bg-[#f5a623]/10 border-[#f5a623]/25"
                     >
-                      {r.tradeSetup}
+                      {resolveRankingSetup(r)}
                     </span>
                   </td>
                   <td className="px-2 py-2.5">
@@ -164,7 +168,7 @@ export default function TodaysRankings({
                   </td>
                   <td className="px-3 py-2.5">
                     <ActionPill
-                      action={r.suggestedAction}
+                      action={resolveRankingAction(r)}
                       testId={`ranking-action-${r.symbol}`}
                     />
                   </td>

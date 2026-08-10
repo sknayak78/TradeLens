@@ -153,13 +153,18 @@ def test_rankings_and_catalog_trends_mirror_the_recommendation(
     action: str, served
 ) -> None:
     served(action)
-    expected = decide(_row(action)).trend
+    expected = decide(_row(action))
 
     rankings: List[Ranking] = market_router.opportunities()
     catalog = market_router.list_stocks()
 
-    assert [r.trend for r in rankings] == [expected]
-    assert [s.trend for s in catalog] == [expected]
+    assert [r.trend for r in rankings] == [expected.trend]
+    assert [s.trend for s in catalog] == [expected.trend]
+    assert rankings[0].action == expected.recommendation.action
+    assert rankings[0].strategy == expected.recommendation.strategy
+    # Legacy analysis chips remain present (may disagree with mentor authority).
+    assert rankings[0].tradeSetup
+    assert rankings[0].suggestedAction
 
 
 def test_a_bearish_stock_is_never_published_as_the_seeded_uptrend(served) -> None:

@@ -1,4 +1,4 @@
-import type { Trend, TradeSetup, RiskLevel } from "@/types";
+import type { Trend, RiskLevel } from "@/types";
 
 interface BadgeProps {
   label: string;
@@ -44,7 +44,8 @@ const SETUP_STYLE =
 
 interface AnalysisBadgesProps {
   trend: Trend;
-  setup: TradeSetup;
+  /** Legacy tradeSetup or recommendation.strategy (ER-0021). */
+  setup: string;
   risk: RiskLevel;
   size?: "sm" | "xs";
   layout?: "row" | "wrap";
@@ -117,10 +118,12 @@ export function Stars({ count, testId }: { count: number; testId?: string }) {
 }
 
 const ACTION_STYLE: Record<string, string> = {
+  "Strong Buy": "text-[#26a69a] bg-[#26a69a]/10 border-[#26a69a]/25",
+  Buy: "text-[#26a69a] bg-[#26a69a]/10 border-[#26a69a]/25",
   "Buy on Breakout": "text-[#26a69a] bg-[#26a69a]/10 border-[#26a69a]/25",
-  "Watch": "text-[#2962ff] bg-[#2962ff]/10 border-[#2962ff]/25",
-  "Wait": "text-[#f5a623] bg-[#f5a623]/10 border-[#f5a623]/25",
-  "Avoid": "text-[#ef5350] bg-[#ef5350]/10 border-[#ef5350]/25",
+  Watch: "text-[#2962ff] bg-[#2962ff]/10 border-[#2962ff]/25",
+  Wait: "text-[#f5a623] bg-[#f5a623]/10 border-[#f5a623]/25",
+  Avoid: "text-[#ef5350] bg-[#ef5350]/10 border-[#ef5350]/25",
 };
 
 export function ActionPill({

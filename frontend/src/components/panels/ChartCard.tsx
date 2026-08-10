@@ -18,6 +18,10 @@ import EmptyState from "@/components/common/EmptyState";
 import AnalysisBadges, { Stars, ActionPill } from "@/components/panels/AnalysisBadges";
 import RecommendationCard from "@/components/panels/RecommendationCard";
 import StockHero from "@/components/panels/StockHero";
+import {
+  resolveChartSetup,
+  resolveChartSuggestedAction,
+} from "@/components/panels/stockDetailAuthority";
 import { Sparkles, TrendingUp, TrendingDown } from "lucide-react";
 
 interface ChartCardProps {
@@ -243,7 +247,7 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
             </StatTile>
             <StatTile label="Suggested Action">
               <ActionPill
-                action={stock.suggestedAction}
+                action={resolveChartSuggestedAction(stock)}
                 testId="detail-suggested-action"
               />
             </StatTile>
@@ -259,7 +263,7 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
             </div>
             <AnalysisBadges
               trend={stock.trend}
-              setup={stock.tradeSetup}
+              setup={resolveChartSetup(stock)}
               risk={stock.riskLevel}
               testIdPrefix="detail-badge"
             />

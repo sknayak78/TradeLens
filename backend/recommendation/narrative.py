@@ -567,12 +567,159 @@ def _entry_condition(
     levels: Optional[TradeLevels],
     trend: Trend,
     setup: Optional["TradingSetup"] = None,
+    progress: Optional["SetupProgress"] = None,
+    action: Optional[Action] = None,
 ) -> str:
-    """Trading Plan — how to execute the stable setup."""
+    """Trading Plan — how to execute the stable setup.
+
+    When Setup Progress is available it is the authority for *where price is
+    relative to the plan*. Strategy still owns the plan shape; progress prevents
+    stale instructions such as "wait to pull back" when price is already inside
+    the structural zone (ER-0021).
+    """
     plan_levels = levels
     if plan_levels is None and setup is not None:
         plan_levels = setup.levels
 
+    if progress is not None:
+        progress_plan = _entry_condition_from_progress(
+            market, strategy, plan_levels, trend, setup, progress, action
+        )
+        if progress_plan is not None:
+            return progress_plan
+
+    return _entry_condition_from_strategy(
+        market, strategy, plan_levels, trend, setup
+    )
+
+
+def _entry_condition_from_progress(
+    market: RecommendationInput,
+    strategy: Strategy,
+    plan_levels: Optional[TradeLevels],
+    trend: Trend,
+    setup: Optional["TradingSetup"],
+    progress: "SetupProgress",
+    _action: Optional[Action],
+) -> Optional[str]:
+    """Progress-aware Trading Plan copy. Returns None to fall back to strategy."""
+    status = progress.status
+
+    if status == "invalidated":
+        if plan_levels is not None:
+            return (
+                "No active entry plan: the prior structure is invalidated below "
+                f"{_price(plan_levels.stop_loss)}. Wait for a new setup to form "
+                "before planning an entry."
+            )
+        return (
+            "No active entry plan: the prior structure is invalidated. Wait for "
+            "a new setup to form before planning an entry."
+        )
+
+    if status == "no_setup":
+        if trend == "bearish":
+            return "No trade: stay out until buyers take back control."
+        return (
+            f"Wait for the price to steady above {_recent_average(market)} "
+            "before considering an entry."
+        )
+
+    if strategy == "Pullback" and plan_levels is not None:
+        zone = (
+            f"{_price(plan_levels.entry_min)}-{_price(plan_levels.entry_max)}"
+        )
+        if status == "awaiting_entry":
+            return (
+                "Wait for the price to pull back into the structural zone "
+                f"{zone} and hold there."
+            )
+        if status == "in_entry_zone":
+            # Pullback + in-zone stays Watch/Wait under action_from_progress —
+            # acknowledge the zone without inventing a BUY (ER-0021 / Bharti).
+            return (
+                f"Price is already inside the structural zone {zone}. "
+                "Stay patient and do not chase: wait for a clearer hold or a "
+                "better reward-to-risk before acting. A daily close below "
+                f"{_price(plan_levels.stop_loss)} cancels the plan."
+            )
+        if status == "extended":
+            return (
+                "Wait for the price to pull back into the structural zone "
+                f"{zone} and hold there."
+            )
+
+    if strategy == "Breakout":
+        resistance = market.resistance
+        if status == "breakout_pending":
+            if resistance is not None:
+                return (
+                    "Wait for a daily close above "
+                    f"{_price(resistance)} before entering the planned "
+                    "breakout zone."
+                )
+            return (
+                "Wait for a confirmed breakout above resistance before entering."
+            )
+        if status == "breakout_holding":
+            if resistance is not None:
+                return (
+                    f"Breakout confirmation is underway above "
+                    f"{_price(resistance)}: do not treat this as a fresh chase. "
+                    "Wait for a daily close that holds above resistance; a slip "
+                    "back below means the breakout failed."
+                )
+            return (
+                "Breakout confirmation is underway above resistance: wait for a "
+                "daily close that holds before entering."
+            )
+
+    if strategy == "Trend Continuation" and plan_levels is not None:
+        planned = (
+            setup.planned_entry
+            if setup is not None and setup.planned_entry is not None
+            else (plan_levels.entry_min + plan_levels.entry_max) / 2
+        )
+        zone = (
+            f"{_price(plan_levels.entry_min)} and {_price(plan_levels.entry_max)}"
+        )
+        if status in ("ready", "in_entry_zone"):
+            return (
+                f"Plan the entry between {zone} (planned fill near "
+                f"{_price(planned)}), and exit if the price closes below "
+                f"{_price(plan_levels.stop_loss)}."
+            )
+        if status == "extended":
+            return (
+                "Price is extended above the structural buy zone "
+                f"{_price(plan_levels.entry_min)}-{_price(plan_levels.entry_max)}. "
+                "Wait for a pullback into that zone before planning a fresh entry."
+            )
+        if status == "awaiting_entry":
+            return (
+                "Wait for the price to reclaim the structural zone "
+                f"{_price(plan_levels.entry_min)}-{_price(plan_levels.entry_max)} "
+                "and hold there before entering."
+            )
+
+    if strategy == "Consolidation":
+        return (
+            f"Wait for the price to steady above {_recent_average(market)} "
+            "before considering an entry."
+        )
+
+    # Unknown progress/strategy pairing — let the strategy fallback decide.
+    return None
+
+
+def _entry_condition_from_strategy(
+    market: RecommendationInput,
+    strategy: Strategy,
+    plan_levels: Optional[TradeLevels],
+    trend: Trend,
+    setup: Optional["TradingSetup"],
+) -> str:
+    """Strategy-only Trading Plan used when Setup Progress is unavailable."""
     if strategy == "Trend Continuation" and plan_levels is not None:
         planned = (
             setup.planned_entry
@@ -644,7 +791,9 @@ def build(
         verdict=_verdict(market, trend, action, strategy, limits),
         summary=_summary(market, trend, action, strategy, levels, next_trigger),
         next_trigger=next_trigger,
-        entry_condition=_entry_condition(market, strategy, levels, trend, setup),
+        entry_condition=_entry_condition(
+            market, strategy, levels, trend, setup, progress, action
+        ),
         mentor_lesson=insight.mentor_lesson(strategy),
         what_would_change_my_view=insight.what_would_change_my_view(
             strategy, trend, levels, progress, setup

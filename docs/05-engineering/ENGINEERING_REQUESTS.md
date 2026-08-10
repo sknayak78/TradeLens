@@ -302,3 +302,39 @@ conversation that teaches one trading principle per insight.
 - Concise Recommendation Card mentor UI
 - Regression tests for section uniqueness
 - ADR-004 and `ER-0020-INSIGHT-V2-EDUCATIONAL-NARRATIVE.md`
+
+---
+
+## ER-0021
+
+### Title
+
+Single Setup Authority — Stock Detail Chart & Trading Plan
+
+### Priority
+
+P0
+
+### Status
+
+Done
+
+### Business Goal
+
+Make TradingSetup + SetupProgress the single source of truth for stock-detail
+decision display so Chart Suggested Action, setup badge, Trading Plan and
+Watch Next cannot contradict each other.
+
+### Deliverables
+
+- ChartCard Suggested Action / Setup badge prefer `recommendation` (legacy
+  fallback only when recommendation is absent)
+- Trading Plan (`entryCondition`) progress-aware for Pullback / Breakout /
+  invalidated (and related statuses)
+- Breakout confirmation stays a trigger — never remapped to "Buy on Breakout"
+  as the current action
+- Rankings / Today's Opportunities expose additive Mentor Engine `action` +
+  `strategy` (legacy `tradeSetup` / `suggestedAction` retained)
+- TopOpportunities prefers `strategy` / `action` with legacy fallback
+- Regression tests for Bharti / Eicher / Maruti / Tata / INFY authority shapes
+- Spec: `ER-0021-SINGLE-SETUP-AUTHORITY.md`

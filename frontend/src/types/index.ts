@@ -117,6 +117,10 @@ export interface Ranking {
   stars: number;
   classification: string;
   trend: Trend;
+  /** ER-0021 — Mentor Engine action when available. */
+  action?: RecommendationAction | null;
+  /** ER-0021 — Mentor Engine strategy when available. */
+  strategy?: RecommendationStrategy | null;
   tradeSetup: TradeSetup;
   riskLevel: RiskLevel;
   suggestedAction: SuggestedAction;
