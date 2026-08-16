@@ -228,15 +228,28 @@ def test_opportunities_uses_live_stock_snapshots(monkeypatch):
     )
     monkeypatch.setattr(
         market_data_service,
+        "get_stock_insight",
+        lambda symbol: MarketDataResult(
+            data={
+                "support": 1,
+                "resistance": 2,
+                "aiInsight": "test",
+                "series": [],
+            },
+            metadata=metadata,
+        ),
+    )
+    monkeypatch.setattr(
+        market_data_service,
         "get_opportunities",
         lambda: (_ for _ in ()).throw(AssertionError("get_opportunities should not be used")),
     )
 
     rows = opportunities()
 
-    assert len(rows) == 1
-    assert rows[0].symbol == "RELIANCE"
-    assert rows[0].strengthScore == 80
+    assert len(rows.rankings) == 1
+    assert rows.rankings[0].symbol == "RELIANCE"
+    assert rows.rankings[0].strengthScore == 80
 
 
 def test_rsi_module_calculates_expected_values():

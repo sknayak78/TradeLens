@@ -16,6 +16,15 @@ export interface MarketSummary {
   asOf: string;
 }
 
+export interface OpportunitiesResponse {
+  rankings: Ranking[];
+  actionCounts: Record<string, number>;
+  provider: string;
+  cached: boolean;
+  asOf: string;
+  marketStatus: "OPEN" | "PRE_OPEN" | "CLOSED" | "WEEKEND";
+}
+
 export interface StockDetail extends Stock {
   support: number;
   resistance: number;
@@ -53,8 +62,8 @@ export const marketService = {
     return data;
   },
 
-  opportunities: async (): Promise<Ranking[]> => {
-    const { data } = await api.get<Ranking[]>("/opportunities");
+  opportunities: async (): Promise<OpportunitiesResponse> => {
+    const { data } = await api.get<OpportunitiesResponse>("/opportunities");
     return data;
   },
 

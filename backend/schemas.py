@@ -265,6 +265,20 @@ class Ranking(MarketMetadata):
     riskLevel: Literal["Low", "Medium", "High"] = _legacy_field()
     suggestedAction: str = _legacy_field()
     insight: str = _legacy_field()
+    recommendation: Optional["RecommendationOut"] = Field(
+        default=None,
+        description="Authoritative Mentor recommendation for this featured row.",
+    )
+
+
+class OpportunitiesResponse(MarketMetadata):
+    """Featured opportunity rows plus universe-wide Mentor action counts."""
+
+    rankings: List[Ranking]
+    actionCounts: dict[str, int] = Field(
+        ...,
+        description="Count of each Mentor action across all eligible candidates.",
+    )
 
 
 class WatchlistAnalysis(MarketMetadata):

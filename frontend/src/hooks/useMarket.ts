@@ -2,6 +2,7 @@ import { useQuery, UseQueryResult } from "@tanstack/react-query";
 import {
   marketService,
   MarketSummary,
+  OpportunitiesResponse,
   StockDetail,
 } from "@/services/marketService";
 import type { Ranking } from "@/types";
@@ -17,7 +18,7 @@ export function useMarketSummary(): UseQueryResult<MarketSummary, Error> {
   });
 }
 
-export function useRankings(): UseQueryResult<Ranking[], Error> {
+export function useRankings(): UseQueryResult<OpportunitiesResponse, Error> {
   return useQuery({
     queryKey: OPPORTUNITIES_KEY,
     queryFn: marketService.opportunities,

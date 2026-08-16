@@ -98,13 +98,14 @@ def test_opportunities_not_limited_to_legacy_ten_symbol_list():
 
 def test_recommendation_authority_remains_intact(served):
     served("Buy")
-    rows = market_router.opportunities()
+    payload = market_router.opportunities()
 
-    assert rows
-    for row in rows:
+    assert payload.rankings
+    for row in payload.rankings:
         stock = SeedProvider().get_stock(row.symbol)
+        insight = SeedProvider().get_stock_insight(row.symbol)
         assert stock is not None
-        assert row.trend == decide(stock).trend
+        assert row.trend == decide(stock, insight).trend
 
 
 def test_empty_universe_is_handled_safely():
@@ -144,11 +145,15 @@ def test_seed_recommendation_distribution_is_genuine():
 
     distribution = {action: 0 for action in ACTIONS}
     for row in selection.rows:
-        stock = provider.get_stock(row.symbol)
-        assert stock is not None
-        decision = decide(stock)
-        if decision.recommendation is not None:
-            distribution[decision.recommendation.action] += 1
+        if row.recommendation is not None:
+            distribution[row.recommendation.action] += 1
+        else:
+            stock = provider.get_stock(row.symbol)
+            insight = provider.get_stock_insight(row.symbol)
+            assert stock is not None
+            decision = decide(stock, insight)
+            if decision.recommendation is not None:
+                distribution[decision.recommendation.action] += 1
 
     assert sum(distribution.values()) == selection.returned_count
     assert distribution["Strong Buy"] + distribution["Buy"] <= selection.returned_count

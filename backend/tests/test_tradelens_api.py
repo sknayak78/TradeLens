@@ -128,9 +128,14 @@ def test_opportunities(s):
     r = s.get(f"{API}/opportunities", timeout=15)
     assert r.status_code == 200
     data = r.json()
-    assert len(data) == 10
+    assert "rankings" in data and "actionCounts" in data
+    rankings = data["rankings"]
+    action_counts = data["actionCounts"]
+    assert len(rankings) == 10
+    assert isinstance(action_counts, dict)
+    assert sum(action_counts.values()) >= len(rankings)
     for k in ["symbol", "name", "strengthScore", "trend", "price", "changePct", "reason"]:
-        assert k in data[0], f"missing {k}"
+        assert k in rankings[0], f"missing {k}"
 
 
 def test_stock_detail_curated(s):
@@ -201,11 +206,16 @@ def test_rankings_shape_and_order(s):
     r = s.get(f"{API}/opportunities", timeout=15)
     assert r.status_code == 200
     data = r.json()
-    assert len(data) == 10
+    assert "rankings" in data and "actionCounts" in data
+    rankings = data["rankings"]
+    action_counts = data["actionCounts"]
+    assert len(rankings) == 10
+    assert isinstance(action_counts, dict)
+    assert sum(action_counts.values()) >= len(rankings)
     required = ["rank", "symbol", "name", "price", "changePct", "strengthScore",
                 "stars", "classification", "trend", "tradeSetup", "riskLevel",
                 "suggestedAction", "insight", "reason"]
-    for i, row in enumerate(data):
+    for i, row in enumerate(rankings):
         for k in required:
             assert k in row, f"row {i} missing {k}"
         assert row["rank"] == i + 1
@@ -217,9 +227,9 @@ def test_rankings_shape_and_order(s):
         low = row["insight"].lower()
         for banned in ("guaranteed", "certain", "sure shot"):
             assert banned not in low
-    # scores descending
-    scores = [row["strengthScore"] for row in data]
-    assert scores == sorted(scores, reverse=True), f"not descending: {scores}"
+    # Featured rows are ranked 1..N; ordering follows Mentor action priority.
+    ranks = [row["rank"] for row in rankings]
+    assert ranks == list(range(1, len(rankings) + 1))
 
 
 # --- Stock detail analysis fields ---

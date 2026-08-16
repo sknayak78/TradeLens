@@ -46,12 +46,25 @@ export default function TodaysRankings({
   onSelect,
   activeSymbol,
 }: TopOpportunitiesProps) {
-  const { data: items = [], isLoading, isError, error, refetch } = useRankings();
+  const { data, isLoading, isError, error, refetch } = useRankings();
+  const items = data?.rankings ?? [];
+  const actionCounts = data?.actionCounts;
+
+  const countSummary = actionCounts
+    ? ["Strong Buy", "Buy", "Watch", "Wait", "Avoid"]
+        .filter((action) => (actionCounts[action] ?? 0) > 0)
+        .map((action) => `${actionCounts[action]} ${action}`)
+        .join(" · ")
+    : null;
 
   return (
     <PanelCard
       title="Today's Opportunities"
-      subtitle="Analysis-driven leaderboard"
+      subtitle={
+        countSummary
+          ? `Featured from universe · ${countSummary}`
+          : "Analysis-driven leaderboard"
+      }
       testId="card-top-opportunities"
       action={
         !isLoading && !isError && items.length > 0 ? (
@@ -164,7 +177,7 @@ export default function TodaysRankings({
                   </td>
                   <td className="px-3 py-2.5">
                     <ActionPill
-                      action={r.suggestedAction}
+                      action={r.recommendation?.action ?? r.suggestedAction}
                       testId={`ranking-action-${r.symbol}`}
                     />
                   </td>

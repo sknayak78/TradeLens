@@ -11,6 +11,7 @@ from schemas import (
     RecommendationOut,
     TodaysFocusItem,
     Ranking,
+    OpportunitiesResponse,
     StockDetail,
     StockSummary,
     SeriesPoint,
@@ -94,21 +95,20 @@ def market_summary() -> MarketSummary:
     )
 
 
-@router.get("/opportunities", response_model=List[Ranking])
-def opportunities() -> List[Ranking]:
-    """Today's Rankings — screened from the broader market universe.
+@router.get("/opportunities", response_model=OpportunitiesResponse)
+def opportunities() -> OpportunitiesResponse:
+    """Today's Rankings — featured rows from the screened market universe.
 
     Candidates are drawn from the configured STOCKS catalogue, filtered by
-    data-quality and liquidity screening, then ranked by the existing legacy
-    strength score.  The legacy 10-symbol OPPORTUNITIES list supplies reason
-    strings when available but no longer limits the candidate pool.
+  screening, evaluated by the Mentor Engine, bucketed by
+  ``recommendation.action``, and featured by ``recommendation.score``.
     """
     selection, metadata = select_opportunities(market_data_service)
 
-    result: List[Ranking] = []
+    rankings: List[Ranking] = []
     for idx, row in enumerate(selection.rows, start=1):
         analysis = row.analysis
-        result.append(Ranking(
+        rankings.append(Ranking(
             **metadata,
             rank=idx,
             symbol=row.symbol,
@@ -124,8 +124,18 @@ def opportunities() -> List[Ranking]:
             suggestedAction=analysis.suggested_action,
             insight=analysis.insight,
             reason=row.reason,
+            recommendation=(
+                None
+                if row.recommendation is None
+                else _recommendation_out(row.recommendation)
+            ),
         ))
-    return result
+
+    return OpportunitiesResponse(
+        **metadata,
+        rankings=rankings,
+        actionCounts=selection.action_counts,
+    )
 
 
 @router.get("/stock/{symbol}", response_model=StockDetail)
