@@ -197,41 +197,39 @@ def test_opportunities_uses_live_stock_snapshots(monkeypatch):
         as_of=datetime.now(timezone.utc),
         market_status="OPEN",
     )
+    stock_row = {
+        "symbol": "RELIANCE",
+        "name": "Reliance Industries",
+        "price": 100.0,
+        "changePct": 1.2,
+        "score": 75,
+        "trend": "bullish",
+        "rsi": 60.0,
+        "ema20": 90.0,
+        "vwap": 95.0,
+        "volume": 1000,
+        "avg_volume": 800,
+        "day_high": 110.0,
+        "sector": "Energy",
+    }
 
     monkeypatch.setattr(
         market_data_service,
-        "get_opportunities",
-        lambda: MarketDataResult(
-            data=[{"symbol": "RELIANCE", "reason": "seed reason"}],
-            metadata=metadata,
-        ),
+        "get_all_stocks",
+        lambda: MarketDataResult(data=[stock_row], metadata=metadata),
     )
     monkeypatch.setattr(
         market_data_service,
         "get_stock",
         lambda symbol: MarketDataResult(
-            data={
-                "symbol": symbol,
-                "name": "Reliance Industries",
-                "price": 100.0,
-                "changePct": 1.2,
-                "score": 75,
-                "trend": "bullish",
-                "rsi": 60.0,
-                "ema20": 90.0,
-                "vwap": 95.0,
-                "volume": 1000,
-                "avg_volume": 800,
-                "day_high": 110.0,
-                "sector": "Energy",
-            },
+            data={**stock_row, "symbol": symbol},
             metadata=metadata,
         ),
     )
     monkeypatch.setattr(
         market_data_service,
-        "get_all_stocks",
-        lambda: (_ for _ in ()).throw(AssertionError("get_all_stocks should not be used")),
+        "get_opportunities",
+        lambda: (_ for _ in ()).throw(AssertionError("get_opportunities should not be used")),
     )
 
     rows = opportunities()

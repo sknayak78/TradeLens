@@ -18,6 +18,7 @@ from schemas import (
 from analysis.service import service as analysis_service
 from recommendation.models import Recommendation
 from services.market_data_service import market_data_service
+from services.opportunity_selection import select_opportunities
 from services.stock_decision import decide
 
 logger = logging.getLogger("tradelens.market")
@@ -95,65 +96,34 @@ def market_summary() -> MarketSummary:
 
 @router.get("/opportunities", response_model=List[Ranking])
 def opportunities() -> List[Ranking]:
-    """Today's Rankings — analysis-driven leaderboard.
+    """Today's Rankings — screened from the broader market universe.
 
-    Every stock is analysed by StockAnalysisService; rows are sorted by
-    strength score descending and re-ranked. Curated 'reason' strings from
-    the seed keep the human context.
+    Candidates are drawn from the configured STOCKS catalogue, filtered by
+    data-quality and liquidity screening, then ranked by the existing legacy
+    strength score.  The legacy 10-symbol OPPORTUNITIES list supplies reason
+    strings when available but no longer limits the candidate pool.
     """
-    opportunity_result = market_data_service.get_opportunities()
-    reason_by_symbol = {
-        o["symbol"]: o["reason"] for o in opportunity_result.data
-    }
-    metadata = opportunity_result.metadata.to_api_dict()
-
-    rows: List[dict] = []
-    for opportunity in opportunity_result.data:
-        symbol = opportunity["symbol"]
-        stock_result = market_data_service.get_stock(symbol)
-        stock = stock_result.data
-        if not stock:
-            continue
-
-        analysis = analysis_service.analyse(stock)
-        rows.append({
-            "symbol": symbol,
-            "name": stock["name"],
-            "price": stock["price"],
-            "changePct": stock["changePct"],
-            "trend": decide(stock).trend,
-            "analysis": analysis,
-        })
-
-    rows.sort(
-        key=lambda r: (r["analysis"].strength_score, r["price"]),
-        reverse=True,
-    )
-    rows = rows[:10]
+    selection, metadata = select_opportunities(market_data_service)
 
     result: List[Ranking] = []
-    for idx, r in enumerate(rows, start=1):
-        a = r["analysis"]
-        reason = reason_by_symbol.get(
-            r["symbol"],
-            a.classification + " — " + a.trade_setup,
-        )
+    for idx, row in enumerate(selection.rows, start=1):
+        analysis = row.analysis
         result.append(Ranking(
             **metadata,
             rank=idx,
-            symbol=r["symbol"],
-            name=r["name"],
-            price=r["price"],
-            changePct=r["changePct"],
-            strengthScore=a.strength_score,
-            stars=a.stars,
-            classification=a.classification,
-            trend=r["trend"],
-            tradeSetup=a.trade_setup,
-            riskLevel=a.risk_level,
-            suggestedAction=a.suggested_action,
-            insight=a.insight,
-            reason=reason,
+            symbol=row.symbol,
+            name=row.name,
+            price=row.price,
+            changePct=row.change_pct,
+            strengthScore=analysis.strength_score,
+            stars=analysis.stars,
+            classification=analysis.classification,
+            trend=row.trend,
+            tradeSetup=analysis.trade_setup,
+            riskLevel=analysis.risk_level,
+            suggestedAction=analysis.suggested_action,
+            insight=analysis.insight,
+            reason=row.reason,
         ))
     return result
 
