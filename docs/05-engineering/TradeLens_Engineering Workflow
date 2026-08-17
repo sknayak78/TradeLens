@@ -1,0 +1,228 @@
+TradeLens Engineering Workflow
+1. Purpose
+This document defines the standard workflow for implementing, testing, committing, pushing, reviewing, and merging TradeLens engineering stories.
+The objective is to ensure:
+•	No work is lost between Cursor, local development and GitHub. 
+•	Every story has a clearly identifiable baseline. 
+•	Branches and commits are unambiguous. 
+•	Changes are independently verifiable. 
+•	Regression testing is performed before merge. 
+•	Product development can proceed without requiring the Product Owner to understand Git internals. 
+ 
+2. Roles
+Product Owner
+Defines:
+•	What should be built 
+•	Why it is required 
+•	Product priorities 
+•	Acceptance criteria 
+Cursor / Development Agent
+Responsible for:
+•	Implementation 
+•	Unit/integration tests 
+•	Code changes 
+•	Commit creation 
+•	Reporting exact Git state 
+Technical Checkpoint
+Before any merge, verify:
+•	Branch 
+•	Baseline 
+•	Commit 
+•	Changed files 
+•	Tests 
+•	Remote branch 
+•	PR status 
+•	Working tree 
+________________________________________
+3. Golden Rule
+Never treat an agent's statement that something is "committed" or "complete" as proof that the change exists in Git.
+Git itself is the source of truth.
+A commit is considered verified only when:
+git cat-file -t <SHA>
+returns:
+commit
+A change is considered safely preserved only when the commit also exists on the remote branch.
+________________________________________
+4. Story Lifecycle
+Every ER/story follows:
+Product requirement
+        ↓
+Baseline verification
+        ↓
+Create story branch
+        ↓
+Implementation
+        ↓
+Tests
+        ↓
+Code review
+        ↓
+Commit
+        ↓
+Verify commit
+        ↓
+Push
+        ↓
+Verify remote
+        ↓
+Pull Request
+        ↓
+CI / review
+        ↓
+Merge
+        ↓
+Verify main
+        ↓
+New baseline
+        ↓
+Next story
+________________________________________
+5. Baseline Verification
+Before starting a story:
+git status
+git branch --show-current
+git log --oneline -1
+The Product Owner should not proceed if:
+•	The wrong branch is checked out. 
+•	There are unexpected local changes. 
+•	The baseline commit is unclear. 
+The baseline must be explicitly recorded in the Cursor implementation prompt.
+Example:
+BASELINE
+Branch: main
+Commit: b9c1ae0
+Working tree: clean
+________________________________________
+6. Branching
+Each story gets a dedicated branch.
+Example:
+cursor/er-0025-launch-ux
+The branch must be created from the agreed baseline.
+Do not:
+•	Reset 
+•	Rebase 
+•	Cherry-pick 
+•	Merge another development branch 
+unless explicitly instructed.
+________________________________________
+7. Cursor Implementation Prompt
+Every substantial implementation prompt should contain:
+Scope
+What is being built.
+Acceptance criteria
+What must work.
+Files allowed to change
+Explicitly identified.
+Files that must not change
+Especially:
+•	Recommendation Engine 
+•	Mentor Engine 
+•	API contracts 
+•	dependencies 
+•	unrelated frontend/backend modules 
+unless required by the story.
+Testing requirements
+Exact tests to run.
+Git safety
+GIT SAFETY
+- Work only on the specified branch.
+- Do not switch branches.
+- Do not reset, rebase, cherry-pick or merge.
+- Do not modify unrelated files.
+- Do not change dependencies unless explicitly required.
+- Do not push unless instructed.
+- Report the exact commit SHA.
+- Report git status after implementation.
+________________________________________
+8. Commit Verification
+After Cursor commits:
+git status
+git log --oneline --decorate -5
+git cat-file -t <COMMIT_SHA>
+Expected:
+commit
+Also verify the commit contents:
+git show --stat --oneline <COMMIT_SHA>
+________________________________________
+9. Push Verification
+Push only after tests and commit verification:
+git push origin HEAD
+Then:
+git status
+git branch -vv
+The remote branch must be confirmed.
+A commit is not considered safely preserved merely because Cursor says it was pushed.
+________________________________________
+10. Pull Request
+The PR should identify:
+•	ER/story number 
+•	Baseline 
+•	Commit SHA 
+•	Scope 
+•	Tests 
+•	Known pre-existing failures 
+•	Out-of-scope changes 
+Before merge, verify the actual PR diff rather than relying solely on the agent's summary.
+________________________________________
+11. Regression Gate
+Every story must define its regression suite.
+For TradeLens, the minimum relevant areas generally include:
+•	Single Source of Truth / recommendation authority 
+•	Stock detail recommendation 
+•	Market data abstraction 
+•	Candidate screening 
+•	Opportunity ranking 
+•	Relevant frontend tests 
+•	API tests where applicable 
+Known pre-existing failures must be explicitly documented and never silently classified as new failures.
+________________________________________
+12. Worktrees
+Worktrees are allowed and useful, but their purpose must always be explicit.
+Example:
+TradeLens/
+TradeLens-er0022/
+Before using a worktree:
+git worktree list
+Never assume that a branch exists in every worktree.
+If a commit exists in Cursor but not locally, first:
+git fetch origin --prune
+Then verify the remote branch.
+________________________________________
+13. Four Git States
+We will use these terms consistently:
+State	Meaning
+Implemented	Cursor says the code is complete
+Committed	Git commit exists and SHA is verified
+Pushed	Commit exists on GitHub
+Merged	Commit is part of main
+Only the last three are Git-verifiable.
+ 
+14. Product Owner Safety Rules
+The Product Owner should not execute:
+git reset
+git rebase
+git cherry-pick
+git merge
+git push --force
+git clean
+unless explicitly instructed.
+When a command could potentially affect existing work, the Product Owner should stop and provide the command output before proceeding.
+ 
+15. Definition of Done
+An ER/story is considered complete only when:
+•	Correct baseline confirmed 
+•	Dedicated branch created 
+•	Implementation completed 
+•	Scope reviewed 
+•	Tests pass 
+•	Known failures documented 
+•	Commit SHA verified 
+•	Working tree clean 
+•	Remote branch verified 
+•	PR created 
+•	CI passes 
+•	PR reviewed 
+•	PR merged 
+•	main verified 
+•	New baseline SHA recorded
+
