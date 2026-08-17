@@ -96,3 +96,52 @@ def assert_legacy_stock_fields(payload: Mapping[str, Any]) -> None:
     missing = [field for field in SCREENING_REQUIRED_FIELDS if field not in payload]
     if missing:
         raise ValueError(f"legacy stock dict missing required fields: {missing}")
+
+
+def _optional_float(row: Mapping[str, Any], key: str) -> float | None:
+    value = row.get(key)
+    if value is None:
+        return None
+    return float(value)
+
+
+def _optional_int(row: Mapping[str, Any], key: str) -> int | None:
+    value = row.get(key)
+    if value is None:
+        return None
+    return int(value)
+
+
+def legacy_row_to_stock_snapshot(row: Mapping[str, Any]) -> StockSnapshot:
+    """Convert one legacy catalogue stock row into a normalized snapshot."""
+    return StockSnapshot(
+        symbol=str(row["symbol"]).strip().upper(),
+        name=str(row["name"]),
+        price=float(row["price"]),
+        change_pct=float(row["changePct"]),
+        rsi=float(row["rsi"]),
+        ema20=float(row["ema20"]),
+        vwap=float(row["vwap"]),
+        volume=int(row["volume"]),
+        trend=str(row["trend"]),
+        day_high=float(row["day_high"]),
+        avg_volume=int(row["avg_volume"]),
+        sector=str(row.get("sector", "")),
+        ema50=_optional_float(row, "ema50"),
+        ema200=_optional_float(row, "ema200"),
+        score=_optional_int(row, "score"),
+        support=_optional_float(row, "support"),
+        resistance=_optional_float(row, "resistance"),
+    )
+
+
+def legacy_row_to_stock_insight(row: Mapping[str, Any], symbol: str) -> StockInsight:
+    """Convert one legacy insight row into a normalized insight payload."""
+    normalized = symbol.strip().upper()
+    return StockInsight(
+        symbol=normalized,
+        support=float(row["support"]),
+        resistance=float(row["resistance"]),
+        ai_insight=str(row["aiInsight"]),
+        series=tuple(dict(point) for point in row.get("series", [])),
+    )

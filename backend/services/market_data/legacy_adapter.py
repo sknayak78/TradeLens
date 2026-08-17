@@ -34,12 +34,23 @@ class LegacyCatalogueSupport(Protocol):
         """Return default watchlist seed symbols."""
 
 
+@runtime_checkable
+class LegacyBatchCatalogueSupport(Protocol):
+    """Batch catalogue reads that must not hydrate symbols individually."""
+
+    def all_stock_snapshots(self) -> Sequence[StockSnapshot]:
+        """Return the full static catalogue as normalized snapshots."""
+
+    def search_stock_snapshots(self, query: str, limit: int = 20) -> Sequence[StockSnapshot]:
+        """Return catalogue search matches as normalized snapshots."""
+
+
 class LegacyProviderAdapter(MarketDataProvider):
     """Expose a NormalizedMarketDataProvider through the legacy dict contract.
 
     Compatibility conversion to legacy dictionaries happens exclusively through
     ``StockSnapshot.to_legacy_dict``, ``StockInsight.to_legacy_dict``, and the
-  helpers in ``snapshot_builder``.
+    helpers in ``snapshot_builder``.
     """
 
     def __init__(self, normalized: NormalizedMarketDataProvider):
@@ -52,6 +63,11 @@ class LegacyProviderAdapter(MarketDataProvider):
 
     def _catalogue(self) -> LegacyCatalogueSupport | None:
         if isinstance(self._normalized, LegacyCatalogueSupport):
+            return self._normalized
+        return None
+
+    def _batch_catalogue(self) -> LegacyBatchCatalogueSupport | None:
+        if isinstance(self._normalized, LegacyBatchCatalogueSupport):
             return self._normalized
         return None
 
@@ -97,6 +113,12 @@ class LegacyProviderAdapter(MarketDataProvider):
         )
 
     def search_stocks(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
+        batch = self._batch_catalogue()
+        if batch is not None:
+            return [
+                build_legacy_stock_dict(snapshot)
+                for snapshot in batch.search_stock_snapshots(query, limit)
+            ]
         needle = query.strip().lower()
         matches: list[dict[str, Any]] = []
         for instrument in self._normalized.get_instruments():
@@ -125,6 +147,12 @@ class LegacyProviderAdapter(MarketDataProvider):
         return build_legacy_opportunity_rows(contexts)  # type: ignore[arg-type]
 
     def get_all_stocks(self) -> list[dict[str, Any]]:
+        batch = self._batch_catalogue()
+        if batch is not None:
+            return [
+                build_legacy_stock_dict(snapshot)
+                for snapshot in batch.all_stock_snapshots()
+            ]
         rows: list[dict[str, Any]] = []
         for instrument in self._normalized.get_instruments():
             stock = self.get_stock(instrument.symbol)

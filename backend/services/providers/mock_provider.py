@@ -5,7 +5,10 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
 
-from services.market_data.legacy_adapter import LegacyCatalogueSupport
+from services.market_data.legacy_adapter import (
+    LegacyBatchCatalogueSupport,
+    LegacyCatalogueSupport,
+)
 from services.market_data.models import (
     DataFreshness,
     Instrument,
@@ -22,7 +25,11 @@ from services.market_data.models import (
 from services.market_data.normalized_provider import NormalizedMarketDataProvider
 
 
-class MockMarketDataProvider(NormalizedMarketDataProvider, LegacyCatalogueSupport):
+class MockMarketDataProvider(
+    NormalizedMarketDataProvider,
+    LegacyCatalogueSupport,
+    LegacyBatchCatalogueSupport,
+):
     """Fixture-driven normalized provider with no network or seed_data dependency."""
 
     name = "mock"
@@ -151,6 +158,27 @@ class MockMarketDataProvider(NormalizedMarketDataProvider, LegacyCatalogueSuppor
 
     def watchlist_symbols(self) -> Sequence[str]:
         return self._watchlist_symbols
+
+    def all_stock_snapshots(self) -> Sequence[StockSnapshot]:
+        return tuple(self._snapshots[sym] for sym in sorted(self._snapshots))
+
+    def search_stock_snapshots(
+        self,
+        query: str,
+        limit: int = 20,
+    ) -> Sequence[StockSnapshot]:
+        needle = query.strip().lower()
+        matches: list[StockSnapshot] = []
+        for snapshot in self.all_stock_snapshots():
+            if (
+                not needle
+                or needle in snapshot.symbol.lower()
+                or needle in snapshot.name.lower()
+            ):
+                matches.append(snapshot)
+            if len(matches) >= max(1, min(limit, 100)):
+                break
+        return tuple(matches)
 
     def inject_quote_failure(self, symbol: str, error: Exception) -> None:
         self._quote_failures[symbol.strip().upper()] = error

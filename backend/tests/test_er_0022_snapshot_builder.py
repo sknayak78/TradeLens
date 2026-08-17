@@ -9,6 +9,8 @@ from services.market_data.snapshot_builder import (
     build_legacy_insight_dict,
     build_legacy_stock_dict,
     build_legacy_stock_from_quote,
+    legacy_row_to_stock_insight,
+    legacy_row_to_stock_snapshot,
 )
 
 
@@ -85,3 +87,27 @@ def test_build_legacy_insight_dict_preserves_keys() -> None:
     )
     payload = build_legacy_insight_dict(insight)
     assert set(payload) == {"support", "resistance", "aiInsight", "series"}
+
+
+def test_legacy_row_to_stock_snapshot_matches_seed_row() -> None:
+    from seed_data import STOCKS_BY_SYMBOL
+
+    legacy = STOCKS_BY_SYMBOL["RELIANCE"]
+    snapshot = legacy_row_to_stock_snapshot(legacy)
+    payload = snapshot.to_legacy_dict()
+    for field in SCREENING_REQUIRED_FIELDS:
+        assert payload[field] == legacy[field]
+    assert payload.get("ema50") == legacy.get("ema50")
+    assert payload.get("score") == legacy.get("score")
+
+
+def test_legacy_row_to_stock_insight_matches_seed_row() -> None:
+    from seed_data import INSIGHTS
+
+    legacy = INSIGHTS["RELIANCE"]
+    insight = legacy_row_to_stock_insight(legacy, "RELIANCE")
+    payload = insight.to_legacy_dict()
+    assert payload["support"] == legacy["support"]
+    assert payload["resistance"] == legacy["resistance"]
+    assert payload["aiInsight"] == legacy["aiInsight"]
+    assert payload["series"] == legacy["series"]
