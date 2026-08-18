@@ -17,6 +17,7 @@ import ErrorState from "@/components/common/ErrorState";
 import EmptyState from "@/components/common/EmptyState";
 import AnalysisBadges, { Stars, ActionPill } from "@/components/panels/AnalysisBadges";
 import RecommendationCard from "@/components/panels/RecommendationCard";
+import LearnWhyPanel from "@/components/panels/LearnWhyPanel";
 import StockHero from "@/components/panels/StockHero";
 import { Sparkles, TrendingUp, TrendingDown } from "lucide-react";
 
@@ -128,7 +129,15 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
               Falls back to the legacy insight panel when the engine could not
               produce a decision. */}
           {stock.recommendation ? (
-            <RecommendationCard recommendation={stock.recommendation} />
+            <>
+              <LearnWhyPanel
+                recommendation={stock.recommendation}
+                symbol={stock.symbol}
+                variant="button"
+                testIdPrefix="detail-learn-why"
+              />
+              <RecommendationCard recommendation={stock.recommendation} />
+            </>
           ) : (
             <InsightPanel insight={stock.insight} />
           )}

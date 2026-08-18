@@ -1,9 +1,11 @@
 import { NavLink } from "react-router-dom";
 import {
+  BookOpen,
   LayoutDashboard,
-  Star,
+  MessagesSquare,
   NotebookPen,
   Settings as SettingsIcon,
+  Star,
   X,
 } from "lucide-react";
 
@@ -13,16 +15,17 @@ interface SidebarProps {
 }
 
 const NAV_ITEMS = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard" },
-  { to: "/watchlist", label: "Watchlist", icon: Star, testId: "nav-watchlist" },
-  { to: "/journal", label: "Trading Journal", icon: NotebookPen, testId: "nav-journal" },
-  { to: "/settings", label: "Settings", icon: SettingsIcon, testId: "nav-settings" },
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard", end: true },
+  { to: "/learn", label: "Learn", icon: BookOpen, testId: "nav-learn", end: false },
+  { to: "/community", label: "Community", icon: MessagesSquare, testId: "nav-community", end: true },
+  { to: "/watchlist", label: "Watchlist", icon: Star, testId: "nav-watchlist", end: true },
+  { to: "/journal", label: "Trading Journal", icon: NotebookPen, testId: "nav-journal", end: true },
+  { to: "/settings", label: "Settings", icon: SettingsIcon, testId: "nav-settings", end: true },
 ];
 
 export default function Sidebar({ mobileOpen, onCloseMobile }: SidebarProps) {
   return (
     <>
-      {/* Desktop sidebar */}
       <aside
         className="hidden md:flex w-56 flex-shrink-0 border-r border-[#2a2e39] bg-[#131722] flex-col"
         data-testid="sidebar-desktop"
@@ -31,7 +34,6 @@ export default function Sidebar({ mobileOpen, onCloseMobile }: SidebarProps) {
         <SidebarFooter />
       </aside>
 
-      {/* Mobile drawer */}
       {mobileOpen && (
         <div
           className="md:hidden fixed inset-0 z-40 flex"
@@ -70,11 +72,11 @@ function SidebarNav({ onNavigate }: { onNavigate: () => void }) {
       <div className="px-3 pb-2 text-[10px] uppercase tracking-widest text-[#787b86]">
         Workspace
       </div>
-      {NAV_ITEMS.map(({ to, label, icon: Icon, testId }) => (
+      {NAV_ITEMS.map(({ to, label, icon: Icon, testId, end }) => (
         <NavLink
           key={to}
           to={to}
-          end={to === "/"}
+          end={end}
           onClick={onNavigate}
           data-testid={testId}
           className={({ isActive }) =>

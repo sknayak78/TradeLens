@@ -9,8 +9,29 @@ interface HeaderProps {
   onOpenMobileNav: () => void;
 }
 
+const SEARCH_EMPTY_MESSAGE =
+  "This stock isn't currently covered by TradeLens. TradeLens currently focuses on a curated set of NSE stocks for its learning experience.";
+
+function rankSearchResults(query: string, results: StockSummary[]): StockSummary[] {
+  const needle = query.trim().toLowerCase();
+  const score = (symbol: string, name: string) => {
+    const sym = symbol.toLowerCase();
+    const nm = name.toLowerCase();
+    if (sym === needle) return 0;
+    if (sym.startsWith(needle)) return 1;
+    if (nm.startsWith(needle)) return 2;
+    if (sym.includes(needle)) return 3;
+    if (nm.includes(needle)) return 4;
+    return 5;
+  };
+  return [...results].sort(
+    (a, b) => score(a.symbol, a.name) - score(b.symbol, b.name),
+  );
+}
+
 export default function Header({ onOpenMobileNav }: HeaderProps) {
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [results, setResults] = useState<StockSummary[]>([]);
   const [open, setOpen] = useState(false);
   const [spinning, setSpinning] = useState(false);
@@ -27,18 +48,22 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
   );
 
   useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
     let cancelled = false;
-    const q = query.trim();
-    if (!q) {
+    if (!debouncedQuery) {
       setResults([]);
       setOpen(false);
       return;
     }
     marketService
-      .searchStocks(q, 8)
-      .then((r) => {
+      .searchStocks(debouncedQuery, 8)
+      .then((rows) => {
         if (!cancelled) {
-          setResults(r);
+          setResults(rankSearchResults(debouncedQuery, rows));
           setOpen(true);
         }
       })
@@ -51,7 +76,7 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
     return () => {
       cancelled = true;
     };
-  }, [query]);
+  }, [debouncedQuery]);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -78,6 +103,14 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
   const handleAdd = (symbol: string) => {
     if (watchlistSet.has(symbol)) return;
     addToWatchlist.mutate(symbol);
+  };
+
+  const handleViewStock = (symbol: string) => {
+    navigate(`/?symbol=${encodeURIComponent(symbol)}`);
+    setOpen(false);
+    setQuery("");
+    setDebouncedQuery("");
+    setResults([]);
   };
 
   return (
@@ -125,7 +158,7 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => query && setOpen(true)}
+            onFocus={() => debouncedQuery && setOpen(true)}
             placeholder="Search stocks e.g. RELIANCE, TCS…"
             data-testid="stock-search-input"
             className="w-full h-9 pl-9 pr-3 rounded-md bg-[#1e222d] border border-[#2a2e39] text-sm text-[#d1d4dc] placeholder:text-[#787b86] focus:border-[#2962ff]/60 focus:outline-none transition-colors"
@@ -143,14 +176,18 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
                     className="flex items-center justify-between px-3 py-2 hover:bg-[#2a2e39] transition-colors"
                     data-testid={`search-result-${s.symbol}`}
                   >
-                    <div className="min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => handleViewStock(s.symbol)}
+                      className="min-w-0 text-left flex-1"
+                    >
                       <div className="text-sm text-white font-medium">
                         {s.symbol}
                       </div>
                       <div className="text-xs text-[#787b86] truncate">
                         {s.name}
                       </div>
-                    </div>
+                    </button>
                     <div className="flex items-center gap-3">
                       <div className="text-right shrink-0">
                         <div className="font-mono tabular-nums text-sm text-[#d1d4dc]">
@@ -188,9 +225,12 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
               })}
             </div>
           )}
-          {open && query && results.length === 0 && (
-            <div className="absolute left-0 right-0 top-11 rounded-md border border-[#2a2e39] bg-[#1e222d] px-3 py-2 text-xs text-[#787b86] z-40">
-              No matches for “{query}”
+          {open && debouncedQuery && results.length === 0 && (
+            <div
+              className="absolute left-0 right-0 top-11 rounded-md border border-[#2a2e39] bg-[#1e222d] px-3 py-3 text-xs text-[#787b86] z-40 leading-relaxed"
+              data-testid="stock-search-empty"
+            >
+              {SEARCH_EMPTY_MESSAGE}
             </div>
           )}
         </div>

@@ -128,18 +128,25 @@ const ACTION_STYLE: Record<string, string> = {
 export function ActionPill({
   action,
   testId,
+  mentorView = false,
 }: {
   action: string;
   testId?: string;
+  mentorView?: boolean;
 }) {
+  const label = mentorView ? `Mentor view: ${action}` : action;
   return (
     <span
       data-testid={testId}
-      className={`inline-flex items-center px-2 py-0.5 rounded-[3px] border text-[10px] font-mono uppercase tracking-wider ${
+      className={`inline-flex items-center px-2 py-0.5 rounded-[3px] border ${
+        mentorView
+          ? "text-[11px] normal-case tracking-normal"
+          : "text-[10px] font-mono uppercase tracking-wider"
+      } ${
         ACTION_STYLE[action] || "text-[#d1d4dc] bg-[#2a2e39]/40 border-[#2a2e39]"
       }`}
     >
-      {action}
+      {label}
     </span>
   );
 }
