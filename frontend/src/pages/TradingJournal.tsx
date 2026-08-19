@@ -34,15 +34,15 @@ export default function TradingJournal() {
     <div data-testid="journal-page" className="p-4 md:p-6">
       <div className="mb-4 flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-white text-xl md:text-2xl font-semibold tracking-tight">
+          <h1 className="text-[#1F2933] text-xl md:text-2xl font-semibold tracking-tight">
             Trading Journal
           </h1>
-          <p className="text-xs text-[#787b86] mt-1">
+          <p className="text-xs text-[#667085] mt-1">
             Log every trade. Review with brutal honesty.
           </p>
         </div>
         <button
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-[#2962ff] hover:bg-[#2962ff]/85 text-white text-sm font-medium transition-colors"
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-[#2962ff] hover:bg-[#2962ff]/85 text-[#1F2933] text-sm font-medium transition-colors"
           onClick={() => setDialogOpen(true)}
           data-testid="journal-new-trade"
         >
@@ -96,7 +96,7 @@ export default function TradingJournal() {
           <div className="overflow-x-auto -mx-4">
             <table className="w-full text-sm whitespace-nowrap">
               <thead>
-                <tr className="text-[#787b86] text-[10px] uppercase tracking-widest">
+                <tr className="text-[#667085] text-[10px] uppercase tracking-widest">
                   <th className="text-left font-normal px-4 pb-2">ID</th>
                   <th className="text-left font-normal px-2 pb-2">Date</th>
                   <th className="text-left font-normal px-2 pb-2">Stock</th>
@@ -114,15 +114,15 @@ export default function TradingJournal() {
                   <tr
                     key={t.id}
                     data-testid={`journal-row-${t.id}`}
-                    className="tl-row border-t border-[#2a2e39]/60"
+                    className="tl-row border-t border-[#D9DDE2]/60"
                   >
-                    <td className="px-4 py-2.5 font-mono tabular-nums text-[#787b86] text-xs">
+                    <td className="px-4 py-2.5 font-mono tabular-nums text-[#667085] text-xs">
                       T-{t.id.toString().padStart(4, "0")}
                     </td>
-                    <td className="px-2 py-2.5 text-[#d1d4dc]">
+                    <td className="px-2 py-2.5 text-[#1F2933]">
                       {formatDate(t.trade_date)}
                     </td>
-                    <td className="px-2 py-2.5 text-white font-medium">
+                    <td className="px-2 py-2.5 text-[#1F2933] font-medium">
                       {t.symbol}
                     </td>
                     <td className="px-2 py-2.5">
@@ -136,13 +136,13 @@ export default function TradingJournal() {
                         {t.side}
                       </span>
                     </td>
-                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#d1d4dc]">
+                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
                       {t.entry_price.toLocaleString("en-IN")}
                     </td>
-                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#d1d4dc]">
+                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
                       {t.exit_price.toLocaleString("en-IN")}
                     </td>
-                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#d1d4dc]">
+                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
                       {t.quantity}
                     </td>
                     <td
@@ -157,14 +157,14 @@ export default function TradingJournal() {
                         maximumFractionDigits: 2,
                       })}
                     </td>
-                    <td className="px-4 py-2.5 text-[#787b86] text-xs max-w-[240px] truncate">
+                    <td className="px-4 py-2.5 text-[#667085] text-xs max-w-[240px] truncate">
                       {t.notes || "—"}
                     </td>
                     <td className="px-2 py-2.5">
                       <button
                         onClick={() => deleteTrade.mutate(t.id)}
                         data-testid={`journal-delete-${t.id}`}
-                        className="p-1 rounded-md text-[#787b86] hover:text-[#ef5350] hover:bg-[#ef5350]/10 transition-colors"
+                        className="p-1 rounded-md text-[#667085] hover:text-[#ef5350] hover:bg-[#ef5350]/10 transition-colors"
                         aria-label={`Delete trade ${t.id}`}
                       >
                         <Trash2 size={14} />
@@ -177,9 +177,9 @@ export default function TradingJournal() {
           </div>
         )}
 
-        <div className="mt-4 rounded-[4px] border border-dashed border-[#2a2e39] bg-[#131722] p-4 flex items-center gap-3">
-          <NotebookPen size={18} className="text-[#787b86]" />
-          <p className="text-xs text-[#787b86]">
+        <div className="mt-4 rounded-[4px] border border-dashed border-[#D9DDE2] bg-white p-4 flex items-center gap-3">
+          <NotebookPen size={18} className="text-[#667085]" />
+          <p className="text-xs text-[#667085]">
             Trades are stored in your local SQLite database. Add, edit or
             delete entries — they persist across refreshes.
           </p>
@@ -204,10 +204,10 @@ function StatCard({
 }) {
   return (
     <div
-      className="rounded-[4px] border border-[#2a2e39] bg-[#1e222d] p-4"
+      className="rounded-[4px] border border-[#D9DDE2] bg-white p-4"
       data-testid={testId}
     >
-      <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
+      <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1">
         {label}
       </div>
       <div

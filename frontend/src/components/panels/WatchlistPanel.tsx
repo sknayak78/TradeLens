@@ -4,6 +4,7 @@ import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import EmptyState from "@/components/common/EmptyState";
 import { useWatchlist, useRemoveFromWatchlist } from "@/hooks/useWatchlist";
+import { showApiError, showSuccess } from "@/lib/feedback";
 import { X } from "lucide-react";
 
 interface WatchlistPanelProps {
@@ -29,7 +30,7 @@ export default function WatchlistPanel({
       testId="card-watchlist"
       action={
         !isLoading && !isError ? (
-          <span className="text-[10px] font-mono tabular-nums text-[#787b86] uppercase tracking-widest">
+          <span className="text-[10px] font-mono tabular-nums text-[#667085] uppercase tracking-widest">
             Live · Mock
           </span>
         ) : null
@@ -57,7 +58,7 @@ export default function WatchlistPanel({
             data-testid="watchlist-table"
           >
             <thead>
-              <tr className="text-[#787b86] text-[10px] uppercase tracking-widest">
+              <tr className="text-[#667085] text-[10px] uppercase tracking-widest">
                 <th className="text-left font-normal px-4 pb-2">Stock</th>
                 <th className="text-right font-normal px-2 pb-2">Price</th>
                 <th className="text-right font-normal px-2 pb-2">RSI</th>
@@ -76,13 +77,13 @@ export default function WatchlistPanel({
                     ? "text-[#ef5350]"
                     : w.rsi <= 30
                       ? "text-[#26a69a]"
-                      : "text-[#d1d4dc]";
+                      : "text-[#1F2933]";
                 return (
                   <tr
                     key={w.symbol}
                     data-testid={`watchlist-row-${w.symbol}`}
                     onClick={() => onSelect?.(w.symbol)}
-                    className={`tl-row border-t border-[#2a2e39]/60 ${
+                    className={`tl-row border-t border-[#D9DDE2]/60 ${
                       onSelect ? "cursor-pointer" : ""
                     } ${
                       isActive
@@ -91,15 +92,15 @@ export default function WatchlistPanel({
                     }`}
                   >
                     <td className="px-4 py-2.5">
-                      <div className="text-white font-medium text-sm">
+                      <div className="text-[#1F2933] font-medium text-sm">
                         {w.symbol}
                       </div>
-                      <div className="text-[11px] text-[#787b86] truncate max-w-[140px]">
+                      <div className="text-[11px] text-[#667085] truncate max-w-[140px]">
                         {w.name}
                       </div>
                     </td>
                     <td className="px-2 py-2.5 text-right">
-                      <div className="font-mono tabular-nums text-white">
+                      <div className="font-mono tabular-nums text-[#1F2933]">
                         ₹{w.price.toLocaleString("en-IN")}
                       </div>
                       <div
@@ -118,13 +119,13 @@ export default function WatchlistPanel({
                     >
                       {w.rsi.toFixed(1)}
                     </td>
-                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#d1d4dc]">
+                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
                       {w.ema20.toLocaleString("en-IN")}
                     </td>
-                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#d1d4dc]">
+                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
                       {w.vwap.toLocaleString("en-IN")}
                     </td>
-                    <td className="px-2 py-2.5 text-right font-mono tabular-nums font-semibold text-white">
+                    <td className="px-2 py-2.5 text-right font-mono tabular-nums font-semibold text-[#1F2933]">
                       {w.score}
                     </td>
                     <td className="px-4 py-2.5">
@@ -133,12 +134,23 @@ export default function WatchlistPanel({
                     {showRemove && (
                       <td className="px-2 py-2.5">
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            removeMutation.mutate(w.symbol);
+                            removeMutation.mutate(w.symbol, {
+                              onSuccess: () => {
+                                showSuccess(`${w.symbol} removed from your watchlist.`);
+                              },
+                              onError: (err) => {
+                                showApiError(
+                                  `Could not remove ${w.symbol} from watchlist`,
+                                  err,
+                                );
+                              },
+                            });
                           }}
                           data-testid={`watchlist-remove-${w.symbol}`}
-                          className="p-1 rounded-md text-[#787b86] hover:text-[#ef5350] hover:bg-[#ef5350]/10 transition-colors"
+                          className="p-1 rounded-md text-[#667085] hover:text-[#ef5350] hover:bg-[#ef5350]/10 transition-colors"
                           aria-label={`Remove ${w.symbol}`}
                         >
                           <X size={14} />

@@ -56,7 +56,7 @@ export default function FoundersVisionPage() {
           about uncertainty, committed to teaching before recommending, and focused on habits
           that last longer than any single trade.
         </p>
-        <p className="text-[#787b86]">— Sujeet Nayak</p>
+        <p className="text-[#667085]">— Sujeet Nayak</p>
       </InfoSection>
     </div>
   );

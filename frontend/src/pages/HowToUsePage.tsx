@@ -76,7 +76,7 @@ export default function HowToUsePage() {
         <ol className="list-decimal pl-5 space-y-2">
           <li>Scan Today&apos;s Opportunities for stocks worth studying today.</li>
           <li>Click a card to load its chart and Mentor classification on the right.</li>
-          <li>Use <strong className="text-white">Learn Why</strong> to see the evidence behind the classification.</li>
+          <li>Use <strong className="text-[#1F2933]">Learn Why</strong> to see the evidence behind the classification.</li>
           <li>Add interesting symbols to your watchlist from the header search.</li>
         </ol>
       </InfoSection>

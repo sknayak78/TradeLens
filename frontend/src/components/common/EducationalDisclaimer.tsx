@@ -20,7 +20,7 @@ export default function EducationalDisclaimer({
     return (
       <p
         data-testid={testId}
-        className={`text-[11px] leading-relaxed text-[#787b86] ${className}`}
+        className={`text-[11px] leading-relaxed text-[#667085] ${className}`}
       >
         {DISCLAIMER_TEXT}
       </p>
@@ -30,10 +30,10 @@ export default function EducationalDisclaimer({
   return (
     <aside
       data-testid={testId}
-      className={`flex items-start gap-2 rounded-[4px] border border-[#2a2e39] bg-[#1a1f2b] px-3 py-2 ${className}`}
+      className={`flex items-start gap-2 rounded-[4px] border border-[#D9DDE2] bg-[#F0F1EF] px-3 py-2 ${className}`}
     >
-      <Info size={14} className="text-[#787b86] shrink-0 mt-0.5" aria-hidden />
-      <p className="text-[11px] leading-relaxed text-[#787b86]">{DISCLAIMER_TEXT}</p>
+      <Info size={14} className="text-[#667085] shrink-0 mt-0.5" aria-hidden />
+      <p className="text-[11px] leading-relaxed text-[#667085]">{DISCLAIMER_TEXT}</p>
     </aside>
   );
 }

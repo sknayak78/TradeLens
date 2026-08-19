@@ -84,14 +84,14 @@ export default function CommunityPage() {
                   </span>
                   <div className="min-w-0">
                     <p>{topic.description}</p>
-                    <div className="mt-3 flex items-center gap-2 text-[10px] uppercase tracking-widest text-[#787b86]">
+                    <div className="mt-3 flex items-center gap-2 text-[10px] uppercase tracking-widest text-[#667085]">
                       <Users size={11} />
                       <span>Learning space · {topic.replies} replies</span>
                     </div>
                     <button
                       type="button"
                       disabled
-                      className="mt-3 px-3 py-1.5 rounded-[4px] border border-[#2a2e39] text-[11px] uppercase tracking-wider text-[#787b86] cursor-not-allowed"
+                      className="mt-3 px-3 py-1.5 rounded-[4px] border border-[#D9DDE2] text-[11px] uppercase tracking-wider text-[#667085] cursor-not-allowed"
                       title="Discussion threads will open in a future release"
                     >
                       Join conversation (opening soon)

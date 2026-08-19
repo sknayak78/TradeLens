@@ -48,10 +48,10 @@ export default function SettingsPage() {
     <div data-testid="settings-page" className="p-4 md:p-6">
       <div className="mb-4 flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-white text-xl md:text-2xl font-semibold tracking-tight">
+          <h1 className="text-[#1F2933] text-xl md:text-2xl font-semibold tracking-tight">
             Settings
           </h1>
-          <p className="text-xs text-[#787b86] mt-1">
+          <p className="text-xs text-[#667085] mt-1">
             Configure your TradeLens experience — stored in SQLite.
           </p>
         </div>
@@ -86,7 +86,7 @@ export default function SettingsPage() {
                 value={capital}
                 onChange={(e) => setCapital(e.target.value)}
                 data-testid="settings-capital"
-                className="w-40 h-8 px-2 bg-[#131722] border border-[#2a2e39] rounded-md text-sm text-white font-mono tabular-nums focus:border-[#2962ff]/50 outline-none"
+                className="w-40 h-8 px-2 bg-white border border-[#D9DDE2] rounded-md text-sm text-[#1F2933] font-mono tabular-nums focus:border-[#2962ff]/50 outline-none"
               />
             </Row>
             <Row label="Risk per Trade (%)" divider>
@@ -98,7 +98,7 @@ export default function SettingsPage() {
                 value={risk}
                 onChange={(e) => setRisk(e.target.value)}
                 data-testid="settings-risk-input"
-                className="w-40 h-8 px-2 bg-[#131722] border border-[#2a2e39] rounded-md text-sm text-white font-mono tabular-nums focus:border-[#2962ff]/50 outline-none"
+                className="w-40 h-8 px-2 bg-white border border-[#D9DDE2] rounded-md text-sm text-[#1F2933] font-mono tabular-nums focus:border-[#2962ff]/50 outline-none"
               />
             </Row>
             <div className="pt-3 flex justify-end">
@@ -106,7 +106,7 @@ export default function SettingsPage() {
                 onClick={handleSave}
                 disabled={isUpdating}
                 data-testid="settings-save"
-                className="px-3 py-1.5 rounded-md bg-[#2962ff] hover:bg-[#2962ff]/85 text-white text-xs uppercase tracking-widest transition-colors disabled:opacity-60"
+                className="px-3 py-1.5 rounded-md bg-[#2962ff] hover:bg-[#2962ff]/85 text-[#1F2933] text-xs uppercase tracking-widest transition-colors disabled:opacity-60"
               >
                 {isUpdating ? "Saving…" : "Save Changes"}
               </button>
@@ -123,8 +123,8 @@ export default function SettingsPage() {
                     data-testid={`settings-tf-${tf}`}
                     className={`px-2.5 py-1 rounded text-[11px] font-mono uppercase tracking-wider transition-colors border ${
                       timeframe === tf
-                        ? "bg-[#2962ff]/15 text-white border-[#2962ff]/40"
-                        : "text-[#787b86] border-[#2a2e39] hover:text-[#d1d4dc]"
+                        ? "bg-[#2962ff]/15 text-[#1F2933] border-[#2962ff]/40"
+                        : "text-[#667085] border-[#D9DDE2] hover:text-[#1F2933]"
                     }`}
                   >
                     {tf}
@@ -143,9 +143,9 @@ export default function SettingsPage() {
               <Tile label="Risk" value={`${settings.risk_per_trade}%`} />
               <Tile label="Timeframe" value={settings.preferred_timeframe} />
             </div>
-            <div className="text-[11px] text-[#787b86] mt-3">
+            <div className="text-[11px] text-[#667085] mt-3">
               Per-trade risk ≈{" "}
-              <span className="text-[#d1d4dc] font-mono tabular-nums">
+              <span className="text-[#1F2933] font-mono tabular-nums">
                 ₹
                 {(
                   (settings.capital * settings.risk_per_trade) /
@@ -161,8 +161,8 @@ export default function SettingsPage() {
 
           <PanelCard title="About" testId="settings-about">
             <div className="flex items-start gap-3">
-              <Info size={16} className="text-[#787b86] mt-0.5 shrink-0" />
-              <p className="text-xs text-[#787b86] leading-relaxed">
+              <Info size={16} className="text-[#667085] mt-0.5 shrink-0" />
+              <p className="text-xs text-[#667085] leading-relaxed">
                 TradeLens v1.0 · FastAPI + SQLite backend. Watchlist, trades and
                 settings are persisted server-side. Market and opportunity data
                 are served from static seed values in this demo.
@@ -187,10 +187,10 @@ function Row({
   return (
     <div
       className={`flex items-center justify-between py-3 ${
-        divider ? "border-t border-[#2a2e39]" : ""
+        divider ? "border-t border-[#D9DDE2]" : ""
       }`}
     >
-      <span className="text-sm text-[#d1d4dc]">{label}</span>
+      <span className="text-sm text-[#1F2933]">{label}</span>
       <div>{children}</div>
     </div>
   );
@@ -198,11 +198,11 @@ function Row({
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[4px] border border-[#2a2e39] bg-[#131722] px-3 py-2">
-      <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
+    <div className="rounded-[4px] border border-[#D9DDE2] bg-white px-3 py-2">
+      <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1">
         {label}
       </div>
-      <div className="text-white text-sm">{value}</div>
+      <div className="text-[#1F2933] text-sm">{value}</div>
     </div>
   );
 }

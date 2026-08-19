@@ -19,6 +19,7 @@ export default function TopOpportunities({
 
   return (
     <PanelCard
+      id="learning-opportunities"
       title="Today's Learning Opportunities"
       subtitle="A few stocks worth exploring with the Mentor."
       testId="card-top-opportunities"

@@ -15,11 +15,11 @@ export default function InfoPageLayout({
 }: InfoPageLayoutProps) {
   return (
     <div data-testid={testId} className="min-h-full">
-      <div className="px-4 md:px-6 pt-5 pb-4 border-b border-[#2a2e39]">
-        <h1 className="text-white text-xl md:text-2xl font-semibold tracking-tight">
+      <div className="px-4 md:px-6 pt-5 pb-4 border-b border-[#D9DDE2]">
+        <h1 className="text-[#1F2933] text-xl md:text-2xl font-semibold tracking-tight">
           {title}
         </h1>
-        <p className="text-sm text-[#787b86] mt-1 max-w-3xl">{subtitle}</p>
+        <p className="text-sm text-[#667085] mt-1 max-w-3xl">{subtitle}</p>
       </div>
       <div className="p-4 md:p-6 max-w-4xl">{children}</div>
     </div>
@@ -35,8 +35,8 @@ export function InfoSection({
 }) {
   return (
     <section className="mb-8">
-      <h2 className="text-white text-base font-semibold mb-3">{title}</h2>
-      <div className="text-sm text-[#d1d4dc] leading-relaxed space-y-3">
+      <h2 className="text-[#1F2933] text-base font-semibold mb-3">{title}</h2>
+      <div className="text-sm text-[#1F2933] leading-relaxed space-y-3">
         {children}
       </div>
     </section>
@@ -54,12 +54,12 @@ export function InfoCard({
 }) {
   return (
     <div
-      className={`rounded-[4px] border border-[#2a2e39] bg-[#1e222d] p-4 ${
+      className={`rounded-[4px] border border-[#D9DDE2] bg-white p-4 ${
         accent ? `border-l-2 ${accent}` : ""
       }`}
     >
-      <h3 className="text-white text-sm font-semibold mb-2">{title}</h3>
-      <div className="text-sm text-[#d1d4dc] leading-relaxed space-y-2">
+      <h3 className="text-[#1F2933] text-sm font-semibold mb-2">{title}</h3>
+      <div className="text-sm text-[#1F2933] leading-relaxed space-y-2">
         {children}
       </div>
     </div>

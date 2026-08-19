@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { useCreateTrade } from "@/hooks/useTrades";
+import { showApiError, showSuccess } from "@/lib/feedback";
 
 interface NewTradeDialogProps {
   open: boolean;
@@ -15,7 +16,7 @@ function todayIso(): string {
 export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
   const createTrade = useCreateTrade();
   const [form, setForm] = useState({
-    symbol: "",
+    symbol: "RELIANCE",
     trade_date: todayIso(),
     entry_price: "",
     exit_price: "",
@@ -25,9 +26,9 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
       setForm({
-        symbol: "",
+        symbol: "RELIANCE",
         trade_date: todayIso(),
         entry_price: "",
         exit_price: "",
@@ -51,9 +52,10 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
     if (!(exit > 0)) return setError("Exit price must be greater than 0.");
     if (!(qty > 0)) return setError("Quantity must be greater than 0.");
 
+    const symbol = form.symbol.trim().toUpperCase();
     createTrade.mutate(
       {
-        symbol: form.symbol.trim().toUpperCase(),
+        symbol,
         trade_date: new Date(form.trade_date).toISOString(),
         entry_price: entry,
         exit_price: exit,
@@ -61,8 +63,16 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
         notes: form.notes,
       },
       {
-        onSuccess: () => onClose(),
-        onError: (err: Error) => setError(err.message || "Failed to save trade."),
+        onSuccess: () => {
+          showSuccess("Trade saved.", `${symbol} added to your journal.`);
+          onClose();
+        },
+        onError: (err) => {
+          showApiError("Could not save trade", err);
+          setError(
+            err instanceof Error ? err.message : "Failed to save trade.",
+          );
+        },
       },
     );
   };
@@ -75,17 +85,17 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
       <form
         onSubmit={handleSubmit}
-        className="relative w-full max-w-md bg-[#1e222d] border border-[#2a2e39] rounded-md shadow-2xl tl-fade-in"
+        className="relative w-full max-w-md bg-white border border-[#D9DDE2] rounded-md shadow-2xl tl-fade-in"
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2e39]">
-          <h3 className="text-white text-sm font-semibold tracking-tight uppercase">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#D9DDE2]">
+          <h3 className="text-[#1F2933] text-sm font-semibold tracking-tight uppercase">
             New Trade
           </h3>
           <button
             type="button"
             onClick={onClose}
             data-testid="new-trade-close"
-            className="p-1 rounded-md text-[#787b86] hover:text-white hover:bg-[#2a2e39]"
+            className="p-1 rounded-md text-[#667085] hover:text-[#1F2933] hover:bg-[#F0F1EF]"
           >
             <X size={16} />
           </button>
@@ -98,7 +108,7 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
               onChange={(e) => setForm({ ...form, symbol: e.target.value })}
               placeholder="RELIANCE"
               data-testid="new-trade-symbol"
-              className="w-full h-9 px-3 bg-[#131722] border border-[#2a2e39] rounded-md text-sm text-white focus:border-[#2962ff]/60 outline-none"
+              className="w-full h-9 px-3 bg-white border border-[#D9DDE2] rounded-md text-sm text-[#1F2933] focus:border-[#2962ff]/60 outline-none"
             />
           </Field>
           <Field label="Trade Date">
@@ -107,7 +117,7 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
               value={form.trade_date}
               onChange={(e) => setForm({ ...form, trade_date: e.target.value })}
               data-testid="new-trade-date"
-              className="w-full h-9 px-3 bg-[#131722] border border-[#2a2e39] rounded-md text-sm text-white focus:border-[#2962ff]/60 outline-none"
+              className="w-full h-9 px-3 bg-white border border-[#D9DDE2] rounded-md text-sm text-[#1F2933] focus:border-[#2962ff]/60 outline-none"
             />
           </Field>
           <div className="grid grid-cols-3 gap-2">
@@ -118,7 +128,7 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
                 value={form.entry_price}
                 onChange={(e) => setForm({ ...form, entry_price: e.target.value })}
                 data-testid="new-trade-entry"
-                className="w-full h-9 px-2 bg-[#131722] border border-[#2a2e39] rounded-md text-sm font-mono tabular-nums text-white focus:border-[#2962ff]/60 outline-none"
+                className="w-full h-9 px-2 bg-white border border-[#D9DDE2] rounded-md text-sm font-mono tabular-nums text-[#1F2933] focus:border-[#2962ff]/60 outline-none"
               />
             </Field>
             <Field label="Exit">
@@ -128,7 +138,7 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
                 value={form.exit_price}
                 onChange={(e) => setForm({ ...form, exit_price: e.target.value })}
                 data-testid="new-trade-exit"
-                className="w-full h-9 px-2 bg-[#131722] border border-[#2a2e39] rounded-md text-sm font-mono tabular-nums text-white focus:border-[#2962ff]/60 outline-none"
+                className="w-full h-9 px-2 bg-white border border-[#D9DDE2] rounded-md text-sm font-mono tabular-nums text-[#1F2933] focus:border-[#2962ff]/60 outline-none"
               />
             </Field>
             <Field label="Qty">
@@ -137,7 +147,7 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
                 value={form.quantity}
                 onChange={(e) => setForm({ ...form, quantity: e.target.value })}
                 data-testid="new-trade-qty"
-                className="w-full h-9 px-2 bg-[#131722] border border-[#2a2e39] rounded-md text-sm font-mono tabular-nums text-white focus:border-[#2962ff]/60 outline-none"
+                className="w-full h-9 px-2 bg-white border border-[#D9DDE2] rounded-md text-sm font-mono tabular-nums text-[#1F2933] focus:border-[#2962ff]/60 outline-none"
               />
             </Field>
           </div>
@@ -148,7 +158,7 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
               rows={3}
               placeholder="What did you see? What is your invalidation?"
               data-testid="new-trade-notes"
-              className="w-full px-3 py-2 bg-[#131722] border border-[#2a2e39] rounded-md text-sm text-[#d1d4dc] focus:border-[#2962ff]/60 outline-none resize-none"
+              className="w-full px-3 py-2 bg-white border border-[#D9DDE2] rounded-md text-sm text-[#1F2933] focus:border-[#2962ff]/60 outline-none resize-none"
             />
           </Field>
           {error && (
@@ -160,11 +170,11 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
             </div>
           )}
         </div>
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-[#2a2e39]">
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-[#D9DDE2]">
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 rounded-md text-sm text-[#787b86] hover:text-white hover:bg-[#2a2e39] transition-colors"
+            className="px-3 py-1.5 rounded-md text-sm text-[#667085] hover:text-[#1F2933] hover:bg-[#F0F1EF] transition-colors"
           >
             Cancel
           </button>
@@ -191,7 +201,7 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[10px] uppercase tracking-widest text-[#787b86]">
+      <span className="text-[10px] uppercase tracking-widest text-[#667085]">
         {label}
       </span>
       {children}

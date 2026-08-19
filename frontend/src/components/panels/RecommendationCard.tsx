@@ -80,11 +80,11 @@ export default function RecommendationCard({
     <div className="flex flex-col gap-3" data-testid="recommendation-card">
       <Accordion
         type="multiple"
-        defaultValue={["overview", "technical", "reasoning"]}
-        className="rounded-[4px] border border-[#2a2e39] bg-[#131722]"
+        defaultValue={[]}
+        className="rounded-[4px] border border-[#D9DDE2] bg-white"
       >
-        <AccordionItem value="overview" className="border-[#2a2e39] px-4">
-          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#787b86] hover:no-underline py-3">
+        <AccordionItem value="overview" className="border-[#D9DDE2] px-4">
+          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#667085] hover:no-underline py-3">
             <span className="flex items-center gap-2">
               <Info size={12} />
               Overview
@@ -92,25 +92,25 @@ export default function RecommendationCard({
           </AccordionTrigger>
           <AccordionContent className={`pb-4 border-l-2 pl-3 ${TONE_ACCENT[tone]}`}>
             <p
-              className="text-white text-base md:text-lg font-semibold leading-snug"
+              className="text-[#1F2933] text-base md:text-lg font-semibold leading-snug"
               data-testid="recommendation-verdict"
             >
               {verdict}
             </p>
             <p
-              className="text-[13px] text-[#d1d4dc] leading-relaxed mt-2"
+              className="text-[13px] text-[#1F2933] leading-relaxed mt-2"
               data-testid="recommendation-summary"
             >
               {summary}
             </p>
-            <p className="text-[11px] text-[#787b86] leading-relaxed mt-3">
+            <p className="text-[11px] text-[#667085] leading-relaxed mt-3">
               {RECOMMENDATION_CONTEXT_MESSAGE}
             </p>
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="technical" className="border-[#2a2e39] px-4">
-          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#787b86] hover:no-underline py-3">
+        <AccordionItem value="technical" className="border-[#D9DDE2] px-4">
+          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#667085] hover:no-underline py-3">
             <span className="flex items-center gap-2">
               <Compass size={12} />
               Technical picture
@@ -118,12 +118,12 @@ export default function RecommendationCard({
           </AccordionTrigger>
           <AccordionContent className="pb-4">
             {rationale && (
-              <p className="text-[13px] text-[#d1d4dc] leading-relaxed mb-3">
+              <p className="text-[13px] text-[#1F2933] leading-relaxed mb-3">
                 {rationale}
               </p>
             )}
             {rulesMatched.length > 0 && (
-              <ul className="space-y-1.5 text-[13px] text-[#d1d4dc]">
+              <ul className="space-y-1.5 text-[13px] text-[#1F2933]">
                 {rulesMatched.map((rule) => (
                   <li key={rule} className="flex gap-2">
                     <CheckCircle2 size={12} className="text-[#26a69a] shrink-0 mt-0.5" />
@@ -135,8 +135,8 @@ export default function RecommendationCard({
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="plan" className="border-[#2a2e39] px-4">
-          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#787b86] hover:no-underline py-3">
+        <AccordionItem value="plan" className="border-[#D9DDE2] px-4">
+          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#667085] hover:no-underline py-3">
             <span className="flex items-center gap-2">
               <Target size={12} />
               Trading setup
@@ -144,7 +144,7 @@ export default function RecommendationCard({
           </AccordionTrigger>
           <AccordionContent className="pb-4" data-testid="recommendation-plan">
             <p
-              className="text-[13px] text-[#d1d4dc] leading-relaxed mb-3"
+              className="text-[13px] text-[#1F2933] leading-relaxed mb-3"
               data-testid="recommendation-entry-condition"
             >
               {entryCondition}
@@ -196,8 +196,8 @@ export default function RecommendationCard({
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="reasoning" className="border-[#2a2e39] px-4">
-          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#787b86] hover:no-underline py-3">
+        <AccordionItem value="reasoning" className="border-[#D9DDE2] px-4">
+          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#667085] hover:no-underline py-3">
             <span className="flex items-center gap-2">
               <Info size={12} />
               Market context
@@ -232,7 +232,7 @@ export default function RecommendationCard({
                 <div className="text-[10px] uppercase tracking-widest text-[#f5a623] mb-2">
                   Warnings
                 </div>
-                <ul className="space-y-1.5 text-[13px] text-[#d1d4dc]">
+                <ul className="space-y-1.5 text-[13px] text-[#1F2933]">
                   {warnings.map((warning) => (
                     <li key={warning}>{warning}</li>
                   ))}
@@ -243,7 +243,7 @@ export default function RecommendationCard({
         </AccordionItem>
 
         <AccordionItem value="lesson" className="border-0 px-4">
-          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#787b86] hover:no-underline py-3">
+          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#667085] hover:no-underline py-3">
             <span className="flex items-center gap-2">
               <GraduationCap size={12} />
               Mentor lesson
@@ -251,29 +251,29 @@ export default function RecommendationCard({
           </AccordionTrigger>
           <AccordionContent className="pb-4" data-testid="recommendation-beginner">
             <p
-              className="text-[13px] text-[#d1d4dc] leading-relaxed"
+              className="text-[13px] text-[#1F2933] leading-relaxed"
               data-testid="recommendation-beginner-tip"
             >
               {beginnerTip}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
-              <div className="rounded-[3px] border border-[#2a2e39] bg-[#1a1f2b] px-3 py-2">
-                <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
+              <div className="rounded-[3px] border border-[#D9DDE2] bg-[#F0F1EF] px-3 py-2">
+                <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1">
                   Watch Next
                 </div>
                 <div
-                  className="text-[13px] text-[#d1d4dc]"
+                  className="text-[13px] text-[#1F2933]"
                   data-testid="recommendation-next-trigger"
                 >
                   {nextTrigger}
                 </div>
               </div>
-              <div className="rounded-[3px] border border-[#2a2e39] bg-[#1a1f2b] px-3 py-2">
-                <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
+              <div className="rounded-[3px] border border-[#D9DDE2] bg-[#F0F1EF] px-3 py-2">
+                <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1">
                   Ideal For
                 </div>
                 <div
-                  className="text-[13px] text-[#d1d4dc]"
+                  className="text-[13px] text-[#1F2933]"
                   data-testid="recommendation-ideal-for"
                 >
                   {idealFor}

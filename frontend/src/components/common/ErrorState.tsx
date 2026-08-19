@@ -21,8 +21,8 @@ export default function ErrorState({
       <span className="w-10 h-10 rounded-md bg-[#ef5350]/10 border border-[#ef5350]/30 flex items-center justify-center text-[#ef5350]">
         <AlertTriangle size={18} />
       </span>
-      <p className="text-sm text-[#d1d4dc] font-medium">{title}</p>
-      <p className="text-xs text-[#787b86] max-w-xs">{message}</p>
+      <p className="text-sm text-[#1F2933] font-medium">{title}</p>
+      <p className="text-xs text-[#667085] max-w-xs">{message}</p>
       {onRetry && (
         <button
           onClick={onRetry}

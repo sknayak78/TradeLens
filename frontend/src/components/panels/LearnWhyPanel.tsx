@@ -60,14 +60,14 @@ function LearnWhyContent({
 
   return (
     <div className="flex flex-col gap-3" data-testid={`${testIdPrefix}-content`}>
-      <div className="rounded-[4px] border border-[#2a2e39] bg-[#131722] p-4">
-        <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
+      <div className="rounded-[4px] border border-[#D9DDE2] bg-white p-4">
+        <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1">
           Mentor view · {symbol}
         </div>
-        <p className="text-white text-base font-semibold leading-snug">{verdict}</p>
-        <p className="text-[13px] text-[#d1d4dc] leading-relaxed mt-2">{summary}</p>
+        <p className="text-[#1F2933] text-base font-semibold leading-snug">{verdict}</p>
+        <p className="text-[13px] text-[#1F2933] leading-relaxed mt-2">{summary}</p>
         {reason && (
-          <p className="text-[12px] text-[#787b86] border-t border-[#2a2e39] pt-2 mt-3">
+          <p className="text-[12px] text-[#667085] border-t border-[#D9DDE2] pt-2 mt-3">
             Featured context: {reason}
           </p>
         )}
@@ -76,18 +76,18 @@ function LearnWhyContent({
       <Accordion
         type="multiple"
         defaultValue={["overview", "evidence"]}
-        className="rounded-[4px] border border-[#2a2e39] bg-[#131722] px-3"
+        className="rounded-[4px] border border-[#D9DDE2] bg-white px-3"
       >
-        <AccordionItem value="overview" className="border-[#2a2e39]">
-          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#787b86] hover:no-underline py-3">
+        <AccordionItem value="overview" className="border-[#D9DDE2]">
+          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#667085] hover:no-underline py-3">
             <span className="flex items-center gap-2">
               <Info size={12} />
               What the system sees
             </span>
           </AccordionTrigger>
-          <AccordionContent className="pb-3 text-[13px] text-[#d1d4dc] leading-relaxed">
+          <AccordionContent className="pb-3 text-[13px] text-[#1F2933] leading-relaxed">
             <p>
-              TradeLens classified this stock as <strong className="text-white">{action}</strong>{" "}
+              TradeLens classified this stock as <strong className="text-[#1F2933]">{action}</strong>{" "}
               based on the technical evidence available in the catalogue. The Mentor reads trend,
               momentum, structure, and risk context — then explains the result in plain language.
             </p>
@@ -105,8 +105,8 @@ function LearnWhyContent({
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="evidence" className="border-[#2a2e39]">
-          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#787b86] hover:no-underline py-3">
+        <AccordionItem value="evidence" className="border-[#D9DDE2]">
+          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#667085] hover:no-underline py-3">
             <span className="flex items-center gap-2">
               <Compass size={12} />
               Supporting evidence
@@ -132,8 +132,8 @@ function LearnWhyContent({
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="gaps" className="border-[#2a2e39]">
-          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#787b86] hover:no-underline py-3">
+        <AccordionItem value="gaps" className="border-[#D9DDE2]">
+          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#667085] hover:no-underline py-3">
             <span className="flex items-center gap-2">
               <AlertTriangle size={12} />
               What is missing / risk
@@ -152,7 +152,7 @@ function LearnWhyContent({
                 <div className="text-[10px] uppercase tracking-widest text-[#f5a623] mb-2">
                   Warnings
                 </div>
-                <ul className="space-y-1.5 text-[13px] text-[#d1d4dc]">
+                <ul className="space-y-1.5 text-[13px] text-[#1F2933]">
                   {warnings.map((warning) => (
                     <li key={warning}>{warning}</li>
                   ))}
@@ -163,26 +163,26 @@ function LearnWhyContent({
         </AccordionItem>
 
         <AccordionItem value="lesson" className="border-0">
-          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#787b86] hover:no-underline py-3">
+          <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#667085] hover:no-underline py-3">
             <span className="flex items-center gap-2">
               <GraduationCap size={12} />
               Mentor lesson
             </span>
           </AccordionTrigger>
           <AccordionContent className="pb-3">
-            <p className="text-[13px] text-[#d1d4dc] leading-relaxed">{beginnerTip}</p>
+            <p className="text-[13px] text-[#1F2933] leading-relaxed">{beginnerTip}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
-              <div className="rounded-[3px] border border-[#2a2e39] bg-[#1a1f2b] px-3 py-2">
-                <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
+              <div className="rounded-[3px] border border-[#D9DDE2] bg-[#F0F1EF] px-3 py-2">
+                <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1">
                   Watch next
                 </div>
-                <div className="text-[13px] text-[#d1d4dc]">{nextTrigger}</div>
+                <div className="text-[13px] text-[#1F2933]">{nextTrigger}</div>
               </div>
-              <div className="rounded-[3px] border border-[#2a2e39] bg-[#1a1f2b] px-3 py-2">
-                <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
+              <div className="rounded-[3px] border border-[#D9DDE2] bg-[#F0F1EF] px-3 py-2">
+                <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1">
                   Ideal for
                 </div>
-                <div className="text-[13px] text-[#d1d4dc]">{idealFor}</div>
+                <div className="text-[13px] text-[#1F2933]">{idealFor}</div>
               </div>
             </div>
           </AccordionContent>
@@ -190,7 +190,7 @@ function LearnWhyContent({
       </Accordion>
 
       <EducationalDisclaimer variant="inline" testId={`${testIdPrefix}-disclaimer`} />
-      <p className="text-[11px] text-[#787b86] leading-relaxed">
+      <p className="text-[11px] text-[#667085] leading-relaxed">
         {RECOMMENDATION_CONTEXT_MESSAGE}
       </p>
     </div>

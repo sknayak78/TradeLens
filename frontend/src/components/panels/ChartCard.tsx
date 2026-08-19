@@ -74,8 +74,8 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
               data-testid={`timeframe-${tf}`}
               className={`px-2 py-1 rounded text-[10px] font-mono uppercase tracking-wider transition-colors ${
                 tf === timeframe
-                  ? "bg-[#2962ff]/15 text-[#2962ff]"
-                  : "text-[#787b86] hover:bg-[#2a2e39] hover:text-[#d1d4dc]"
+                  ? "bg-[#2962ff]/10 text-[#2962ff]"
+                  : "text-[#667085] hover:bg-[#F0F1EF] hover:text-[#1F2933]"
               }`}
             >
               {tf}
@@ -101,50 +101,12 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
       )}
       {!isLoading && !isError && stock && stats && (
         <div className="flex flex-col gap-4">
-          {/* Which stock am I looking at? */}
+          {/* Stock → verdict → metadata (hero includes recommendation headline) */}
           <StockHero stock={stock} dayLow={stats.min} dayHigh={stats.max} />
 
-          {/* Symbol chips */}
+          {/* Primary visual evidence — placed immediately after the Mentor context */}
           <div
-            className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1"
-            data-testid="chart-symbol-chips"
-          >
-            {chips.map((s) => (
-              <button
-                key={s}
-                onClick={() => onSelectSymbol?.(s)}
-                data-testid={`chart-symbol-${s}`}
-                className={`px-2 py-1 rounded-[3px] text-[11px] font-mono tracking-wide transition-colors border shrink-0 ${
-                  s === symbol
-                    ? "bg-[#2962ff]/15 text-white border-[#2962ff]/40"
-                    : "bg-transparent text-[#787b86] border-[#2a2e39] hover:text-[#d1d4dc] hover:border-[#3a3f4b]"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-
-          {/* Recommendation — the primary answer to "should I buy today?".
-              Falls back to the legacy insight panel when the engine could not
-              produce a decision. */}
-          {stock.recommendation ? (
-            <>
-              <LearnWhyPanel
-                recommendation={stock.recommendation}
-                symbol={stock.symbol}
-                variant="button"
-                testIdPrefix="detail-learn-why"
-              />
-              <RecommendationCard recommendation={stock.recommendation} />
-            </>
-          ) : (
-            <InsightPanel insight={stock.insight} />
-          )}
-
-          {/* Chart */}
-          <div
-            className="h-56 md:h-64 min-h-[240px] w-full -mx-2 relative"
+            className="h-52 md:h-60 min-h-[220px] w-full -mx-2 relative"
             data-testid="chart-container"
           >
             <ResponsiveContainer width="100%" height="100%">
@@ -153,19 +115,19 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                 margin={{ top: 8, right: 12, bottom: 4, left: 4 }}
               >
                 <CartesianGrid
-                  stroke="#2a2e39"
+                  stroke="var(--tl-border)"
                   strokeDasharray="2 4"
                   vertical={false}
                 />
                 <XAxis
                   dataKey="t"
-                  stroke="#787b86"
+                  stroke="var(--tl-text-muted)"
                   tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
                   tickLine={false}
                   axisLine={false}
                 />
                 <YAxis
-                  stroke="#787b86"
+                  stroke="var(--tl-text-muted)"
                   tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
                   tickLine={false}
                   axisLine={false}
@@ -174,14 +136,15 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                 />
                 <Tooltip
                   contentStyle={{
-                    background: "#131722",
-                    border: "1px solid #2a2e39",
+                    background: "var(--tl-surface)",
+                    border: "1px solid var(--tl-border)",
                     borderRadius: 4,
                     fontFamily: "JetBrains Mono",
                     fontSize: 12,
+                    color: "var(--tl-text)",
                   }}
-                  labelStyle={{ color: "#787b86" }}
-                  itemStyle={{ color: "#d1d4dc" }}
+                  labelStyle={{ color: "var(--tl-text-muted)" }}
+                  itemStyle={{ color: "var(--tl-text)" }}
                   formatter={(v: number) => [
                     `₹${v.toLocaleString("en-IN")}`,
                     "Price",
@@ -217,7 +180,7 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                   stroke={lineColor}
                   strokeWidth={2}
                   dot={false}
-                  activeDot={{ r: 4, fill: lineColor, stroke: "#131722" }}
+                  activeDot={{ r: 4, fill: lineColor, stroke: "var(--tl-surface)" }}
                   isAnimationActive
                   animationDuration={900}
                 />
@@ -225,12 +188,48 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
             </ResponsiveContainer>
           </div>
 
-          {/* Stats + insight */}
+          {/* Quick symbol switcher */}
+          <div
+            className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1"
+            data-testid="chart-symbol-chips"
+          >
+            {chips.map((s) => (
+              <button
+                key={s}
+                onClick={() => onSelectSymbol?.(s)}
+                data-testid={`chart-symbol-${s}`}
+                className={`px-2 py-1 rounded-[3px] text-[11px] font-mono tracking-wide transition-colors border shrink-0 ${
+                  s === symbol
+                    ? "bg-[#2962ff]/10 text-[#1F2933] border-[#2962ff]/40"
+                    : "bg-transparent text-[#667085] border-[#D9DDE2] hover:text-[#1F2933] hover:border-[#C5CAD3]"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+
+          {stock.recommendation ? (
+            <>
+              <LearnWhyPanel
+                recommendation={stock.recommendation}
+                symbol={stock.symbol}
+                variant="button"
+                toggleLabel="Why This View?"
+                testIdPrefix="detail-learn-why"
+              />
+              <RecommendationCard recommendation={stock.recommendation} />
+            </>
+          ) : (
+            <InsightPanel insight={stock.insight} />
+          )}
+
+          {/* Supporting metrics — below progressive disclosure */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <StatTile label="Strength Score">
               <div className="flex items-center gap-2">
                 <span
-                  className="text-white font-mono tabular-nums text-sm font-semibold"
+                  className="text-[#1F2933] font-mono tabular-nums text-sm font-semibold"
                   data-testid="detail-strength-score"
                 >
                   {stock.strengthScore}
@@ -260,10 +259,10 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
 
           {/* Three analysis badges */}
           <div
-            className="rounded-[4px] border border-[#2a2e39] bg-[#131722] px-3 py-2 flex items-center justify-between gap-3 flex-wrap"
+            className="rounded-[4px] border border-[#D9DDE2] bg-white px-3 py-2 flex items-center justify-between gap-3 flex-wrap"
             data-testid="detail-badges"
           >
-            <div className="text-[10px] uppercase tracking-widest text-[#787b86]">
+            <div className="text-[10px] uppercase tracking-widest text-[#667085]">
               {stock.classification}
             </div>
             <AnalysisBadges
@@ -284,18 +283,18 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
 function InsightPanel({ insight }: { insight: string }) {
   return (
     <div
-      className="rounded-[4px] border border-[#2a2e39] bg-[#131722] p-3 flex gap-3"
+      className="rounded-[4px] border border-[#D9DDE2] bg-white p-3 flex gap-3"
       data-testid="ai-insight"
     >
       <span className="mt-0.5 shrink-0 w-7 h-7 rounded-md bg-[#2962ff]/15 border border-[#2962ff]/30 text-[#2962ff] flex items-center justify-center">
         <Sparkles size={14} />
       </span>
       <div>
-        <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
+        <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1">
           Insight
         </div>
         <p
-          className="text-sm text-[#d1d4dc] leading-relaxed"
+          className="text-sm text-[#1F2933] leading-relaxed"
           data-testid="detail-insight"
         >
           {insight}
@@ -313,8 +312,8 @@ function StatTile({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[4px] border border-[#2a2e39] bg-[#131722] px-3 py-2">
-      <div className="text-[10px] uppercase tracking-widest text-[#787b86] mb-1">
+    <div className="rounded-[4px] border border-[#D9DDE2] bg-white px-3 py-2">
+      <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1">
         {label}
       </div>
       <div>{children}</div>

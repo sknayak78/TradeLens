@@ -13,6 +13,20 @@ module.exports = {
         sm: 'calc(var(--radius) - 4px)'
       },
       colors: {
+        tl: {
+          bg: 'var(--tl-bg)',
+          surface: 'var(--tl-surface)',
+          'surface-secondary': 'var(--tl-surface-secondary)',
+          hover: 'var(--tl-surface-hover)',
+          border: 'var(--tl-border)',
+          text: 'var(--tl-text)',
+          hi: 'var(--tl-text-hi)',
+          muted: 'var(--tl-text-muted)',
+          up: 'var(--tl-up)',
+          down: 'var(--tl-down)',
+          blue: 'var(--tl-blue)',
+          warning: 'var(--tl-warning)',
+        },
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         card: {

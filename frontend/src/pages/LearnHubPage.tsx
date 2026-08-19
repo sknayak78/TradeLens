@@ -29,8 +29,8 @@ export default function LearnHubPage() {
                 [
                   "px-3 py-1.5 rounded-[4px] border text-xs font-semibold uppercase tracking-wider transition-colors",
                   isActive
-                    ? "bg-[#2962ff]/15 text-white border-[#2962ff]/40"
-                    : "text-[#787b86] border-[#2a2e39] hover:text-[#d1d4dc] hover:border-[#3a3f4b]",
+                    ? "bg-[#2962ff]/15 text-[#1F2933] border-[#2962ff]/40"
+                    : "text-[#667085] border-[#D9DDE2] hover:text-[#1F2933] hover:border-[#C5CAD3]",
                 ].join(" ")
               }
             >

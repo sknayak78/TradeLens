@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWatchlist, useAddToWatchlist } from "@/hooks/useWatchlist";
 import { marketService, StockSummary } from "@/services/marketService";
+import { showApiError, showSuccess } from "@/lib/feedback";
 
 interface HeaderProps {
   onOpenMobileNav: () => void;
@@ -100,9 +101,18 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
     }, 700);
   };
 
-  const handleAdd = (symbol: string) => {
+  const handleAdd = (symbol: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
     if (watchlistSet.has(symbol)) return;
-    addToWatchlist.mutate(symbol);
+    addToWatchlist.mutate(symbol, {
+      onSuccess: () => {
+        showSuccess(`${symbol} added to your watchlist.`);
+      },
+      onError: (err) => {
+        showApiError(`Could not add ${symbol} to watchlist`, err);
+      },
+    });
   };
 
   const handleViewStock = (symbol: string) => {
@@ -115,12 +125,12 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
 
   return (
     <header
-      className="h-14 flex items-center justify-between px-3 md:px-4 border-b border-[#2a2e39] bg-[#131722] sticky top-0 z-30"
+      className="h-14 flex items-center justify-between px-3 md:px-4 border-b border-[#D9DDE2] bg-white sticky top-0 z-30"
       data-testid="app-header"
     >
       <div className="flex items-center gap-2 md:gap-4 min-w-0">
         <button
-          className="md:hidden p-2 rounded-md hover:bg-[#2a2e39] text-[#787b86]"
+          className="md:hidden p-2 rounded-md hover:bg-[#F0F1EF] text-[#667085]"
           onClick={onOpenMobileNav}
           data-testid="mobile-nav-toggle"
           aria-label="Open menu"
@@ -128,7 +138,7 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
           <Menu size={18} />
         </button>
         <button
-          className="flex items-center gap-2 pr-2 md:pr-4 md:border-r md:border-[#2a2e39] shrink-0"
+          className="flex items-center gap-2 pr-2 md:pr-4 md:border-r md:border-[#D9DDE2] shrink-0"
           onClick={() => navigate("/")}
           data-testid="app-logo"
         >
@@ -136,7 +146,7 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
             <LineChart size={18} strokeWidth={2.5} />
           </span>
           <span className="hidden sm:flex items-baseline gap-1">
-            <span className="text-white font-semibold tracking-tight text-base">
+            <span className="text-[#1F2933] font-semibold tracking-tight text-base">
               Trade
             </span>
             <span className="text-[#2962ff] font-semibold tracking-tight text-base">
@@ -152,7 +162,7 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
         >
           <Search
             size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-[#787b86] pointer-events-none"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-[#667085] pointer-events-none"
           />
           <input
             type="text"
@@ -161,11 +171,11 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
             onFocus={() => debouncedQuery && setOpen(true)}
             placeholder="Search stocks e.g. RELIANCE, TCS…"
             data-testid="stock-search-input"
-            className="w-full h-9 pl-9 pr-3 rounded-md bg-[#1e222d] border border-[#2a2e39] text-sm text-[#d1d4dc] placeholder:text-[#787b86] focus:border-[#2962ff]/60 focus:outline-none transition-colors"
+            className="w-full h-9 pl-9 pr-3 rounded-md bg-white border border-[#D9DDE2] text-sm text-[#1F2933] placeholder:text-[#667085] focus:border-[#2962ff]/60 focus:outline-none transition-colors"
           />
           {open && results.length > 0 && (
             <div
-              className="absolute left-0 right-0 top-11 rounded-md border border-[#2a2e39] bg-[#1e222d] shadow-2xl overflow-hidden z-40 tl-fade-in"
+              className="absolute left-0 right-0 top-11 rounded-md border border-[#D9DDE2] bg-white shadow-2xl overflow-hidden z-40 tl-fade-in"
               data-testid="stock-search-results"
             >
               {results.map((s) => {
@@ -173,7 +183,7 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
                 return (
                   <div
                     key={s.symbol}
-                    className="flex items-center justify-between px-3 py-2 hover:bg-[#2a2e39] transition-colors"
+                    className="flex items-center justify-between px-3 py-2 hover:bg-[#F0F1EF] transition-colors"
                     data-testid={`search-result-${s.symbol}`}
                   >
                     <button
@@ -181,16 +191,16 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
                       onClick={() => handleViewStock(s.symbol)}
                       className="min-w-0 text-left flex-1"
                     >
-                      <div className="text-sm text-white font-medium">
+                      <div className="text-sm text-[#1F2933] font-medium">
                         {s.symbol}
                       </div>
-                      <div className="text-xs text-[#787b86] truncate">
+                      <div className="text-xs text-[#667085] truncate">
                         {s.name}
                       </div>
                     </button>
                     <div className="flex items-center gap-3">
                       <div className="text-right shrink-0">
-                        <div className="font-mono tabular-nums text-sm text-[#d1d4dc]">
+                        <div className="font-mono tabular-nums text-sm text-[#1F2933]">
                           ₹{s.price.toLocaleString("en-IN")}
                         </div>
                         <div
@@ -205,13 +215,14 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
                         </div>
                       </div>
                       <button
-                        onClick={() => handleAdd(s.symbol)}
+                        type="button"
+                        onClick={(e) => handleAdd(s.symbol, e)}
                         disabled={inWatchlist || addToWatchlist.isPending}
                         data-testid={`search-add-${s.symbol}`}
                         className={`p-1.5 rounded-md border transition-colors ${
                           inWatchlist
                             ? "text-[#26a69a] border-[#26a69a]/30 bg-[#26a69a]/10 cursor-default"
-                            : "text-[#787b86] border-[#2a2e39] hover:text-[#2962ff] hover:border-[#2962ff]/40 hover:bg-[#2962ff]/10"
+                            : "text-[#667085] border-[#D9DDE2] hover:text-[#2962ff] hover:border-[#2962ff]/40 hover:bg-[#2962ff]/10"
                         }`}
                         aria-label={
                           inWatchlist ? "Already in watchlist" : "Add to watchlist"
@@ -227,7 +238,7 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
           )}
           {open && debouncedQuery && results.length === 0 && (
             <div
-              className="absolute left-0 right-0 top-11 rounded-md border border-[#2a2e39] bg-[#1e222d] px-3 py-3 text-xs text-[#787b86] z-40 leading-relaxed"
+              className="absolute left-0 right-0 top-11 rounded-md border border-[#D9DDE2] bg-white px-3 py-3 text-xs text-[#667085] z-40 leading-relaxed"
               data-testid="stock-search-empty"
             >
               {SEARCH_EMPTY_MESSAGE}
@@ -238,14 +249,14 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
 
       <div className="flex items-center gap-1 md:gap-2 shrink-0">
         <span
-          className="hidden md:inline text-[10px] text-[#787b86] font-mono tabular-nums mr-1"
+          className="hidden md:inline text-[10px] text-[#667085] font-mono tabular-nums mr-1"
           data-testid="last-refresh-time"
         >
           UPDATED {lastRefresh.toLocaleTimeString("en-IN", { hour12: false })}
         </span>
         <button
           onClick={handleRefresh}
-          className="p-2 rounded-md hover:bg-[#2a2e39] text-[#787b86] hover:text-white transition-colors"
+          className="p-2 rounded-md hover:bg-[#F0F1EF] text-[#667085] hover:text-[#1F2933] transition-colors"
           data-testid="refresh-button"
           aria-label="Refresh data"
         >
@@ -253,7 +264,7 @@ export default function Header({ onOpenMobileNav }: HeaderProps) {
         </button>
         <button
           onClick={() => navigate("/settings")}
-          className="p-2 rounded-md hover:bg-[#2a2e39] text-[#787b86] hover:text-white transition-colors"
+          className="p-2 rounded-md hover:bg-[#F0F1EF] text-[#667085] hover:text-[#1F2933] transition-colors"
           data-testid="settings-button"
           aria-label="Settings"
         >

@@ -41,24 +41,24 @@ export default function OpportunityCard({
     <article
       data-testid={`opportunity-card-${ranking.symbol}`}
       onClick={() => onSelect?.(ranking.symbol)}
-      className={`rounded-[4px] border bg-[#131722] p-3 flex flex-col gap-2.5 transition-colors ${
-        onSelect ? "cursor-pointer hover:border-[#3a3f4b]" : ""
+      className={`rounded-[4px] border bg-[#F6F7F5] p-3 flex flex-col gap-2.5 transition-colors ${
+        onSelect ? "cursor-pointer hover:border-[#C5CAD3]" : ""
       } ${
         active
           ? "border-[#2962ff]/50 bg-[#2962ff]/5 ring-1 ring-[#2962ff]/20"
-          : "border-[#2a2e39]"
+          : "border-[#D9DDE2]"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-white font-semibold leading-snug truncate">
+          <p className="text-[#1F2933] font-semibold leading-snug truncate">
             {ranking.name}
           </p>
-          <p className="text-[11px] text-[#787b86] font-mono mt-0.5">
+          <p className="text-[11px] text-[#667085] font-mono mt-0.5">
             {ranking.symbol}
           </p>
         </div>
-        <div className="font-mono tabular-nums text-sm text-white shrink-0">
+        <div className="font-mono tabular-nums text-sm text-[#1F2933] shrink-0">
           ₹{ranking.price.toLocaleString("en-IN")}
         </div>
       </div>
@@ -71,7 +71,7 @@ export default function OpportunityCard({
 
       {explanation && (
         <p
-          className="text-[12px] text-[#a3a6af] leading-relaxed"
+          className="text-[12px] text-[#667085] leading-relaxed"
           data-testid={`card-explanation-${ranking.symbol}`}
         >
           {explanation}
@@ -96,7 +96,7 @@ export default function OpportunityCard({
           type="button"
           onClick={() => setShowTechnical((value) => !value)}
           data-testid={`card-technical-toggle-${ranking.symbol}`}
-          className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[#787b86] hover:text-[#a3a6af] transition-colors"
+          className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[#667085] hover:text-[#1F2933] transition-colors"
         >
           Technical details
           <ChevronDown
@@ -106,17 +106,17 @@ export default function OpportunityCard({
         </button>
         {showTechnical && (
           <div
-            className="mt-2 rounded-[3px] border border-[#2a2e39] bg-[#1a1f2b] p-2.5 flex flex-col gap-2"
+            className="mt-2 rounded-[3px] border border-[#D9DDE2] bg-[#F0F1EF] p-2.5 flex flex-col gap-2"
             data-testid={`card-technical-${ranking.symbol}`}
           >
             <div className="flex items-center gap-2 flex-wrap">
               <TrendBadge trend={ranking.trend} testId={`card-trend-${ranking.symbol}`} />
               <Stars count={ranking.stars} testId={`card-stars-${ranking.symbol}`} />
-              <span className="text-[10px] font-mono text-[#787b86]">
+              <span className="text-[10px] font-mono text-[#667085]">
                 Score {ranking.strengthScore}
               </span>
             </div>
-            <div className="flex items-center gap-2 flex-wrap text-[10px] font-mono text-[#787b86]">
+            <div className="flex items-center gap-2 flex-wrap text-[10px] font-mono text-[#667085]">
               <span>#{ranking.rank.toString().padStart(2, "0")}</span>
               <span>·</span>
               <span>{ranking.tradeSetup}</span>
@@ -133,7 +133,7 @@ export default function OpportunityCard({
               </span>
             </div>
             {ranking.recommendation?.positives?.[0] && (
-              <p className="text-[11px] text-[#787b86] leading-relaxed border-t border-[#2a2e39] pt-2">
+              <p className="text-[11px] text-[#667085] leading-relaxed border-t border-[#D9DDE2] pt-2">
                 {ranking.recommendation.positives[0]}
               </p>
             )}
