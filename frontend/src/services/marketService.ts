@@ -66,7 +66,9 @@ export const marketService = {
   },
 
   opportunities: async (): Promise<OpportunitiesResponse> => {
-    const { data } = await api.get<OpportunitiesResponse>("/opportunities");
+    const { data } = await api.get<OpportunitiesResponse>("/opportunities", {
+      timeout: 60_000,
+    });
     return data;
   },
 

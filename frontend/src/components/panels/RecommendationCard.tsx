@@ -17,6 +17,7 @@ import {
 import EducationalDisclaimer, {
   RECOMMENDATION_CONTEXT_MESSAGE,
 } from "@/components/common/EducationalDisclaimer";
+import MetricHelp from "@/components/common/MetricHelp";
 import {
   Accordion,
   AccordionContent,
@@ -167,6 +168,17 @@ export default function RecommendationCard({
                   />
                   <LevelTile
                     label="Risk / Reward"
+                    labelHelp={
+                      levels ? (
+                        <MetricHelp
+                          metric="riskReward"
+                          context={{ riskReward: levels.riskReward }}
+                          testId="recommendation-risk-reward-help"
+                        />
+                      ) : (
+                        <MetricHelp metric="riskReward" testId="recommendation-risk-reward-help" />
+                      )
+                    }
                     value={`1 : ${levels.riskReward.toFixed(2)}`}
                     note={riskRewardNote(levels.riskReward)}
                     testId="recommendation-risk-reward"

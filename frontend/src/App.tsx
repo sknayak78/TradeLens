@@ -4,9 +4,9 @@ import Dashboard from "@/pages/Dashboard";
 import WatchlistPage from "@/pages/WatchlistPage";
 import TradingJournal from "@/pages/TradingJournal";
 import SettingsPage from "@/pages/SettingsPage";
-import LearnHubPage from "@/pages/LearnHubPage";
+import HowToUseHubPage from "@/pages/HowToUseHubPage";
 import HowToUsePage from "@/pages/HowToUsePage";
-import FoundersVisionPage from "@/pages/FoundersVisionPage";
+import FoundersVisionHubPage from "@/pages/FoundersVisionHubPage";
 import CommunityPage from "@/pages/CommunityPage";
 import "@/App.css";
 
@@ -16,10 +16,13 @@ export default function App() {
       <Routes>
         <Route element={<AppShell />}>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/learn" element={<LearnHubPage />}>
+          <Route path="/how-to-use" element={<HowToUseHubPage />}>
             <Route index element={<HowToUsePage />} />
-            <Route path="vision" element={<FoundersVisionPage />} />
           </Route>
+          <Route path="/founders-vision" element={<FoundersVisionHubPage />} />
+          {/* Legacy learn routes */}
+          <Route path="/learn" element={<Navigate to="/how-to-use" replace />} />
+          <Route path="/learn/vision" element={<Navigate to="/founders-vision" replace />} />
           <Route path="/community" element={<CommunityPage />} />
           <Route path="/watchlist" element={<WatchlistPage />} />
           <Route path="/journal" element={<TradingJournal />} />

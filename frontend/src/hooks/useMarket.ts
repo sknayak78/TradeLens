@@ -25,6 +25,8 @@ export function useRankings(): UseQueryResult<OpportunitiesResponse, Error> {
   return useQuery({
     queryKey: OPPORTUNITIES_KEY,
     queryFn: marketService.opportunities,
+    staleTime: 60_000,
+    retry: 2,
   });
 }
 
