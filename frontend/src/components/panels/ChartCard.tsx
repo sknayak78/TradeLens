@@ -21,6 +21,10 @@ import RecommendationCard from "@/components/panels/RecommendationCard";
 import LearnWhyPanel from "@/components/panels/LearnWhyPanel";
 import StockHero from "@/components/panels/StockHero";
 import { Sparkles, TrendingUp, TrendingDown } from "lucide-react";
+import {
+  formatChartTooltipLabel,
+  formatChartXAxisTick,
+} from "@/lib/chartAxisFormat";
 
 interface ChartCardProps {
   symbol: string;
@@ -63,12 +67,22 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
     return { first, last, changePct, min, max };
   }, [stock]);
 
+  const activeTimeframe = stock?.timeframe ?? timeframe;
   const isUp = stock?.trend === "bullish";
   const lineColor = isUp
     ? "#26a69a"
     : stock?.trend === "bearish"
       ? "#ef5350"
       : "#2962ff";
+
+  const xAxisTickFormatter = useMemo(() => {
+    if (!stock?.series?.length) {
+      return (value: string) => value;
+    }
+    const series = stock.series;
+    return (value: string, index: number) =>
+      formatChartXAxisTick(activeTimeframe, value, index, series);
+  }, [activeTimeframe, stock?.series]);
 
   return (
     <PanelCard
@@ -146,6 +160,9 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                   tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
                   tickLine={false}
                   axisLine={false}
+                  interval="preserveStartEnd"
+                  minTickGap={24}
+                  tickFormatter={xAxisTickFormatter}
                 />
                 <YAxis
                   stroke="var(--tl-text-muted)"
@@ -165,6 +182,9 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                     color: "var(--tl-text)",
                   }}
                   labelStyle={{ color: "var(--tl-text-muted)" }}
+                  labelFormatter={(value) =>
+                    formatChartTooltipLabel(activeTimeframe, String(value))
+                  }
                   itemStyle={{ color: "var(--tl-text)" }}
                   formatter={(v: number) => [
                     `₹${v.toLocaleString("en-IN")}`,

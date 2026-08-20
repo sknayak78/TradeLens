@@ -5,6 +5,7 @@ import logging
 from datetime import date, datetime, timezone
 from typing import Any, Sequence
 
+from services.chart_axis_labels import series_timestamp
 from services.chart_timeframe import (
     INTRADAY_FALLBACK,
     TimeframeConfig,
@@ -18,26 +19,16 @@ from services.providers.yahoo_finance_provider import YahooFinanceProvider
 logger = logging.getLogger("tradelens.chart_series")
 
 
-def _format_label(bar: OHLCVBar, intraday: bool) -> str:
-    timestamp = bar.timestamp
-    if timestamp.tzinfo is None:
-        timestamp = timestamp.replace(tzinfo=timezone.utc)
-    if intraday:
-        return timestamp.astimezone(timezone.utc).strftime("%H:%M")
-    return timestamp.strftime("%Y-%m-%d")
-
-
 def bars_to_series(
     bars: Sequence[OHLCVBar],
     *,
     max_points: int,
-    intraday: bool,
 ) -> list[dict[str, Any]]:
     if not bars:
         return []
     selected = list(bars)[-max_points:]
     return [
-        {"t": _format_label(bar, intraday), "v": round(bar.close, 2)}
+        {"t": series_timestamp(bar), "v": round(bar.close, 2)}
         for bar in selected
     ]
 
@@ -99,7 +90,7 @@ def build_chart_series(
         bars = _fetch_bars(service, symbol, config)
         if not bars:
             raise RuntimeError("no bars returned for timeframe")
-        series = bars_to_series(bars, max_points=config.max_points, intraday=config.intraday)
+        series = bars_to_series(bars, max_points=config.max_points)
         if series:
             return series, label, used_fallback
         raise RuntimeError("no chart points built for timeframe")
@@ -120,7 +111,6 @@ def build_chart_series(
     series = bars_to_series(
         bars,
         max_points=fallback.max_points,
-        intraday=fallback.intraday,
     )
     if not series:
         raise RuntimeError("no fallback chart points available")
