@@ -21,6 +21,7 @@ import RecommendationCard from "@/components/panels/RecommendationCard";
 import LearnWhyPanel from "@/components/panels/LearnWhyPanel";
 import StockHero from "@/components/panels/StockHero";
 import { Sparkles, TrendingUp, TrendingDown } from "lucide-react";
+import MetricHelp from "@/components/common/MetricHelp";
 import {
   formatChartTooltipLabel,
   formatChartXAxisTick,
@@ -255,11 +256,27 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
               <LearnWhyPanel
                 recommendation={stock.recommendation}
                 symbol={stock.symbol}
+                marketContext={{
+                  price: stock.price,
+                  ema20: stock.ema20,
+                  rsi: stock.rsi,
+                  support: stock.support,
+                  resistance: stock.resistance,
+                }}
                 variant="button"
                 toggleLabel="Why This View?"
                 testIdPrefix="detail-learn-why"
               />
-              <RecommendationCard recommendation={stock.recommendation} />
+              <RecommendationCard
+                recommendation={stock.recommendation}
+                marketContext={{
+                  price: stock.price,
+                  ema20: stock.ema20,
+                  rsi: stock.rsi,
+                  support: stock.support,
+                  resistance: stock.resistance,
+                }}
+              />
             </>
           ) : (
             <InsightPanel insight={stock.insight} />
@@ -278,13 +295,34 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                 <Stars count={stock.stars} testId="detail-stars" />
               </div>
             </StatTile>
-            <StatTile label="Support">
+            <StatTile
+              label="Support"
+              help={
+                <MetricHelp
+                  metric="support"
+                  context={{ value: stock.support, price: stock.price }}
+                  testId="detail-support-help"
+                />
+              }
+            >
               <span className="text-[#26a69a] font-mono tabular-nums text-sm inline-flex items-center gap-1">
                 <TrendingUp size={13} />
                 {stock.support.toLocaleString("en-IN")}
               </span>
             </StatTile>
-            <StatTile label="Resistance">
+            <StatTile
+              label="Resistance"
+              help={
+                <MetricHelp
+                  metric="resistance"
+                  context={{
+                    value: stock.resistance,
+                    price: stock.price,
+                  }}
+                  testId="detail-resistance-help"
+                />
+              }
+            >
               <span className="text-[#ef5350] font-mono tabular-nums text-sm inline-flex items-center gap-1">
                 <TrendingDown size={13} />
                 {stock.resistance.toLocaleString("en-IN")}
@@ -347,15 +385,18 @@ function InsightPanel({ insight }: { insight: string }) {
 
 function StatTile({
   label,
+  help,
   children,
 }: {
   label: string;
+  help?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="rounded-[4px] border border-[#D9DDE2] bg-white px-3 py-2">
-      <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1">
-        {label}
+      <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1 flex items-center gap-1">
+        <span>{label}</span>
+        {help}
       </div>
       <div>{children}</div>
     </div>
