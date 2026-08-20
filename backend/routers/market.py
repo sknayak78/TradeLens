@@ -1,5 +1,6 @@
 """Market-data endpoints backed by the cached provider service."""
 import logging
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -15,9 +16,12 @@ from schemas import (
     StockDetail,
     StockSummary,
     SeriesPoint,
+    DayRangeOut,
 )
 from analysis.service import service as analysis_service
 from recommendation.models import Recommendation
+from services.chart_series import build_chart_series, get_day_ohlc_range
+from services.chart_timeframe import normalize_timeframe
 from services.market_data_service import market_data_service
 from services.opportunity_selection import select_opportunities
 from services.stock_decision import decide
@@ -139,8 +143,9 @@ def opportunities() -> OpportunitiesResponse:
 
 
 @router.get("/stock/{symbol}", response_model=StockDetail)
-def stock_detail(symbol: str) -> StockDetail:
+def stock_detail(symbol: str, timeframe: str = "1W") -> StockDetail:
     symbol = symbol.strip().upper()
+    normalized_timeframe = normalize_timeframe(timeframe)
     stock_result = market_data_service.get_stock(symbol)
     stock = stock_result.data
     if not stock:
@@ -149,6 +154,23 @@ def stock_detail(symbol: str) -> StockDetail:
     insight = market_data_service.get_stock_insight(symbol).data
     analysis = analysis_service.analyse(stock)
     decision = decide(stock, insight)
+
+    try:
+        series, timeframe_label, timeframe_fallback = build_chart_series(
+            market_data_service,
+            symbol,
+            normalized_timeframe,
+        )
+    except Exception as exc:
+        logger.warning(
+            "market.stock_detail.chart_series_failed symbol=%s timeframe=%s",
+            symbol,
+            normalized_timeframe,
+            exc_info=True,
+        )
+        series = insight.get("series", [])
+        timeframe_label = "Recent"
+        timeframe_fallback = True
 
     return StockDetail(
         **stock_result.metadata.to_api_dict(),
@@ -167,7 +189,10 @@ def stock_detail(symbol: str) -> StockDetail:
         support=insight["support"],
         resistance=insight["resistance"],
         aiInsight=insight["aiInsight"],
-        series=[SeriesPoint(**p) for p in insight["series"]],
+        series=[SeriesPoint(**p) for p in series],
+        timeframe=normalized_timeframe,
+        timeframeLabel=timeframe_label,
+        timeframeFallback=timeframe_fallback,
         strengthScore=analysis.strength_score,
         stars=analysis.stars,
         classification=analysis.classification,
@@ -181,3 +206,19 @@ def stock_detail(symbol: str) -> StockDetail:
             else _recommendation_out(decision.recommendation)
         ),
     )
+
+
+@router.get("/stock/{symbol}/day-range", response_model=DayRangeOut)
+def stock_day_range(symbol: str, date: str) -> DayRangeOut:
+    symbol = symbol.strip().upper()
+    try:
+        trade_date = datetime.strptime(date, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD") from exc
+
+    stock = market_data_service.get_stock(symbol).data
+    if not stock:
+        raise HTTPException(status_code=404, detail=f"Stock {symbol} not found")
+
+    payload = get_day_ohlc_range(market_data_service, symbol, trade_date)
+    return DayRangeOut(**payload)

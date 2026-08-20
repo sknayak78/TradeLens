@@ -59,6 +59,8 @@ def test_trades_crud(s):
     payload = {
         "symbol": "RELIANCE",
         "trade_date": "2026-01-15T00:00:00",
+        "exit_date": "2026-01-16T00:00:00",
+        "side": "LONG",
         "entry_price": 100,
         "exit_price": 110,
         "quantity": 10,
@@ -86,10 +88,17 @@ def test_trades_crud(s):
 
 def test_trade_short_side(s):
     r = s.post(f"{API}/trades", json={
-        "symbol": "TCS", "trade_date": "2026-01-15T00:00:00",
-        "entry_price": 200, "exit_price": 180, "quantity": 5, "notes": "TEST_short"
+        "symbol": "TCS",
+        "trade_date": "2026-01-15T00:00:00",
+        "exit_date": "2026-01-16T00:00:00",
+        "side": "SHORT",
+        "entry_price": 200,
+        "exit_price": 180,
+        "quantity": 5,
+        "notes": "TEST_short",
     }, timeout=15).json()
     assert r["side"] == "SHORT"
+    assert r["pnl"] == pytest.approx((200 - 180) * 5, rel=1e-3)
     s.delete(f"{API}/trades/{r['id']}", timeout=15)
 
 

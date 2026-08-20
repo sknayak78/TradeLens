@@ -163,9 +163,9 @@ export default function SettingsPage() {
             <div className="flex items-start gap-3">
               <Info size={16} className="text-[#667085] mt-0.5 shrink-0" />
               <p className="text-xs text-[#667085] leading-relaxed">
-                TradeLens v1.0 · FastAPI + SQLite backend. Watchlist, trades and
-                settings are persisted server-side. Market and opportunity data
-                are served from static seed values in this demo.
+                TradeLens helps you learn how to read the market. Study
+                opportunities, understand the evidence, and reflect on your
+                trading decisions.
               </p>
             </div>
           </PanelCard>

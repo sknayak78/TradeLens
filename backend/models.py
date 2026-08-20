@@ -27,9 +27,12 @@ class Trade(Base):
     trade_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
     entry_price: Mapped[float] = mapped_column(Float, nullable=False)
-    exit_price: Mapped[float] = mapped_column(Float, nullable=False)
+    exit_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    side: Mapped[str] = mapped_column(String(8), default="LONG", nullable=False)
+    exit_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(8), default="CLOSED", nullable=False)
 
 
 class Settings(Base):

@@ -137,7 +137,9 @@ def select_featured_candidates(
         featured.append(candidate)
         selected_symbols.add(candidate.symbol)
 
-    for action in ("Strong Buy", "Buy"):
+    # Ensure each non-empty Mentor action bucket is represented before filling
+    # the remainder, so the section reflects the full learning spectrum.
+    for action in ACTION_PRIORITY:
         if buckets[action] and len(featured) < max_rows:
             _take(buckets[action][0])
 

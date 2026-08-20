@@ -1,24 +1,35 @@
 import { api } from "@/services/api";
 
+export type TradeSide = "LONG" | "SHORT";
+export type TradeStatus = "OPEN" | "CLOSED";
+
 export interface Trade {
   id: number;
   trade_date: string;
   symbol: string;
+  side: TradeSide;
   entry_price: number;
-  exit_price: number;
+  exit_price: number | null;
+  exit_date: string | null;
   quantity: number;
   notes: string;
+  status: TradeStatus;
   pnl: number;
-  side: "LONG" | "SHORT";
+  unrealized_pnl: number | null;
+  current_price: number | null;
+  holding_period_days: number | null;
 }
 
 export interface TradeCreatePayload {
   trade_date: string;
   symbol: string;
+  side: TradeSide;
   entry_price: number;
-  exit_price: number;
+  exit_price?: number | null;
+  exit_date?: string | null;
   quantity: number;
   notes?: string;
+  confirm_out_of_range?: boolean;
 }
 
 export const tradeService = {

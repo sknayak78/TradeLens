@@ -9,7 +9,10 @@ import type { Ranking } from "@/types";
 
 export const MARKET_SUMMARY_KEY = ["market", "summary"] as const;
 export const OPPORTUNITIES_KEY = ["market", "opportunities"] as const;
-export const stockKey = (symbol: string) => ["market", "stock", symbol] as const;
+export const stockKey = (symbol: string, timeframe: string) =>
+  ["market", "stock", symbol, timeframe] as const;
+export const dayRangeKey = (symbol: string, date: string) =>
+  ["market", "day-range", symbol, date] as const;
 
 export function useMarketSummary(): UseQueryResult<MarketSummary, Error> {
   return useQuery({
@@ -28,10 +31,21 @@ export function useRankings(): UseQueryResult<OpportunitiesResponse, Error> {
 // Legacy alias — kept so nothing else breaks.
 export const useOpportunities = useRankings;
 
-export function useStock(symbol: string): UseQueryResult<StockDetail, Error> {
+export function useStock(
+  symbol: string,
+  timeframe: string,
+): UseQueryResult<StockDetail, Error> {
   return useQuery({
-    queryKey: stockKey(symbol),
-    queryFn: () => marketService.stock(symbol),
+    queryKey: stockKey(symbol, timeframe),
+    queryFn: () => marketService.stock(symbol, timeframe),
     enabled: Boolean(symbol),
+  });
+}
+
+export function useDayRange(symbol: string, date: string, enabled = true) {
+  return useQuery({
+    queryKey: dayRangeKey(symbol, date),
+    queryFn: () => marketService.dayRange(symbol, date),
+    enabled: enabled && Boolean(symbol && date),
   });
 }

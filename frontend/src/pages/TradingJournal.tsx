@@ -17,17 +17,38 @@ function formatDate(iso: string): string {
   });
 }
 
+function formatMoney(value: number): string {
+  const prefix = value >= 0 ? "+" : "-";
+  return `${prefix}₹${Math.abs(value).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 export default function TradingJournal() {
   const { data: trades = [], isLoading, isError, error, refetch } = useTrades();
   const deleteTrade = useDeleteTrade();
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const stats = useMemo(() => {
-    if (!trades.length) return { totalPnl: 0, wins: 0, winRate: 0 };
-    const totalPnl = trades.reduce((s, t) => s + t.pnl, 0);
-    const wins = trades.filter((t) => t.pnl > 0).length;
-    const winRate = (wins / trades.length) * 100;
-    return { totalPnl, wins, winRate };
+    const closed = trades.filter((trade) => trade.status === "CLOSED");
+    const open = trades.filter((trade) => trade.status === "OPEN");
+    const realizedPnl = closed.reduce((sum, trade) => sum + trade.pnl, 0);
+    const unrealizedPnl = open.reduce(
+      (sum, trade) => sum + (trade.unrealized_pnl ?? 0),
+      0,
+    );
+    const wins = closed.filter((trade) => trade.pnl > 0).length;
+    const winRate = closed.length ? (wins / closed.length) * 100 : 0;
+    return {
+      realizedPnl,
+      unrealizedPnl,
+      wins,
+      winRate,
+      closedCount: closed.length,
+      openCount: open.length,
+      totalCount: trades.length,
+    };
   }, [trades]);
 
   return (
@@ -42,7 +63,7 @@ export default function TradingJournal() {
           </p>
         </div>
         <button
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-[#2962ff] hover:bg-[#2962ff]/85 text-[#1F2933] text-sm font-medium transition-colors"
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-[#2962ff] hover:bg-[#2962ff]/85 text-white text-sm font-medium transition-colors"
           onClick={() => setDialogOpen(true)}
           data-testid="journal-new-trade"
         >
@@ -51,22 +72,28 @@ export default function TradingJournal() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
         <StatCard
-          label="Net P&L"
-          value={`₹${stats.totalPnl.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          positive={stats.totalPnl >= 0}
-          testId="journal-stat-pnl"
+          label="Realized P&L"
+          value={formatMoney(stats.realizedPnl)}
+          positive={stats.realizedPnl >= 0}
+          testId="journal-stat-realized-pnl"
         />
         <StatCard
-          label="Win Rate"
+          label="Unrealized P&L"
+          value={formatMoney(stats.unrealizedPnl)}
+          positive={stats.unrealizedPnl >= 0}
+          testId="journal-stat-unrealized-pnl"
+        />
+        <StatCard
+          label="Win Rate (Closed)"
           value={`${stats.winRate.toFixed(0)}%`}
           positive={stats.winRate >= 50}
           testId="journal-stat-winrate"
         />
         <StatCard
-          label="Total Trades"
-          value={`${trades.length}`}
+          label="Open / Closed"
+          value={`${stats.openCount} / ${stats.closedCount}`}
           positive
           testId="journal-stat-total"
         />
@@ -98,9 +125,11 @@ export default function TradingJournal() {
               <thead>
                 <tr className="text-[#667085] text-[10px] uppercase tracking-widest">
                   <th className="text-left font-normal px-4 pb-2">ID</th>
-                  <th className="text-left font-normal px-2 pb-2">Date</th>
+                  <th className="text-left font-normal px-2 pb-2">Entry</th>
+                  <th className="text-left font-normal px-2 pb-2">Exit</th>
                   <th className="text-left font-normal px-2 pb-2">Stock</th>
                   <th className="text-left font-normal px-2 pb-2">Side</th>
+                  <th className="text-left font-normal px-2 pb-2">Status</th>
                   <th className="text-right font-normal px-2 pb-2">Entry</th>
                   <th className="text-right font-normal px-2 pb-2">Exit</th>
                   <th className="text-right font-normal px-2 pb-2">Qty</th>
@@ -110,68 +139,95 @@ export default function TradingJournal() {
                 </tr>
               </thead>
               <tbody>
-                {trades.map((t: Trade) => (
-                  <tr
-                    key={t.id}
-                    data-testid={`journal-row-${t.id}`}
-                    className="tl-row border-t border-[#D9DDE2]/60"
-                  >
-                    <td className="px-4 py-2.5 font-mono tabular-nums text-[#667085] text-xs">
-                      T-{t.id.toString().padStart(4, "0")}
-                    </td>
-                    <td className="px-2 py-2.5 text-[#1F2933]">
-                      {formatDate(t.trade_date)}
-                    </td>
-                    <td className="px-2 py-2.5 text-[#1F2933] font-medium">
-                      {t.symbol}
-                    </td>
-                    <td className="px-2 py-2.5">
-                      <span
-                        className={`px-1.5 py-0.5 rounded-[3px] text-[10px] font-mono border ${
-                          t.side === "LONG"
-                            ? "text-[#26a69a] bg-[#26a69a]/10 border-[#26a69a]/25"
-                            : "text-[#ef5350] bg-[#ef5350]/10 border-[#ef5350]/25"
+                {trades.map((trade: Trade) => {
+                  const isOpen = trade.status === "OPEN";
+                  const pnlValue = isOpen
+                    ? trade.unrealized_pnl ?? 0
+                    : trade.pnl;
+                  return (
+                    <tr
+                      key={trade.id}
+                      data-testid={`journal-row-${trade.id}`}
+                      className="tl-row border-t border-[#D9DDE2]/60"
+                    >
+                      <td className="px-4 py-2.5 font-mono tabular-nums text-[#667085] text-xs">
+                        T-{trade.id.toString().padStart(4, "0")}
+                      </td>
+                      <td className="px-2 py-2.5 text-[#1F2933]">
+                        {formatDate(trade.trade_date)}
+                      </td>
+                      <td className="px-2 py-2.5 text-[#1F2933]">
+                        {trade.exit_date ? formatDate(trade.exit_date) : "—"}
+                      </td>
+                      <td className="px-2 py-2.5 text-[#1F2933] font-medium">
+                        {trade.symbol}
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <span
+                          className={`px-1.5 py-0.5 rounded-[3px] text-[10px] font-mono border ${
+                            trade.side === "LONG"
+                              ? "text-[#26a69a] bg-[#26a69a]/10 border-[#26a69a]/25"
+                              : "text-[#ef5350] bg-[#ef5350]/10 border-[#ef5350]/25"
+                          }`}
+                        >
+                          {trade.side}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <span
+                          className={`px-1.5 py-0.5 rounded-[3px] text-[10px] font-mono border ${
+                            isOpen
+                              ? "text-[#2962ff] bg-[#2962ff]/10 border-[#2962ff]/25"
+                              : "text-[#667085] bg-[#F0F1EF] border-[#D9DDE2]"
+                          }`}
+                        >
+                          {trade.status}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
+                        {trade.entry_price.toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
+                        {isOpen
+                          ? trade.current_price?.toLocaleString("en-IN") ?? "—"
+                          : trade.exit_price?.toLocaleString("en-IN") ?? "—"}
+                      </td>
+                      <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
+                        {trade.quantity}
+                      </td>
+                      <td
+                        className={`px-2 py-2.5 text-right font-mono tabular-nums font-semibold ${
+                          pnlValue >= 0 ? "text-[#26a69a]" : "text-[#ef5350]"
                         }`}
                       >
-                        {t.side}
-                      </span>
-                    </td>
-                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
-                      {t.entry_price.toLocaleString("en-IN")}
-                    </td>
-                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
-                      {t.exit_price.toLocaleString("en-IN")}
-                    </td>
-                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
-                      {t.quantity}
-                    </td>
-                    <td
-                      className={`px-2 py-2.5 text-right font-mono tabular-nums font-semibold ${
-                        t.pnl >= 0 ? "text-[#26a69a]" : "text-[#ef5350]"
-                      }`}
-                    >
-                      {t.pnl >= 0 ? "+" : ""}
-                      ₹
-                      {Math.abs(t.pnl).toLocaleString("en-IN", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </td>
-                    <td className="px-4 py-2.5 text-[#667085] text-xs max-w-[240px] truncate">
-                      {t.notes || "—"}
-                    </td>
-                    <td className="px-2 py-2.5">
-                      <button
-                        onClick={() => deleteTrade.mutate(t.id)}
-                        data-testid={`journal-delete-${t.id}`}
-                        className="p-1 rounded-md text-[#667085] hover:text-[#ef5350] hover:bg-[#ef5350]/10 transition-colors"
-                        aria-label={`Delete trade ${t.id}`}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                        {formatMoney(pnlValue)}
+                        {isOpen && (
+                          <div className="text-[10px] font-normal text-[#667085]">
+                            unrealized
+                          </div>
+                        )}
+                        {!isOpen && trade.holding_period_days != null && (
+                          <div className="text-[10px] font-normal text-[#667085]">
+                            {trade.holding_period_days}d hold
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-[#667085] text-xs max-w-[240px] truncate">
+                        {trade.notes || "—"}
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <button
+                          onClick={() => deleteTrade.mutate(trade.id)}
+                          data-testid={`journal-delete-${trade.id}`}
+                          className="p-1 rounded-md text-[#667085] hover:text-[#ef5350] hover:bg-[#ef5350]/10 transition-colors"
+                          aria-label={`Delete trade ${trade.id}`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -180,8 +236,8 @@ export default function TradingJournal() {
         <div className="mt-4 rounded-[4px] border border-dashed border-[#D9DDE2] bg-white p-4 flex items-center gap-3">
           <NotebookPen size={18} className="text-[#667085]" />
           <p className="text-xs text-[#667085]">
-            Trades are stored in your local SQLite database. Add, edit or
-            delete entries — they persist across refreshes.
+            Realized P&amp;L reflects closed trades only. Open positions show
+            unrealized P&amp;L using the latest market price.
           </p>
         </div>
       </PanelCard>

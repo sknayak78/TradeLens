@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { useStock } from "@/hooks/useMarket";
 import { useWatchlist } from "@/hooks/useWatchlist";
+import { useAppSettings } from "@/context/SettingsContext";
 import PanelCard from "@/components/panels/PanelCard";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
@@ -30,8 +31,17 @@ const TIMEFRAMES = ["1D", "1W", "1M", "3M", "1Y"];
 
 export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
   const { data: watchlist = [] } = useWatchlist();
-  const { data: stock, isLoading, isError, error, refetch } = useStock(symbol);
-  const [timeframe, setTimeframe] = useState("1D");
+  const { settings } = useAppSettings();
+  const defaultTimeframe = settings?.preferred_timeframe ?? "1W";
+  const [timeframe, setTimeframe] = useState(defaultTimeframe);
+  const { data: stock, isLoading, isError, error, refetch, isFetching } = useStock(
+    symbol,
+    timeframe,
+  );
+
+  useEffect(() => {
+    setTimeframe(defaultTimeframe);
+  }, [defaultTimeframe, symbol]);
 
   const chips = useMemo(() => {
     const watchlistSymbols = watchlist.map((w) => w.symbol);
@@ -63,7 +73,13 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
   return (
     <PanelCard
       title="Recommendation & Chart"
-      subtitle={stock ? `${stock.symbol} · Intraday` : "Loading…"}
+      subtitle={
+        stock
+          ? `${stock.symbol} · ${stock.timeframeLabel ?? timeframe}${
+              stock.timeframeFallback ? " (daily fallback)" : ""
+            }`
+          : "Loading…"
+      }
       testId="card-chart"
       action={
         <div className="flex items-center gap-1" data-testid="chart-timeframes">
@@ -85,6 +101,11 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
       }
     >
       {isLoading && <LoadingState testId="chart-loading" label="Loading chart" />}
+      {isFetching && !isLoading && stock && (
+        <div className="text-[10px] text-[#667085] uppercase tracking-widest">
+          Updating chart…
+        </div>
+      )}
       {isError && !isLoading && (
         <ErrorState
           message={error?.message ?? "Failed to load chart data."}
