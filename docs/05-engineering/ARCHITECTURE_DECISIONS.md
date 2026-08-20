@@ -84,13 +84,67 @@ score → trend → candidate zone → limits → STRATEGY
 - Strategy vocabulary matches the product brief (plus `No Entry Yet` for Avoid).
 - Frontend / schema literals updated in the same change; no other API shape moves.
 
-See `docs/ER-0016-STRATEGY-DRIVEN.md` for before/after examples.
+See `docs/05-engineering/ER-0016-STRATEGY-DRIVEN-RECOMMENDATION-ENGINE.md`.
+
+---
+
+## ADR-003: Mentor Engine — Trading Setup vs Setup Progress
+
+**Status:** Accepted
+
+**Date:** 07-Aug-2026
+
+### Context
+
+Regenerating a full recommendation from today's close made TradeLens feel like a
+daily signal machine: entry ceilings moved with the last print, risk/reward
+drifted, and Watch Next could fight the plan. Mentors do not reinvent the setup
+every session — they track progress against a plan.
+
+### Decision
+
+Split the engine into two layers:
+
+```
+score → structure → TradingSetup → SetupProgress → action → narrative
+```
+
+1. **Trading Setup** (stable while structure is stable)
+   - Strategy, structural entry zone, stop, targets
+   - Planned entry = midpoint of the structural zone
+   - Risk/reward from planned entry — never from today's close
+   - `structure_key` fingerprints EMA/S/R identity (excludes last price)
+
+2. **Setup Progress** (updates with the session)
+   - Status: ready / in_entry_zone / awaiting_entry / extended /
+     breakout_pending / breakout_holding / invalidated / no_setup
+   - Distances to entry / stop / target
+   - Future-only `next_event` (feeds Watch Next)
+
+Legacy `levels` / `strategy` / `action` / `nextTrigger` remain on the wire and
+are derived from Setup + Progress. Additive `setup` and `progress` objects
+expose the split explicitly.
+
+Narrative sections stay non-repetitive: summary is context only; Watch Next is
+owned by Progress.
+
+### Consequences
+
+- Quiet sessions cannot rewrite entry geometry or R:R.
+- Action can soften from Strong Buy → Watch when price extends above the zone
+  without changing the underlying setup.
+- Breakout plans live on `setup.levels` while legacy `levels` stay null so the
+  card never shows a buy-now zone under a wait-for-breakout thesis.
+- Persistence of setups across days is a future step; within a snapshot, the
+  stability contract is proven by holding structure fixed and varying price.
+
+See `docs/05-engineering/MENTOR_ENGINE_SETUP_PROGRESS.md`.
 
 ---
 
 ## Future ADRs
 
-- ADR-003 Market Data Provider Strategy
-- ADR-004 Technical Indicator Engine
-- ADR-005 AI Decision Engine
-- ADR-006 Paper Trading Architecture
+- ADR-004 Market Data Provider Strategy
+- ADR-005 Technical Indicator Engine
+- ADR-006 AI Decision Engine
+- ADR-007 Paper Trading / Setup Persistence

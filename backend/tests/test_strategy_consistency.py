@@ -41,7 +41,10 @@ BREAKOUT = _bullish(
     support=99.0,
     resistance=101.9,
 )
-#: Reported bug shape: healthy trend, thin headroom, usable-looking zone.
+#: Reported contradiction shape — under the Mentor Engine this is an *extended*
+#: Trend Continuation (structural buy zone below, price pressed up near resistance),
+#: not a Breakout.  The buy-now vs wait-for-breakout contradiction stays impossible
+#: because legacy levels still only publish for zone strategies when in-thesis.
 BREAKOUT_REPORTED = RecommendationInput(
     symbol="TEST",
     price=3445.0,
@@ -92,7 +95,7 @@ def _prose(recommendation: Recommendation) -> str:
         (TREND_CONTINUATION, "Trend Continuation"),
         (PULLBACK, "Pullback"),
         (BREAKOUT, "Breakout"),
-        (BREAKOUT_REPORTED, "Breakout"),
+        (BREAKOUT_REPORTED, "Trend Continuation"),
         (CONSOLIDATION, "Consolidation"),
         (AVOID, "No Entry Yet"),
     ],
@@ -110,36 +113,33 @@ def test_avoid_action_pairs_with_no_entry_strategy():
 # ---------- One-thesis consistency ----------
 
 def test_breakout_never_publishes_a_buy_now_entry_zone():
-    """The reported contradiction: Entry Range vs Wait for breakout."""
-    for market in (BREAKOUT, BREAKOUT_REPORTED):
-        recommendation = engine.recommend(market)
-
-        assert recommendation.strategy == "Breakout"
-        assert recommendation.levels is None
-        assert "close above" in recommendation.next_trigger.lower()
-        assert "before entering" in recommendation.entry_condition.lower()
-        # Must not invite buying between two prices below resistance.
-        assert "between" not in recommendation.entry_condition.lower()
-        prose = _prose(recommendation)
-        assert "pullback into" not in prose
-
-
-def test_breakout_reported_bug_shape_is_one_thesis():
-    recommendation = engine.recommend(BREAKOUT_REPORTED)
+    """Legacy levels stay null for Breakout; the plan lives on setup."""
+    recommendation = engine.recommend(BREAKOUT)
 
     assert recommendation.strategy == "Breakout"
     assert recommendation.levels is None
-    assert recommendation.next_trigger == (
-        "Watch for a daily close above 3,485.00: that would confirm the "
-        "breakout and create a fresh entry."
-    )
-    assert recommendation.entry_condition == (
-        "Wait for a daily close above 3,485.00 before entering."
-    )
-    # The old contradictory zone must not leak into any field.
-    assert recommendation.levels is None
-    assert "3,294" not in recommendation.summary
-    assert "3,294" not in recommendation.entry_condition
+    assert recommendation.setup is not None
+    assert recommendation.setup.levels is not None
+    assert "close above" in recommendation.next_trigger.lower()
+    assert "before entering" in recommendation.entry_condition.lower()
+    assert "between" not in recommendation.entry_condition.lower()
+    prose = _prose(recommendation)
+    assert "pullback into" not in prose
+
+
+def test_extended_near_resistance_is_one_continuation_thesis():
+    """Former Breakout bug shape: extended continuation, not buy-now + wait."""
+    recommendation = engine.recommend(BREAKOUT_REPORTED)
+
+    assert recommendation.strategy == "Trend Continuation"
+    assert recommendation.progress is not None
+    assert recommendation.progress.status == "extended"
+    assert recommendation.action == "Watch"
+    assert recommendation.levels is not None
+    # Watch Next asks for pullback into the structural zone — not a breakout buy.
+    assert "pullback toward" in recommendation.next_trigger.lower()
+    assert "3,294" in recommendation.next_trigger
+    assert "confirm the breakout" not in recommendation.next_trigger.lower()
 
 
 def test_pullback_never_asks_for_a_breakout_as_the_primary_next_step():
@@ -159,11 +159,12 @@ def test_trend_continuation_publishes_a_buy_now_plan():
     assert recommendation.strategy == "Trend Continuation"
     assert recommendation.action in ("Strong Buy", "Buy")
     assert recommendation.levels is not None
-    assert str(recommendation.levels.entry_min) in recommendation.summary
-    assert str(recommendation.levels.stop_loss) in recommendation.summary
+    assert str(int(recommendation.levels.entry_min)) in recommendation.entry_condition.replace(",", "")
+    assert "99.00" in recommendation.entry_condition or str(recommendation.levels.stop_loss) in (
+        recommendation.entry_condition
+    )
     assert "close below" in recommendation.next_trigger.lower()
     assert "confirm the breakout" not in recommendation.next_trigger.lower()
-    assert "pullback into" not in recommendation.next_trigger.lower()
 
 
 def test_consolidation_has_no_entry_and_waits_for_direction():
@@ -173,7 +174,12 @@ def test_consolidation_has_no_entry_and_waits_for_direction():
     assert recommendation.action == "Wait"
     assert recommendation.levels is None
     trigger = recommendation.next_trigger.lower()
-    assert "direction" in trigger or "range" in trigger or "steady" in trigger
+    assert (
+        "direction" in trigger
+        or "range" in trigger
+        or "steady" in trigger
+        or "consolidation" in trigger
+    )
     assert "confirm the breakout" not in trigger
     assert "between" not in recommendation.entry_condition.lower()
 
@@ -197,13 +203,14 @@ def test_entry_condition_and_next_trigger_share_one_thesis(label: str):
     trigger = recommendation.next_trigger.lower()
 
     if recommendation.strategy == "Breakout":
-        assert "close above" in entry and "close above" in trigger
+        assert "close above" in entry or "breakout" in entry
+        assert "close above" in trigger or "holds above" in trigger
     elif recommendation.strategy == "Pullback":
         assert "confirm the breakout" not in entry
         assert "confirm the breakout" not in trigger
     elif recommendation.strategy == "Trend Continuation":
-        assert "entering between" in entry or "consider entering" in entry
-        assert "close below" in trigger
+        assert "entry" in entry or "plan" in entry
+        assert "close below" in trigger or "cancels" in trigger
     elif recommendation.strategy in ("Consolidation", "No Entry Yet"):
         assert recommendation.levels is None
         assert "between" not in entry

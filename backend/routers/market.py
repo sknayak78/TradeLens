@@ -9,11 +9,13 @@ from schemas import (
     IndexItem,
     RecommendationLevels,
     RecommendationOut,
+    SetupProgressOut,
     TodaysFocusItem,
     Ranking,
     StockDetail,
     StockSummary,
     SeriesPoint,
+    TradingSetupOut,
 )
 from analysis.service import service as analysis_service
 from recommendation.models import Recommendation
@@ -25,9 +27,23 @@ logger = logging.getLogger("tradelens.market")
 router = APIRouter(tags=["market"])
 
 
+def _levels_out(levels) -> Optional[RecommendationLevels]:
+    if levels is None:
+        return None
+    return RecommendationLevels(
+        entryMin=levels.entry_min,
+        entryMax=levels.entry_max,
+        stopLoss=levels.stop_loss,
+        target1=levels.target1,
+        target2=levels.target2,
+        riskReward=levels.risk_reward,
+    )
+
+
 def _recommendation_out(recommendation: Recommendation) -> RecommendationOut:
     """Map the pure engine's output onto the API model."""
-    levels = recommendation.levels
+    setup = recommendation.setup
+    progress = recommendation.progress
     return RecommendationOut(
         action=recommendation.action,
         strategy=recommendation.strategy,
@@ -49,13 +65,22 @@ def _recommendation_out(recommendation: Recommendation) -> RecommendationOut:
         rationale=recommendation.rationale,
         rulesMatched=recommendation.rules_matched,
         warnings=recommendation.warnings,
-        levels=None if levels is None else RecommendationLevels(
-            entryMin=levels.entry_min,
-            entryMax=levels.entry_max,
-            stopLoss=levels.stop_loss,
-            target1=levels.target1,
-            target2=levels.target2,
-            riskReward=levels.risk_reward,
+        levels=_levels_out(recommendation.levels),
+        setup=None if setup is None else TradingSetupOut(
+            strategy=setup.strategy,
+            trend=setup.trend,
+            structureKey=setup.structure_key,
+            plannedEntry=setup.planned_entry,
+            levels=_levels_out(setup.levels),
+            score=setup.score,
+        ),
+        progress=None if progress is None else SetupProgressOut(
+            status=progress.status,
+            price=progress.price,
+            distanceToEntryPct=progress.distance_to_entry_pct,
+            distanceToStopPct=progress.distance_to_stop_pct,
+            distanceToTarget1Pct=progress.distance_to_target1_pct,
+            nextEvent=progress.next_event,
         ),
     )
 
