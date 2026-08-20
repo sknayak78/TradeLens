@@ -14,7 +14,7 @@ export default function LoadingState({
   return (
     <div
       data-testid={testId}
-      className={`flex items-center justify-center gap-2 text-[#787b86] ${
+      className={`flex items-center justify-center gap-2 text-[#667085] ${
         compact ? "py-6" : "py-10"
       }`}
     >

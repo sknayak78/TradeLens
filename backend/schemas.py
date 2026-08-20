@@ -55,12 +55,17 @@ class WatchlistEnriched(BaseModel):
 # ---------- Trades ----------
 
 class TradeCreate(BaseModel):
-    trade_date: datetime
+    model_config = ConfigDict(populate_by_name=True)
+
+    trade_date: datetime = Field(..., description="Entry date for the trade.")
     symbol: str = Field(..., min_length=1, max_length=32)
+    side: Literal["LONG", "SHORT"] = "LONG"
     entry_price: float = Field(..., gt=0)
-    exit_price: float = Field(..., gt=0)
+    exit_price: Optional[float] = Field(default=None, gt=0)
+    exit_date: Optional[datetime] = None
     quantity: int = Field(..., gt=0)
     notes: str = ""
+    confirm_out_of_range: bool = False
 
 
 class TradeOut(BaseModel):
@@ -69,12 +74,17 @@ class TradeOut(BaseModel):
     id: int
     trade_date: datetime
     symbol: str
+    side: Literal["LONG", "SHORT"]
     entry_price: float
-    exit_price: float
+    exit_price: Optional[float] = None
+    exit_date: Optional[datetime] = None
     quantity: int
     notes: str
+    status: Literal["OPEN", "CLOSED"] = "CLOSED"
     pnl: float = 0.0
-    side: Literal["LONG", "SHORT"] = "LONG"
+    unrealized_pnl: Optional[float] = None
+    current_price: Optional[float] = None
+    holding_period_days: Optional[int] = None
 
 
 # ---------- Settings ----------
@@ -135,6 +145,15 @@ class Opportunity(BaseModel):
 class SeriesPoint(BaseModel):
     t: str
     v: float
+
+
+class DayRangeOut(BaseModel):
+    symbol: str
+    date: str
+    available: bool
+    low: Optional[float] = None
+    high: Optional[float] = None
+    message: Optional[str] = None
 
 
 class StockSummary(MarketMetadata):
@@ -234,6 +253,9 @@ class StockDetail(MarketMetadata):
     resistance: float
     aiInsight: str
     series: List[SeriesPoint]
+    timeframe: str = "1W"
+    timeframeLabel: str = "1 Week"
+    timeframeFallback: bool = False
     # Legacy analysis fields — deprecated, never inputs to the engine.
     strengthScore: int = _legacy_field()
     stars: int = _legacy_field()
@@ -265,6 +287,20 @@ class Ranking(MarketMetadata):
     riskLevel: Literal["Low", "Medium", "High"] = _legacy_field()
     suggestedAction: str = _legacy_field()
     insight: str = _legacy_field()
+    recommendation: Optional["RecommendationOut"] = Field(
+        default=None,
+        description="Authoritative Mentor recommendation for this featured row.",
+    )
+
+
+class OpportunitiesResponse(MarketMetadata):
+    """Featured opportunity rows plus universe-wide Mentor action counts."""
+
+    rankings: List[Ranking]
+    actionCounts: dict[str, int] = Field(
+        ...,
+        description="Count of each Mentor action across all eligible candidates.",
+    )
 
 
 class WatchlistAnalysis(MarketMetadata):

@@ -87,6 +87,7 @@ export interface Ranking {
   suggestedAction: SuggestedAction;
   insight: string;
   reason: string;
+  recommendation?: Recommendation | null;
 }
 
 // Kept for legacy usage — Opportunity is now the Ranking payload.

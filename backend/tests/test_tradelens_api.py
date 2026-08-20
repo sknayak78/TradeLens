@@ -59,6 +59,8 @@ def test_trades_crud(s):
     payload = {
         "symbol": "RELIANCE",
         "trade_date": "2026-01-15T00:00:00",
+        "exit_date": "2026-01-16T00:00:00",
+        "side": "LONG",
         "entry_price": 100,
         "exit_price": 110,
         "quantity": 10,
@@ -86,10 +88,17 @@ def test_trades_crud(s):
 
 def test_trade_short_side(s):
     r = s.post(f"{API}/trades", json={
-        "symbol": "TCS", "trade_date": "2026-01-15T00:00:00",
-        "entry_price": 200, "exit_price": 180, "quantity": 5, "notes": "TEST_short"
+        "symbol": "TCS",
+        "trade_date": "2026-01-15T00:00:00",
+        "exit_date": "2026-01-16T00:00:00",
+        "side": "SHORT",
+        "entry_price": 200,
+        "exit_price": 180,
+        "quantity": 5,
+        "notes": "TEST_short",
     }, timeout=15).json()
     assert r["side"] == "SHORT"
+    assert r["pnl"] == pytest.approx((200 - 180) * 5, rel=1e-3)
     s.delete(f"{API}/trades/{r['id']}", timeout=15)
 
 
@@ -128,9 +137,14 @@ def test_opportunities(s):
     r = s.get(f"{API}/opportunities", timeout=15)
     assert r.status_code == 200
     data = r.json()
-    assert len(data) == 10
+    assert "rankings" in data and "actionCounts" in data
+    rankings = data["rankings"]
+    action_counts = data["actionCounts"]
+    assert len(rankings) == 10
+    assert isinstance(action_counts, dict)
+    assert sum(action_counts.values()) >= len(rankings)
     for k in ["symbol", "name", "strengthScore", "trend", "price", "changePct", "reason"]:
-        assert k in data[0], f"missing {k}"
+        assert k in rankings[0], f"missing {k}"
 
 
 def test_stock_detail_curated(s):
@@ -201,11 +215,16 @@ def test_rankings_shape_and_order(s):
     r = s.get(f"{API}/opportunities", timeout=15)
     assert r.status_code == 200
     data = r.json()
-    assert len(data) == 10
+    assert "rankings" in data and "actionCounts" in data
+    rankings = data["rankings"]
+    action_counts = data["actionCounts"]
+    assert len(rankings) == 10
+    assert isinstance(action_counts, dict)
+    assert sum(action_counts.values()) >= len(rankings)
     required = ["rank", "symbol", "name", "price", "changePct", "strengthScore",
                 "stars", "classification", "trend", "tradeSetup", "riskLevel",
                 "suggestedAction", "insight", "reason"]
-    for i, row in enumerate(data):
+    for i, row in enumerate(rankings):
         for k in required:
             assert k in row, f"row {i} missing {k}"
         assert row["rank"] == i + 1
@@ -217,9 +236,9 @@ def test_rankings_shape_and_order(s):
         low = row["insight"].lower()
         for banned in ("guaranteed", "certain", "sure shot"):
             assert banned not in low
-    # scores descending
-    scores = [row["strengthScore"] for row in data]
-    assert scores == sorted(scores, reverse=True), f"not descending: {scores}"
+    # Featured rows are ranked 1..N; ordering follows Mentor action priority.
+    ranks = [row["rank"] for row in rankings]
+    assert ranks == list(range(1, len(rankings) + 1))
 
 
 # --- Stock detail analysis fields ---

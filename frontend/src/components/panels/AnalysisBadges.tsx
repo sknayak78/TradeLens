@@ -15,7 +15,7 @@ function Badge({ label, value, dot, color, testId }: BadgeProps) {
       className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-[3px] border text-[10px] font-mono uppercase tracking-wider ${color}`}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-      <span className="text-[#787b86]">{label}</span>
+      <span className="text-[#667085]">{label}</span>
       <span className="font-semibold">{value}</span>
     </span>
   );
@@ -24,7 +24,7 @@ function Badge({ label, value, dot, color, testId }: BadgeProps) {
 const TREND_STYLE: Record<Trend, string> = {
   bullish: "text-[#26a69a] bg-[#26a69a]/10 border-[#26a69a]/25",
   bearish: "text-[#ef5350] bg-[#ef5350]/10 border-[#ef5350]/25",
-  neutral: "text-[#787b86] bg-[#787b86]/10 border-[#787b86]/25",
+  neutral: "text-[#667085] bg-[#667085]/10 border-[#667085]/25",
 };
 
 const RISK_STYLE: Record<RiskLevel, string> = {
@@ -79,7 +79,7 @@ export default function AnalysisBadges({
             ? "bg-[#26a69a]"
             : trend === "bearish"
               ? "bg-[#ef5350]"
-              : "bg-[#787b86]"
+              : "bg-[#667085]"
         }
         color={TREND_STYLE[trend]}
         testId={`${testIdPrefix}-trend`}
@@ -111,33 +111,42 @@ export function Stars({ count, testId }: { count: number; testId?: string }) {
       aria-label={`${filled} out of 5 stars`}
     >
       {"★".repeat(filled)}
-      <span className="text-[#2a2e39]">{"★".repeat(5 - filled)}</span>
+      <span className="text-[#D9DDE2]">{"★".repeat(5 - filled)}</span>
     </span>
   );
 }
 
 const ACTION_STYLE: Record<string, string> = {
-  "Buy on Breakout": "text-[#26a69a] bg-[#26a69a]/10 border-[#26a69a]/25",
+  "Strong Buy": "text-[#26a69a] bg-[#26a69a]/10 border-[#26a69a]/25",
+  "Buy": "text-[#26a69a] bg-[#26a69a]/10 border-[#26a69a]/25",
   "Watch": "text-[#2962ff] bg-[#2962ff]/10 border-[#2962ff]/25",
   "Wait": "text-[#f5a623] bg-[#f5a623]/10 border-[#f5a623]/25",
   "Avoid": "text-[#ef5350] bg-[#ef5350]/10 border-[#ef5350]/25",
+  "Buy on Breakout": "text-[#26a69a] bg-[#26a69a]/10 border-[#26a69a]/25",
 };
 
 export function ActionPill({
   action,
   testId,
+  mentorView = false,
 }: {
   action: string;
   testId?: string;
+  mentorView?: boolean;
 }) {
+  const label = mentorView ? `Mentor view: ${action}` : action;
   return (
     <span
       data-testid={testId}
-      className={`inline-flex items-center px-2 py-0.5 rounded-[3px] border text-[10px] font-mono uppercase tracking-wider ${
-        ACTION_STYLE[action] || "text-[#d1d4dc] bg-[#2a2e39]/40 border-[#2a2e39]"
+      className={`inline-flex items-center px-2 py-0.5 rounded-[3px] border ${
+        mentorView
+          ? "text-[11px] normal-case tracking-normal"
+          : "text-[10px] font-mono uppercase tracking-wider"
+      } ${
+        ACTION_STYLE[action] || "text-[#1F2933] bg-[#D9DDE2]/40 border-[#D9DDE2]"
       }`}
     >
-      {action}
+      {label}
     </span>
   );
 }

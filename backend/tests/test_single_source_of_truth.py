@@ -155,7 +155,7 @@ def test_rankings_and_catalog_trends_mirror_the_recommendation(
     served(action)
     expected = decide(_row(action)).trend
 
-    rankings: List[Ranking] = market_router.opportunities()
+    rankings: List[Ranking] = market_router.opportunities().rankings
     catalog = market_router.list_stocks()
 
     assert [r.trend for r in rankings] == [expected]

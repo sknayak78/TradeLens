@@ -72,7 +72,7 @@ export default function RecommendationHeadline({
         </div>
       </div>
       <p
-        className="text-[11px] text-[#787b86] leading-relaxed max-w-2xl"
+        className="text-[11px] text-[#667085] leading-relaxed max-w-2xl"
         data-testid="recommendation-confidence-help"
       >
         Confidence indicates how strongly the available technical indicators

@@ -5,16 +5,18 @@
 @tailwind utilities;
 
 :root {
-  --tl-bg: #131722;
-  --tl-surface: #1e222d;
-  --tl-surface-hover: #2a2e39;
-  --tl-border: #2a2e39;
-  --tl-text: #d1d4dc;
-  --tl-text-hi: #ffffff;
-  --tl-text-muted: #787b86;
+  --tl-bg: #f6f7f5;
+  --tl-surface: #ffffff;
+  --tl-surface-secondary: #f0f1ef;
+  --tl-surface-hover: #f0f1ef;
+  --tl-border: #d9dde2;
+  --tl-text: #1f2933;
+  --tl-text-hi: #1f2933;
+  --tl-text-muted: #667085;
   --tl-up: #26a69a;
   --tl-down: #ef5350;
   --tl-blue: #2962ff;
+  --tl-warning: #f5a623;
 }
 
 html,
@@ -49,16 +51,16 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2a2e39;
+  background: #d9dde2;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #363a45;
+  background: #c5cad3;
 }
 
 ::selection {
-  background: rgba(41, 98, 255, 0.35);
-  color: #ffffff;
+  background: rgba(41, 98, 255, 0.2);
+  color: #1f2933;
 }
 
 @keyframes tl-draw {
@@ -98,7 +100,7 @@ body {
   transition: background-color 150ms ease-in-out;
 }
 .tl-row:hover {
-  background-color: #2a2e39;
+  background-color: var(--tl-surface-hover);
 }
 
 @keyframes tl-fade-in {

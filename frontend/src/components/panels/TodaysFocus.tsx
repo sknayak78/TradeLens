@@ -53,7 +53,7 @@ export default function TodaysFocus() {
               <div
                 key={item.key}
                 data-testid={`focus-${item.key}`}
-                className="rounded-[4px] border border-[#2a2e39] bg-[#131722] p-3 flex flex-col gap-2 hover:border-[#3a3f4b] transition-colors"
+                className="rounded-[4px] border border-[#D9DDE2] bg-white p-3 flex flex-col gap-2 hover:border-[#C5CAD3] transition-colors"
               >
                 <div className="flex items-center justify-between">
                   <span
@@ -73,12 +73,12 @@ export default function TodaysFocus() {
                 </div>
                 <div className="flex items-baseline justify-between gap-2">
                   <span
-                    className="text-white text-base font-semibold tracking-tight"
+                    className="text-[#1F2933] text-base font-semibold tracking-tight"
                     data-testid={`focus-${item.key}-symbol`}
                   >
                     {item.symbol}
                   </span>
-                  <span className="text-[11px] text-[#787b86] truncate max-w-[130px] text-right">
+                  <span className="text-[11px] text-[#667085] truncate max-w-[130px] text-right">
                     {item.name}
                   </span>
                 </div>

@@ -20,7 +20,7 @@ export default function TrendBadge({
     ? "text-[#26a69a] bg-[#26a69a]/10 border-[#26a69a]/25"
     : isDown
       ? "text-[#ef5350] bg-[#ef5350]/10 border-[#ef5350]/25"
-      : "text-[#787b86] bg-[#787b86]/10 border-[#787b86]/25";
+      : "text-[#667085] bg-[#667085]/10 border-[#667085]/25";
   const Icon = isUp ? ArrowUpRight : isDown ? ArrowDownRight : Minus;
   const label = isUp ? "Bullish" : isDown ? "Bearish" : "Neutral";
   const pad = size === "sm" ? "px-2 py-1 text-xs" : "px-1.5 py-0.5 text-[11px]";
