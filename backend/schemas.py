@@ -68,6 +68,20 @@ class TradeCreate(BaseModel):
     confirm_out_of_range: bool = False
 
 
+class TradeUpdate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    trade_date: datetime = Field(..., description="Entry date for the trade.")
+    symbol: str = Field(..., min_length=1, max_length=32)
+    side: Literal["LONG", "SHORT"] = "LONG"
+    entry_price: float = Field(..., gt=0)
+    exit_price: Optional[float] = Field(default=None, gt=0)
+    exit_date: Optional[datetime] = None
+    quantity: int = Field(..., gt=0)
+    notes: str = ""
+    confirm_out_of_range: bool = False
+
+
 class TradeOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

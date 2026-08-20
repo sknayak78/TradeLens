@@ -39,5 +39,5 @@ export default function EducationalDisclaimer({
 }
 
 export const RECOMMENDATION_CONTEXT_MESSAGE =
-  "Mentor classifications describe what the available evidence suggests for learning. " +
+  "TradeLens Mentor classifications describe what the available evidence suggests for learning. " +
   "They are not personalized investment advice or trade instructions.";

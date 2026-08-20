@@ -32,6 +32,8 @@ export interface TradeCreatePayload {
   confirm_out_of_range?: boolean;
 }
 
+export interface TradeUpdatePayload extends TradeCreatePayload {}
+
 export const tradeService = {
   list: async (): Promise<Trade[]> => {
     const { data } = await api.get<Trade[]>("/trades");
@@ -40,6 +42,11 @@ export const tradeService = {
 
   create: async (payload: TradeCreatePayload): Promise<Trade> => {
     const { data } = await api.post<Trade>("/trades", payload);
+    return data;
+  },
+
+  update: async (id: number, payload: TradeUpdatePayload): Promise<Trade> => {
+    const { data } = await api.put<Trade>(`/trades/${id}`, payload);
     return data;
   },
 

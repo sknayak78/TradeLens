@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Trade
-from schemas import TradeCreate, TradeOut
+from schemas import TradeCreate, TradeOut, TradeUpdate
 from services.chart_series import get_day_ohlc_range
 from services.market_data_service import market_data_service
 
@@ -89,7 +89,7 @@ def _validate_price_range(
     )
 
 
-def _validate_trade_payload(payload: TradeCreate) -> tuple[str, str]:
+def _validate_trade_payload(payload: TradeCreate | TradeUpdate) -> tuple[str, str]:
     symbol = _validate_symbol(payload.symbol)
     has_exit_date = payload.exit_date is not None
     has_exit_price = payload.exit_price is not None
@@ -192,6 +192,31 @@ def create_trade(payload: TradeCreate, db: Session = Depends(get_db)) -> TradeOu
         status=status_value,
     )
     db.add(trade)
+    db.commit()
+    db.refresh(trade)
+    return _to_out(trade)
+
+
+@router.put("/{trade_id}", response_model=TradeOut)
+def update_trade(
+    trade_id: int,
+    payload: TradeUpdate,
+    db: Session = Depends(get_db),
+) -> TradeOut:
+    trade = db.get(Trade, trade_id)
+    if not trade:
+        raise HTTPException(status_code=404, detail=f"Trade {trade_id} not found")
+
+    symbol, status_value = _validate_trade_payload(payload)
+    trade.trade_date = payload.trade_date
+    trade.symbol = symbol
+    trade.entry_price = payload.entry_price
+    trade.exit_price = payload.exit_price if status_value == "CLOSED" else None
+    trade.exit_date = payload.exit_date if status_value == "CLOSED" else None
+    trade.quantity = payload.quantity
+    trade.notes = payload.notes or ""
+    trade.side = payload.side
+    trade.status = status_value
     db.commit()
     db.refresh(trade)
     return _to_out(trade)
