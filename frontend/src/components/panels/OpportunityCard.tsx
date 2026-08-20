@@ -84,6 +84,7 @@ export default function OpportunityCard({
             recommendation={ranking.recommendation}
             symbol={ranking.symbol}
             reason={ranking.reason}
+            marketContext={{ price: ranking.price }}
             variant="button"
             toggleLabel="Why This View?"
             testIdPrefix={`card-learn-why-${ranking.symbol}`}
