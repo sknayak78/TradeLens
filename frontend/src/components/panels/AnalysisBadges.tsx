@@ -1,4 +1,5 @@
 import type { Trend, TradeSetup, RiskLevel } from "@/types";
+import { TRADELENS_MENTOR } from "@/lib/mentorPresentation";
 
 interface BadgeProps {
   label: string;
@@ -134,19 +135,29 @@ export function ActionPill({
   testId?: string;
   mentorView?: boolean;
 }) {
-  const label = mentorView ? `Mentor view: ${action}` : action;
+  const tone =
+    ACTION_STYLE[action] || "text-[#1F2933] bg-[#D9DDE2]/40 border-[#D9DDE2]";
+
+  if (mentorView) {
+    return (
+      <div
+        data-testid={testId}
+        className={`inline-flex flex-col rounded-[4px] border px-3 py-2 ${tone}`}
+      >
+        <span className="text-[10px] uppercase tracking-widest text-[#667085] leading-none mb-1">
+          {TRADELENS_MENTOR}
+        </span>
+        <span className="text-sm font-bold text-[#1F2933] leading-tight">{action}</span>
+      </div>
+    );
+  }
+
   return (
     <span
       data-testid={testId}
-      className={`inline-flex items-center px-2 py-0.5 rounded-[3px] border ${
-        mentorView
-          ? "text-[11px] normal-case tracking-normal"
-          : "text-[10px] font-mono uppercase tracking-wider"
-      } ${
-        ACTION_STYLE[action] || "text-[#1F2933] bg-[#D9DDE2]/40 border-[#D9DDE2]"
-      }`}
+      className={`inline-flex items-center px-2 py-0.5 rounded-[3px] border text-[10px] font-mono uppercase tracking-wider ${tone}`}
     >
-      {label}
+      {action}
     </span>
   );
 }

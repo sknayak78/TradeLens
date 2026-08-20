@@ -7,6 +7,13 @@ import {
   Target,
 } from "lucide-react";
 import type { Recommendation } from "@/types";
+import type { MarketContext } from "@/lib/mentorPresentation";
+import {
+  humanizeRule,
+  humanizeWarning,
+  TRADELENS_MENTOR,
+} from "@/lib/mentorPresentation";
+import { RuleEvidenceCard, WarningEvidenceCard } from "@/components/panels/MentorEvidence";
 import {
   ACTION_TONE,
   LevelTile,
@@ -45,6 +52,7 @@ function money(value: number): string {
 
 interface RecommendationCardProps {
   recommendation: Recommendation;
+  marketContext?: MarketContext;
 }
 
 /**
@@ -53,6 +61,7 @@ interface RecommendationCardProps {
  */
 export default function RecommendationCard({
   recommendation,
+  marketContext = {},
 }: RecommendationCardProps) {
   const {
     action,
@@ -123,12 +132,12 @@ export default function RecommendationCard({
               </p>
             )}
             {rulesMatched.length > 0 && (
-              <ul className="space-y-1.5 text-[13px] text-[#1F2933]">
+              <ul className="space-y-2">
                 {rulesMatched.map((rule) => (
-                  <li key={rule} className="flex gap-2">
-                    <CheckCircle2 size={12} className="text-[#26a69a] shrink-0 mt-0.5" />
-                    <span>{rule}</span>
-                  </li>
+                  <RuleEvidenceCard
+                    key={rule}
+                    rule={humanizeRule(rule, marketContext)}
+                  />
                 ))}
               </ul>
             )}
@@ -232,9 +241,12 @@ export default function RecommendationCard({
                 <div className="text-[10px] uppercase tracking-widest text-[#f5a623] mb-2">
                   Warnings
                 </div>
-                <ul className="space-y-1.5 text-[13px] text-[#1F2933]">
+                <ul className="space-y-2">
                   {warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
+                    <WarningEvidenceCard
+                      key={warning}
+                      warning={humanizeWarning(warning, marketContext, levels)}
+                    />
                   ))}
                 </ul>
               </div>
@@ -246,7 +258,7 @@ export default function RecommendationCard({
           <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#667085] hover:no-underline py-3">
             <span className="flex items-center gap-2">
               <GraduationCap size={12} />
-              Mentor lesson
+              {TRADELENS_MENTOR} lesson
             </span>
           </AccordionTrigger>
           <AccordionContent className="pb-4" data-testid="recommendation-beginner">

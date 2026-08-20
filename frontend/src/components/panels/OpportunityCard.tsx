@@ -50,7 +50,7 @@ export default function OpportunityCard({
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-[#1F2933] font-semibold leading-snug truncate">
             {ranking.name}
           </p>
@@ -84,6 +84,7 @@ export default function OpportunityCard({
             recommendation={ranking.recommendation}
             symbol={ranking.symbol}
             reason={ranking.reason}
+            marketContext={{ price: ranking.price }}
             variant="button"
             toggleLabel="Why This View?"
             testIdPrefix={`card-learn-why-${ranking.symbol}`}

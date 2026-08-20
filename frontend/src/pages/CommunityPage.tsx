@@ -6,6 +6,7 @@ import {
   Users,
 } from "lucide-react";
 import InfoPageLayout, { InfoCard, InfoSection } from "@/components/layout/InfoPageLayout";
+import { TRADELENS_MENTOR } from "@/lib/mentorPresentation";
 
 const DISCUSSION_TOPICS = [
   {
@@ -18,7 +19,7 @@ const DISCUSSION_TOPICS = [
   {
     title: "When Wait is the right answer",
     description:
-      "Discuss moments when the Mentor said Wait or Avoid and what you learned from sitting out. Discipline is a skill worth practising together.",
+      `Discuss moments when ${TRADELENS_MENTOR} said Wait or Avoid and what you learned from sitting out. Discipline is a skill worth practising together.`,
     icon: Sparkles,
     replies: 0,
   },
@@ -49,7 +50,7 @@ export default function CommunityPage() {
   return (
     <InfoPageLayout
       title="Community Learning Hub"
-      subtitle="A place to discuss market concepts, Mentor interpretations, and the habits of disciplined learners."
+      subtitle={`A place to discuss market concepts, ${TRADELENS_MENTOR} interpretations, and the habits of disciplined learners.`}
       testId="community-page"
     >
       <InfoSection title="How this community works">
@@ -107,7 +108,7 @@ export default function CommunityPage() {
       <InfoSection title="Share your learning journey">
         <InfoCard title="Reflection prompt">
           <p>
-            What is one thing the Mentor helped you notice this week that you would have
+            What is one thing {TRADELENS_MENTOR} helped you notice this week that you would have
             missed on your own? Save your answer in the Trading Journal today — community
             threads will build on reflections like these.
           </p>

@@ -21,7 +21,7 @@ export default function TopOpportunities({
     <PanelCard
       id="learning-opportunities"
       title="Today's Learning Opportunities"
-      subtitle="A few stocks worth exploring with the Mentor."
+      subtitle="A few stocks worth exploring with TradeLens Mentor."
       testId="card-top-opportunities"
     >
       {isLoading && <LoadingState testId="opportunities-loading" />}

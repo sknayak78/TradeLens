@@ -255,11 +255,27 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
               <LearnWhyPanel
                 recommendation={stock.recommendation}
                 symbol={stock.symbol}
+                marketContext={{
+                  price: stock.price,
+                  ema20: stock.ema20,
+                  rsi: stock.rsi,
+                  support: stock.support,
+                  resistance: stock.resistance,
+                }}
                 variant="button"
                 toggleLabel="Why This View?"
                 testIdPrefix="detail-learn-why"
               />
-              <RecommendationCard recommendation={stock.recommendation} />
+              <RecommendationCard
+                recommendation={stock.recommendation}
+                marketContext={{
+                  price: stock.price,
+                  ema20: stock.ema20,
+                  rsi: stock.rsi,
+                  support: stock.support,
+                  resistance: stock.resistance,
+                }}
+              />
             </>
           ) : (
             <InsightPanel insight={stock.insight} />

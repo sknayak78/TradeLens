@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { NotebookPen, Plus, Trash2 } from "lucide-react";
+import { NotebookPen, Pencil, Plus, Trash2 } from "lucide-react";
 import PanelCard from "@/components/panels/PanelCard";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
@@ -29,6 +29,22 @@ export default function TradingJournal() {
   const { data: trades = [], isLoading, isError, error, refetch } = useTrades();
   const deleteTrade = useDeleteTrade();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+
+  const openNewTrade = () => {
+    setEditingTrade(null);
+    setDialogOpen(true);
+  };
+
+  const openEditTrade = (trade: Trade) => {
+    setEditingTrade(trade);
+    setDialogOpen(true);
+  };
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setEditingTrade(null);
+  };
 
   const stats = useMemo(() => {
     const closed = trades.filter((trade) => trade.status === "CLOSED");
@@ -64,7 +80,7 @@ export default function TradingJournal() {
         </div>
         <button
           className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-[#2962ff] hover:bg-[#2962ff]/85 text-white text-sm font-medium transition-colors"
-          onClick={() => setDialogOpen(true)}
+          onClick={openNewTrade}
           data-testid="journal-new-trade"
         >
           <Plus size={14} />
@@ -135,7 +151,7 @@ export default function TradingJournal() {
                   <th className="text-right font-normal px-2 pb-2">Qty</th>
                   <th className="text-right font-normal px-2 pb-2">P&amp;L</th>
                   <th className="text-left font-normal px-4 pb-2">Note</th>
-                  <th className="pb-2 w-8"></th>
+                  <th className="pb-2 w-16"></th>
                 </tr>
               </thead>
               <tbody>
@@ -216,14 +232,24 @@ export default function TradingJournal() {
                         {trade.notes || "—"}
                       </td>
                       <td className="px-2 py-2.5">
-                        <button
-                          onClick={() => deleteTrade.mutate(trade.id)}
-                          data-testid={`journal-delete-${trade.id}`}
-                          className="p-1 rounded-md text-[#667085] hover:text-[#ef5350] hover:bg-[#ef5350]/10 transition-colors"
-                          aria-label={`Delete trade ${trade.id}`}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => openEditTrade(trade)}
+                            data-testid={`journal-edit-${trade.id}`}
+                            className="p-1 rounded-md text-[#667085] hover:text-[#2962ff] hover:bg-[#2962ff]/10 transition-colors"
+                            aria-label={`Edit trade ${trade.id}`}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={() => deleteTrade.mutate(trade.id)}
+                            data-testid={`journal-delete-${trade.id}`}
+                            className="p-1 rounded-md text-[#667085] hover:text-[#ef5350] hover:bg-[#ef5350]/10 transition-colors"
+                            aria-label={`Delete trade ${trade.id}`}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -242,7 +268,7 @@ export default function TradingJournal() {
         </div>
       </PanelCard>
 
-      <NewTradeDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+      <NewTradeDialog open={dialogOpen} onClose={closeDialog} trade={editingTrade} />
     </div>
   );
 }

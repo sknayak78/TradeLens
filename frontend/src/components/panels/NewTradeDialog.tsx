@@ -1,18 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
-import { useCreateTrade } from "@/hooks/useTrades";
+import { useCreateTrade, useUpdateTrade } from "@/hooks/useTrades";
 import { useDayRange } from "@/hooks/useMarket";
 import { marketService } from "@/services/marketService";
 import { showApiError, showSuccess } from "@/lib/feedback";
-import type { TradeSide } from "@/services/tradeService";
+import type { Trade, TradeSide } from "@/services/tradeService";
 
 interface NewTradeDialogProps {
   open: boolean;
   onClose: () => void;
+  trade?: Trade | null;
 }
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function toDateInput(iso: string): string {
+  return iso.slice(0, 10);
 }
 
 type PriceWarning = {
@@ -20,8 +25,10 @@ type PriceWarning = {
   message: string;
 };
 
-export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
+export default function NewTradeDialog({ open, onClose, trade = null }: NewTradeDialogProps) {
   const createTrade = useCreateTrade();
+  const updateTrade = useUpdateTrade();
+  const isEdit = trade != null;
   const [form, setForm] = useState({
     symbol: "RELIANCE",
     trade_date: todayIso(),
@@ -53,23 +60,36 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
 
   useEffect(() => {
     if (open) {
-      setForm({
-        symbol: "RELIANCE",
-        trade_date: todayIso(),
-        exit_date: "",
-        entry_price: "",
-        exit_price: "",
-        quantity: "",
-        side: "LONG",
-        notes: "",
-      });
+      if (trade) {
+        setForm({
+          symbol: trade.symbol,
+          trade_date: toDateInput(trade.trade_date),
+          exit_date: trade.exit_date ? toDateInput(trade.exit_date) : "",
+          entry_price: String(trade.entry_price),
+          exit_price: trade.exit_price != null ? String(trade.exit_price) : "",
+          quantity: String(trade.quantity),
+          side: trade.side,
+          notes: trade.notes,
+        });
+      } else {
+        setForm({
+          symbol: "RELIANCE",
+          trade_date: todayIso(),
+          exit_date: "",
+          entry_price: "",
+          exit_price: "",
+          quantity: "",
+          side: "LONG",
+          notes: "",
+        });
+      }
       setError(null);
       setSymbolValid(true);
       setPriceWarnings([]);
       setConfirmOutOfRange(false);
       setSymbolSuggestions([]);
     }
-  }, [open]);
+  }, [open, trade]);
 
   useEffect(() => {
     if (!open) return;
@@ -176,18 +196,39 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
       return setError("Confirm the out-of-range prices before saving.");
     }
 
+    const payload = {
+      symbol,
+      side: form.side,
+      trade_date: new Date(form.trade_date).toISOString(),
+      entry_price: entry,
+      exit_date: form.exit_date ? new Date(form.exit_date).toISOString() : null,
+      exit_price: form.exit_date ? exit : null,
+      quantity: qty,
+      notes: form.notes,
+      confirm_out_of_range: confirmOutOfRange,
+    };
+
+    if (isEdit && trade) {
+      updateTrade.mutate(
+        { id: trade.id, payload },
+        {
+          onSuccess: () => {
+            showSuccess("Trade updated.", `${symbol} journal entry saved.`);
+            onClose();
+          },
+          onError: (err) => {
+            showApiError("Could not update trade", err);
+            setError(
+              err instanceof Error ? err.message : "Failed to update trade.",
+            );
+          },
+        },
+      );
+      return;
+    }
+
     createTrade.mutate(
-      {
-        symbol,
-        side: form.side,
-        trade_date: new Date(form.trade_date).toISOString(),
-        entry_price: entry,
-        exit_date: form.exit_date ? new Date(form.exit_date).toISOString() : null,
-        exit_price: form.exit_date ? exit : null,
-        quantity: qty,
-        notes: form.notes,
-        confirm_out_of_range: confirmOutOfRange,
-      },
+      payload,
       {
         onSuccess: () => {
           showSuccess("Trade saved.", `${symbol} added to your journal.`);
@@ -206,7 +247,7 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      data-testid="new-trade-dialog"
+      data-testid={isEdit ? "edit-trade-dialog" : "new-trade-dialog"}
     >
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
       <form
@@ -215,7 +256,7 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#D9DDE2] sticky top-0 bg-white">
           <h3 className="text-[#1F2933] text-sm font-semibold tracking-tight uppercase">
-            New Trade
+            {isEdit ? "Edit Trade" : "New Trade"}
           </h3>
           <button
             type="button"
@@ -399,11 +440,15 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
           </button>
           <button
             type="submit"
-            disabled={createTrade.isPending}
-            data-testid="new-trade-submit"
+            disabled={createTrade.isPending || updateTrade.isPending}
+            data-testid={isEdit ? "edit-trade-submit" : "new-trade-submit"}
             className="px-4 py-1.5 rounded-md bg-[#2962ff] hover:bg-[#2962ff]/85 text-white text-sm font-medium transition-colors disabled:opacity-60"
           >
-            {createTrade.isPending ? "Saving…" : "Save Trade"}
+            {createTrade.isPending || updateTrade.isPending
+              ? "Saving…"
+              : isEdit
+                ? "Update Trade"
+                : "Save Trade"}
           </button>
         </div>
       </form>
