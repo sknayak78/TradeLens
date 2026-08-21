@@ -451,4 +451,3 @@ def test_updating_note_does_not_modify_mentor_snapshot(trade_client):
     assert body["notes"] == "My personal reflection on this trade."
     assert body["mentor_snapshot"]["action"] == original_snapshot["action"]
     assert body["mentor_snapshot"]["strategy"] == original_snapshot["strategy"]
-

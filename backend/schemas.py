@@ -95,6 +95,7 @@ class TradeUpdate(BaseModel):
     exit_date: Optional[datetime] = None
     quantity: Optional[int] = Field(default=None, gt=0)
     notes: Optional[str] = None
+    status: Optional[Literal["OPEN", "CLOSED"]] = None
     confirm_out_of_range: bool = False
 
 

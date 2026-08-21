@@ -56,6 +56,7 @@ export interface TradeUpdatePayload {
   exit_date?: string | null;
   quantity?: number;
   notes?: string;
+  status?: TradeStatus;
   confirm_out_of_range?: boolean;
 }
 

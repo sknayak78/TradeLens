@@ -184,8 +184,11 @@ def _to_out(trade: Trade) -> TradeOut:
             )
     else:
         if exit_price is None:
-            exit_price = trade.entry_price
-        realized_pnl = _calc_realized_pnl(side, trade.entry_price, exit_price, trade.quantity)
+            realized_pnl = 0.0
+        else:
+            realized_pnl = _calc_realized_pnl(
+                side, trade.entry_price, exit_price, trade.quantity
+            )
         if trade.exit_date is not None:
             holding_period_days = _holding_period_days(trade.trade_date, trade.exit_date)
 
@@ -209,30 +212,49 @@ def _to_out(trade: Trade) -> TradeOut:
 
 
 def _validate_update_payload(
-  trade: Trade,
-  payload: TradeUpdate,
-) -> str:
+    trade: Trade,
+    payload: TradeUpdate,
+) -> tuple[str, datetime | None, float | None]:
     trade_date = payload.trade_date or trade.trade_date
-    side = payload.side or trade.side or "LONG"
     entry_price = payload.entry_price if payload.entry_price is not None else trade.entry_price
+
+    if payload.status == "OPEN":
+        _validate_price_range(
+            symbol=trade.symbol,
+            trade_date=trade_date,
+            price=entry_price,
+            label="Entry",
+            confirm_out_of_range=payload.confirm_out_of_range,
+        )
+        return "OPEN", None, None
+
     exit_date = payload.exit_date if payload.exit_date is not None else trade.exit_date
     exit_price = payload.exit_price if payload.exit_price is not None else trade.exit_price
-    has_exit_date = exit_date is not None
-    has_exit_price = exit_price is not None
 
-    if has_exit_date != has_exit_price:
-        raise HTTPException(
-            status_code=400,
-            detail="A closed trade requires both Exit Date and Exit Price.",
-        )
+    if payload.status == "CLOSED":
+        if exit_date is None or exit_price is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Please enter the exit date and exit price before closing this trade."
+                ),
+            )
+    else:
+        has_exit_date = exit_date is not None
+        has_exit_price = exit_price is not None
+        if has_exit_date != has_exit_price:
+            raise HTTPException(
+                status_code=400,
+                detail="A closed trade requires both Exit Date and Exit Price.",
+            )
+        if not has_exit_date and not has_exit_price:
+            return "OPEN", None, None
 
     if exit_date and _as_date(exit_date) < _as_date(trade_date):
         raise HTTPException(
             status_code=400,
             detail="Exit Date cannot be before Entry Date.",
         )
-
-    status_value = "CLOSED" if has_exit_date and has_exit_price else "OPEN"
 
     _validate_price_range(
         symbol=trade.symbol,
@@ -241,7 +263,7 @@ def _validate_update_payload(
         label="Entry",
         confirm_out_of_range=payload.confirm_out_of_range,
     )
-    if status_value == "CLOSED" and exit_date and exit_price is not None:
+    if exit_date and exit_price is not None:
         _validate_price_range(
             symbol=trade.symbol,
             trade_date=exit_date,
@@ -250,7 +272,7 @@ def _validate_update_payload(
             confirm_out_of_range=payload.confirm_out_of_range,
         )
 
-    return status_value
+    return "CLOSED", exit_date, exit_price
 
 
 @router.get("", response_model=List[TradeOut])
@@ -296,7 +318,7 @@ def update_trade(
     if not trade:
         raise HTTPException(status_code=404, detail=f"Trade {trade_id} not found")
 
-    status_value = _validate_update_payload(trade, payload)
+    status_value, exit_date, exit_price = _validate_update_payload(trade, payload)
 
     if payload.trade_date is not None:
         trade.trade_date = payload.trade_date
@@ -309,14 +331,9 @@ def update_trade(
     if payload.notes is not None:
         trade.notes = payload.notes
 
-    if status_value == "CLOSED":
-        trade.exit_date = payload.exit_date if payload.exit_date is not None else trade.exit_date
-        trade.exit_price = payload.exit_price if payload.exit_price is not None else trade.exit_price
-    else:
-        trade.exit_date = None
-        trade.exit_price = None
-
     trade.status = status_value
+    trade.exit_date = exit_date
+    trade.exit_price = exit_price
     db.commit()
     db.refresh(trade)
     return _to_out(trade)
