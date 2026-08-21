@@ -401,3 +401,54 @@ def test_snapshot_round_trip_json_shape(trade_client):
         payload = json.loads(stored.mentor_snapshot)
         assert payload["action"] == "Buy"
         assert payload["actual_entry_price"] == pytest.approx(1943.40)
+
+
+def test_delete_then_recreate_reliance_leaves_one_trade(trade_client):
+    """Delete → create must not leave the deleted trade in the journal."""
+    client, session_factory, _ = trade_client
+    created = _create_trade(client)
+    trade_id = created["id"]
+
+    deleted = client.delete(f"/api/trades/{trade_id}")
+    assert deleted.status_code == 204
+
+    with session_factory() as db:
+        assert db.get(Trade, trade_id) is None
+
+    recreated = _create_trade(client, notes="recreated reliance")
+    listed = client.get("/api/trades").json()
+    reliance_rows = [row for row in listed if row["symbol"] == "BHARTIARTL"]
+
+    assert len(reliance_rows) == 1
+    assert reliance_rows[0]["id"] == recreated["id"]
+    assert reliance_rows[0]["notes"] == "recreated reliance"
+
+
+def test_multiple_intentional_same_symbol_trades_are_allowed(trade_client):
+    client, _, _ = trade_client
+    first = _create_trade(client, quantity=100, notes="trade A")
+    second = _create_trade(client, quantity=50, notes="trade B")
+
+    listed = client.get("/api/trades").json()
+    reliance_rows = [row for row in listed if row["symbol"] == "BHARTIARTL"]
+
+    assert len(reliance_rows) == 2
+    ids = {row["id"] for row in reliance_rows}
+    assert ids == {first["id"], second["id"]}
+
+
+def test_updating_note_does_not_modify_mentor_snapshot(trade_client):
+    client, _, _ = trade_client
+    trade = _create_trade(client)
+    original_snapshot = trade["mentor_snapshot"]
+
+    updated = client.put(
+        f"/api/trades/{trade['id']}",
+        json={"notes": "My personal reflection on this trade."},
+    )
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["notes"] == "My personal reflection on this trade."
+    assert body["mentor_snapshot"]["action"] == original_snapshot["action"]
+    assert body["mentor_snapshot"]["strategy"] == original_snapshot["strategy"]
+

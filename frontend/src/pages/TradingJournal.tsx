@@ -6,7 +6,9 @@ import ErrorState from "@/components/common/ErrorState";
 import EmptyState from "@/components/common/EmptyState";
 import NewTradeDialog from "@/components/panels/NewTradeDialog";
 import TradeMentorSnapshotPanel from "@/components/panels/TradeMentorSnapshotPanel";
+import TradeMyNotePanel from "@/components/panels/TradeMyNotePanel";
 import { useTrades, useDeleteTrade } from "@/hooks/useTrades";
+import { showApiError, showSuccess } from "@/lib/feedback";
 import type { Trade } from "@/services/tradeService";
 
 function formatDate(iso: string): string {
@@ -30,6 +32,21 @@ export default function TradingJournal() {
   const { data: trades = [], isLoading, isError, error, refetch } = useTrades();
   const deleteTrade = useDeleteTrade();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const handleDeleteTrade = (tradeId: number) => {
+    setDeletingId(tradeId);
+    deleteTrade.mutate(tradeId, {
+      onSuccess: () => {
+        showSuccess("Trade deleted.");
+        setDeletingId(null);
+      },
+      onError: (err) => {
+        showApiError("Could not delete trade", err);
+        setDeletingId(null);
+      },
+    });
+  };
 
   const stats = useMemo(() => {
     const closed = trades.filter((trade) => trade.status === "CLOSED");
@@ -218,7 +235,9 @@ export default function TradingJournal() {
                       </td>
                       <td className="px-2 py-2.5">
                         <button
-                          onClick={() => deleteTrade.mutate(trade.id)}
+                          type="button"
+                          onClick={() => handleDeleteTrade(trade.id)}
+                          disabled={deletingId === trade.id}
                           data-testid={`journal-delete-${trade.id}`}
                           className="p-1 rounded-md text-[#667085] hover:text-[#ef5350] hover:bg-[#ef5350]/10 transition-colors"
                           aria-label={`Delete trade ${trade.id}`}
@@ -232,24 +251,15 @@ export default function TradingJournal() {
                       className="border-t border-[#D9DDE2]/40 bg-[#FCFCFB]"
                     >
                       <td colSpan={12} className="px-4 py-3">
-                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,280px)]">
+                        <div className="max-w-3xl">
                           <TradeMentorSnapshotPanel
                             snapshot={trade.mentor_snapshot}
                             tradeId={trade.id}
                           />
-                          <div
-                            className="rounded-[4px] border border-[#D9DDE2] bg-white px-3 py-3"
-                            data-testid={`journal-note-${trade.id}`}
-                          >
-                            <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1">
-                              My Note
-                            </div>
-                            <p className="text-xs text-[#1F2933] leading-relaxed">
-                              {trade.notes?.trim()
-                                ? trade.notes
-                                : "No personal note added."}
-                            </p>
-                          </div>
+                          <TradeMyNotePanel
+                            tradeId={trade.id}
+                            notes={trade.notes}
+                          />
                         </div>
                       </td>
                     </tr>
