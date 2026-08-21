@@ -54,6 +54,23 @@ class WatchlistEnriched(BaseModel):
 
 # ---------- Trades ----------
 
+class MentorSnapshotOut(BaseModel):
+    """Immutable Mentor recommendation captured when the trade was recorded."""
+
+    action: Optional[str] = None
+    strategy: Optional[str] = None
+    entry_range_low: Optional[float] = None
+    entry_range_high: Optional[float] = None
+    actual_entry_price: Optional[float] = None
+    planned_stop_loss: Optional[float] = None
+    target_1: Optional[float] = None
+    target_2: Optional[float] = None
+    risk_reward: Optional[float] = None
+    holding_period: Optional[str] = None
+    reason: Optional[str] = None
+    captured_at: Optional[datetime] = None
+
+
 class TradeCreate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -65,6 +82,19 @@ class TradeCreate(BaseModel):
     exit_date: Optional[datetime] = None
     quantity: int = Field(..., gt=0)
     notes: str = ""
+    confirm_out_of_range: bool = False
+
+
+class TradeUpdate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    trade_date: Optional[datetime] = None
+    side: Optional[Literal["LONG", "SHORT"]] = None
+    entry_price: Optional[float] = Field(default=None, gt=0)
+    exit_price: Optional[float] = Field(default=None, gt=0)
+    exit_date: Optional[datetime] = None
+    quantity: Optional[int] = Field(default=None, gt=0)
+    notes: Optional[str] = None
     confirm_out_of_range: bool = False
 
 
@@ -85,6 +115,7 @@ class TradeOut(BaseModel):
     unrealized_pnl: Optional[float] = None
     current_price: Optional[float] = None
     holding_period_days: Optional[int] = None
+    mentor_snapshot: Optional[MentorSnapshotOut] = None
 
 
 # ---------- Settings ----------

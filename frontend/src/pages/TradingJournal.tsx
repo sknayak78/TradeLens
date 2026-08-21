@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { NotebookPen, Plus, Trash2 } from "lucide-react";
 import PanelCard from "@/components/panels/PanelCard";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import EmptyState from "@/components/common/EmptyState";
 import NewTradeDialog from "@/components/panels/NewTradeDialog";
+import TradeMentorSnapshotPanel from "@/components/panels/TradeMentorSnapshotPanel";
 import { useTrades, useDeleteTrade } from "@/hooks/useTrades";
 import type { Trade } from "@/services/tradeService";
 
@@ -145,11 +146,11 @@ export default function TradingJournal() {
                     ? trade.unrealized_pnl ?? 0
                     : trade.pnl;
                   return (
-                    <tr
-                      key={trade.id}
-                      data-testid={`journal-row-${trade.id}`}
-                      className="tl-row border-t border-[#D9DDE2]/60"
-                    >
+                    <Fragment key={trade.id}>
+                      <tr
+                        data-testid={`journal-row-${trade.id}`}
+                        className="tl-row border-t border-[#D9DDE2]/60"
+                      >
                       <td className="px-4 py-2.5 font-mono tabular-nums text-[#667085] text-xs">
                         T-{trade.id.toString().padStart(4, "0")}
                       </td>
@@ -226,6 +227,33 @@ export default function TradingJournal() {
                         </button>
                       </td>
                     </tr>
+                    <tr
+                      key={`${trade.id}-details`}
+                      className="border-t border-[#D9DDE2]/40 bg-[#FCFCFB]"
+                    >
+                      <td colSpan={12} className="px-4 py-3">
+                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,280px)]">
+                          <TradeMentorSnapshotPanel
+                            snapshot={trade.mentor_snapshot}
+                            tradeId={trade.id}
+                          />
+                          <div
+                            className="rounded-[4px] border border-[#D9DDE2] bg-white px-3 py-3"
+                            data-testid={`journal-note-${trade.id}`}
+                          >
+                            <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1">
+                              My Note
+                            </div>
+                            <p className="text-xs text-[#1F2933] leading-relaxed">
+                              {trade.notes?.trim()
+                                ? trade.notes
+                                : "No personal note added."}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                    </Fragment>
                   );
                 })}
               </tbody>

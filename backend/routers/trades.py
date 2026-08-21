@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
@@ -10,9 +10,14 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Trade
-from schemas import TradeCreate, TradeOut
+from schemas import MentorSnapshotOut, TradeCreate, TradeOut, TradeUpdate
 from services.chart_series import get_day_ohlc_range
 from services.market_data_service import market_data_service
+from services.trade_mentor_snapshot import (
+    build_mentor_snapshot,
+    deserialize_mentor_snapshot,
+    serialize_mentor_snapshot,
+)
 
 router = APIRouter(prefix="/trades", tags=["trades"])
 
@@ -129,6 +134,39 @@ def _validate_trade_payload(payload: TradeCreate) -> tuple[str, str]:
     return symbol, status_value
 
 
+def _parse_captured_at(value: object) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return None
+
+
+def _mentor_snapshot_out(trade: Trade) -> Optional[MentorSnapshotOut]:
+    payload = deserialize_mentor_snapshot(trade.mentor_snapshot)
+    if payload is None:
+        return None
+    return MentorSnapshotOut(
+        action=payload.get("action"),
+        strategy=payload.get("strategy"),
+        entry_range_low=payload.get("entry_range_low"),
+        entry_range_high=payload.get("entry_range_high"),
+        actual_entry_price=payload.get("actual_entry_price"),
+        planned_stop_loss=payload.get("planned_stop_loss"),
+        target_1=payload.get("target_1"),
+        target_2=payload.get("target_2"),
+        risk_reward=payload.get("risk_reward"),
+        holding_period=payload.get("holding_period"),
+        reason=payload.get("reason"),
+        captured_at=_parse_captured_at(payload.get("captured_at")),
+    )
+
+
 def _to_out(trade: Trade) -> TradeOut:
     status_value = trade.status or ("CLOSED" if trade.exit_price is not None else "OPEN")
     side = trade.side or "LONG"
@@ -166,7 +204,53 @@ def _to_out(trade: Trade) -> TradeOut:
         unrealized_pnl=unrealized_pnl,
         current_price=current_price,
         holding_period_days=holding_period_days,
+        mentor_snapshot=_mentor_snapshot_out(trade),
     )
+
+
+def _validate_update_payload(
+  trade: Trade,
+  payload: TradeUpdate,
+) -> str:
+    trade_date = payload.trade_date or trade.trade_date
+    side = payload.side or trade.side or "LONG"
+    entry_price = payload.entry_price if payload.entry_price is not None else trade.entry_price
+    exit_date = payload.exit_date if payload.exit_date is not None else trade.exit_date
+    exit_price = payload.exit_price if payload.exit_price is not None else trade.exit_price
+    has_exit_date = exit_date is not None
+    has_exit_price = exit_price is not None
+
+    if has_exit_date != has_exit_price:
+        raise HTTPException(
+            status_code=400,
+            detail="A closed trade requires both Exit Date and Exit Price.",
+        )
+
+    if exit_date and _as_date(exit_date) < _as_date(trade_date):
+        raise HTTPException(
+            status_code=400,
+            detail="Exit Date cannot be before Entry Date.",
+        )
+
+    status_value = "CLOSED" if has_exit_date and has_exit_price else "OPEN"
+
+    _validate_price_range(
+        symbol=trade.symbol,
+        trade_date=trade_date,
+        price=entry_price,
+        label="Entry",
+        confirm_out_of_range=payload.confirm_out_of_range,
+    )
+    if status_value == "CLOSED" and exit_date and exit_price is not None:
+        _validate_price_range(
+            symbol=trade.symbol,
+            trade_date=exit_date,
+            price=exit_price,
+            label="Exit",
+            confirm_out_of_range=payload.confirm_out_of_range,
+        )
+
+    return status_value
 
 
 @router.get("", response_model=List[TradeOut])
@@ -180,6 +264,10 @@ def list_trades(db: Session = Depends(get_db)) -> List[TradeOut]:
 @router.post("", response_model=TradeOut, status_code=status.HTTP_201_CREATED)
 def create_trade(payload: TradeCreate, db: Session = Depends(get_db)) -> TradeOut:
     symbol, status_value = _validate_trade_payload(payload)
+    snapshot = build_mentor_snapshot(
+        symbol,
+        actual_entry_price=payload.entry_price,
+    )
     trade = Trade(
         trade_date=payload.trade_date,
         symbol=symbol,
@@ -190,8 +278,45 @@ def create_trade(payload: TradeCreate, db: Session = Depends(get_db)) -> TradeOu
         notes=payload.notes or "",
         side=payload.side,
         status=status_value,
+        mentor_snapshot=serialize_mentor_snapshot(snapshot),
     )
     db.add(trade)
+    db.commit()
+    db.refresh(trade)
+    return _to_out(trade)
+
+
+@router.put("/{trade_id}", response_model=TradeOut)
+def update_trade(
+    trade_id: int,
+    payload: TradeUpdate,
+    db: Session = Depends(get_db),
+) -> TradeOut:
+    trade = db.get(Trade, trade_id)
+    if not trade:
+        raise HTTPException(status_code=404, detail=f"Trade {trade_id} not found")
+
+    status_value = _validate_update_payload(trade, payload)
+
+    if payload.trade_date is not None:
+        trade.trade_date = payload.trade_date
+    if payload.side is not None:
+        trade.side = payload.side
+    if payload.entry_price is not None:
+        trade.entry_price = payload.entry_price
+    if payload.quantity is not None:
+        trade.quantity = payload.quantity
+    if payload.notes is not None:
+        trade.notes = payload.notes
+
+    if status_value == "CLOSED":
+        trade.exit_date = payload.exit_date if payload.exit_date is not None else trade.exit_date
+        trade.exit_price = payload.exit_price if payload.exit_price is not None else trade.exit_price
+    else:
+        trade.exit_date = None
+        trade.exit_price = None
+
+    trade.status = status_value
     db.commit()
     db.refresh(trade)
     return _to_out(trade)
