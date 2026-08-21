@@ -265,3 +265,86 @@ def test_delete_one_of_two_same_symbol_trades(lifecycle_client):
     assert len(listed) == 1
     assert listed[0]["id"] == trade_b["id"]
     assert listed[0]["quantity"] == 2
+
+
+def test_open_trade_remains_null_after_repeated_get(lifecycle_client):
+    client, session_factory = lifecycle_client
+    trade = _create_open(client)
+
+    for _ in range(3):
+        fetched = client.get("/api/trades").json()
+        row = next(item for item in fetched if item["id"] == trade["id"])
+        assert row["status"] == "OPEN"
+        assert row["exit_price"] is None
+        assert row["exit_date"] is None
+        assert row["current_price"] == pytest.approx(1320.0)
+
+    with session_factory() as db:
+        row = db.get(Trade, trade["id"])
+        assert row.exit_price is None
+        assert row.exit_date is None
+
+
+def test_closed_trade_edit_preserves_exit_fields(lifecycle_client):
+    client, _ = lifecycle_client
+    trade = _create_open(client, notes="keep note")
+    client.put(
+        f"/api/trades/{trade['id']}",
+        json={
+            "status": "CLOSED",
+            "exit_date": "2026-08-25T00:00:00+00:00",
+            "exit_price": 1365.0,
+        },
+    )
+
+    updated = client.put(
+        f"/api/trades/{trade['id']}",
+        json={"quantity": 5},
+    )
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["status"] == "CLOSED"
+    assert body["exit_price"] == pytest.approx(1365.0)
+    assert body["exit_date"] is not None
+    assert body["notes"] == "keep note"
+
+
+def test_invalid_exit_price_rejected(lifecycle_client):
+    client, _ = lifecycle_client
+    trade = _create_open(client)
+    response = client.put(
+        f"/api/trades/{trade['id']}",
+        json={
+            "status": "CLOSED",
+            "exit_date": "2026-08-25T00:00:00+00:00",
+            "exit_price": 0,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_exit_date_before_entry_rejected(lifecycle_client):
+    client, _ = lifecycle_client
+    trade = _create_open(client)
+    response = client.put(
+        f"/api/trades/{trade['id']}",
+        json={
+            "status": "CLOSED",
+            "exit_date": "2026-08-20T00:00:00+00:00",
+            "exit_price": 1365.0,
+        },
+    )
+    assert response.status_code == 400
+    assert "before entry" in response.json()["detail"].lower()
+
+
+def test_notes_unchanged_when_omitted_from_update(lifecycle_client):
+    client, _ = lifecycle_client
+    trade = _create_open(client, notes="original note")
+    updated = client.put(
+        f"/api/trades/{trade['id']}",
+        json={"quantity": 6},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["notes"] == "original note"
+

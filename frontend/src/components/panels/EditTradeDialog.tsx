@@ -2,8 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useUpdateTrade } from "@/hooks/useTrades";
 import { useDayRange, useStock } from "@/hooks/useMarket";
+import {
+  buildEditTradePayload,
+  shouldShowExitFields,
+  validateEditTradeForm,
+  type EditTradeFormValues,
+} from "@/lib/editTradeForm";
 import { showApiError, showSuccess } from "@/lib/feedback";
-import type { Trade, TradeStatus, TradeUpdatePayload } from "@/services/tradeService";
+import type { Trade, TradeStatus } from "@/services/tradeService";
 
 interface EditTradeDialogProps {
   trade: Trade | null;
@@ -20,16 +26,28 @@ function toDateInput(iso: string | null): string {
   return iso.slice(0, 10);
 }
 
+function formFromTrade(trade: Trade): EditTradeFormValues {
+  return {
+    trade_date: toDateInput(trade.trade_date),
+    entry_price: String(trade.entry_price),
+    quantity: String(trade.quantity),
+    status: trade.status,
+    exit_date: toDateInput(trade.exit_date),
+    exit_price: trade.exit_price != null ? String(trade.exit_price) : "",
+    notes: trade.notes ?? "",
+  };
+}
+
 export default function EditTradeDialog({ trade, onClose }: EditTradeDialogProps) {
   const updateTrade = useUpdateTrade();
   const submittingRef = useRef(false);
   const open = trade !== null;
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<EditTradeFormValues>({
     trade_date: "",
     entry_price: "",
     quantity: "",
-    status: "OPEN" as TradeStatus,
+    status: "OPEN",
     exit_date: "",
     exit_price: "",
     notes: "",
@@ -40,6 +58,7 @@ export default function EditTradeDialog({ trade, onClose }: EditTradeDialogProps
 
   const symbol = trade?.symbol ?? "";
   const { data: stock } = useStock(symbol, "1W");
+  const showExitFields = shouldShowExitFields(form.status);
 
   const entryRange = useDayRange(
     symbol,
@@ -49,21 +68,13 @@ export default function EditTradeDialog({ trade, onClose }: EditTradeDialogProps
   const exitRange = useDayRange(
     symbol,
     form.exit_date,
-    open && form.status === "CLOSED" && Boolean(symbol && form.exit_date),
+    open && showExitFields && Boolean(symbol && form.exit_date),
   );
 
   useEffect(() => {
     if (!trade) return;
     submittingRef.current = false;
-    setForm({
-      trade_date: toDateInput(trade.trade_date),
-      entry_price: String(trade.entry_price),
-      quantity: String(trade.quantity),
-      status: trade.status,
-      exit_date: toDateInput(trade.exit_date),
-      exit_price: trade.exit_price != null ? String(trade.exit_price) : "",
-      notes: trade.notes ?? "",
-    });
+    setForm(formFromTrade(trade));
     setError(null);
     setPriceWarnings([]);
     setConfirmOutOfRange(false);
@@ -84,7 +95,7 @@ export default function EditTradeDialog({ trade, onClose }: EditTradeDialogProps
 
     const exit = parseFloat(form.exit_price);
     if (
-      form.status === "CLOSED" &&
+      showExitFields &&
       form.exit_date &&
       exitRange.data?.available &&
       Number.isFinite(exit)
@@ -106,7 +117,7 @@ export default function EditTradeDialog({ trade, onClose }: EditTradeDialogProps
     form.exit_price,
     form.trade_date,
     form.exit_date,
-    form.status,
+    showExitFields,
   ]);
 
   const hasBlockingRangeWarning = useMemo(
@@ -121,6 +132,10 @@ export default function EditTradeDialog({ trade, onClose }: EditTradeDialogProps
 
   if (!open || !trade) return null;
 
+  const handleStatusChange = (status: TradeStatus) => {
+    setForm((prev) => ({ ...prev, status }));
+  };
+
   const handleUseCurrentPrice = () => {
     if (stock?.price) {
       setForm((prev) => ({ ...prev, exit_price: String(stock.price) }));
@@ -132,47 +147,17 @@ export default function EditTradeDialog({ trade, onClose }: EditTradeDialogProps
     if (updateTrade.isPending || submittingRef.current) return;
     setError(null);
 
-    const entry = parseFloat(form.entry_price);
-    const qty = parseInt(form.quantity, 10);
-    const exit = form.exit_price ? parseFloat(form.exit_price) : NaN;
-
-    if (!(entry > 0)) return setError("Entry price must be greater than 0.");
-    if (!(qty > 0)) return setError("Quantity must be greater than 0.");
-    if (form.status === "CLOSED") {
-      if (!form.exit_date) {
-        return setError(
-          "Please enter the exit date and exit price before closing this trade.",
-        );
-      }
-      if (!(exit > 0)) {
-        return setError(
-          "Please enter the exit date and exit price before closing this trade.",
-        );
-      }
-      if (form.exit_date < form.trade_date) {
-        return setError("Exit Date cannot be before Entry Date.");
-      }
+    const validationError = validateEditTradeForm(form);
+    if (validationError) {
+      setError(validationError);
+      return;
     }
     if (hasBlockingRangeWarning) {
-      return setError("Confirm the out-of-range prices before saving.");
+      setError("Confirm the out-of-range prices before saving.");
+      return;
     }
 
-    const payload: TradeUpdatePayload = {
-      trade_date: new Date(form.trade_date).toISOString(),
-      entry_price: entry,
-      quantity: qty,
-      notes: form.notes,
-      status: form.status,
-      confirm_out_of_range: confirmOutOfRange,
-    };
-
-    if (form.status === "CLOSED") {
-      payload.exit_date = new Date(form.exit_date).toISOString();
-      payload.exit_price = exit;
-    } else {
-      payload.exit_date = null;
-      payload.exit_price = null;
-    }
+    const payload = buildEditTradePayload(form, confirmOutOfRange);
 
     submittingRef.current = true;
     updateTrade.mutate(
@@ -259,63 +244,86 @@ export default function EditTradeDialog({ trade, onClose }: EditTradeDialogProps
           </div>
 
           <Field label="Status">
-            <div className="flex gap-3">
-              {(["OPEN", "CLOSED"] as TradeStatus[]).map((status) => (
-                <label
-                  key={status}
-                  className="inline-flex items-center gap-1.5 text-sm text-[#1F2933]"
-                >
-                  <input
-                    type="radio"
-                    name="trade-status"
-                    checked={form.status === status}
-                    onChange={() =>
-                      setForm((prev) => ({
-                        ...prev,
-                        status,
-                        exit_date: status === "OPEN" ? "" : prev.exit_date,
-                        exit_price: status === "OPEN" ? "" : prev.exit_price,
-                      }))
-                    }
+            <div className="flex gap-2">
+              {(["OPEN", "CLOSED"] as TradeStatus[]).map((status) => {
+                const selected = form.status === status;
+                return (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => handleStatusChange(status)}
                     data-testid={`edit-trade-status-${status.toLowerCase()}`}
-                  />
-                  {status}
-                </label>
-              ))}
+                    className={`px-3 py-1.5 rounded-md text-xs font-mono border transition-colors ${
+                      selected
+                        ? status === "OPEN"
+                          ? "bg-[#2962ff]/10 text-[#2962ff] border-[#2962ff]/30"
+                          : "bg-[#667085]/10 text-[#1F2933] border-[#667085]/40"
+                        : "text-[#667085] border-[#D9DDE2] hover:bg-[#F0F1EF]"
+                    }`}
+                  >
+                    {status}
+                  </button>
+                );
+              })}
             </div>
           </Field>
 
-          {form.status === "CLOSED" && (
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Exit Date">
-                <input
-                  type="date"
-                  value={form.exit_date}
-                  onChange={(e) => setForm({ ...form, exit_date: e.target.value })}
-                  data-testid="edit-trade-exit-date"
-                  className="w-full h-9 px-3 bg-white border border-[#D9DDE2] rounded-md text-sm text-[#1F2933] focus:border-[#2962ff]/60 outline-none"
-                />
-              </Field>
-              <Field label="Exit Price">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={form.exit_price}
-                  onChange={(e) => setForm({ ...form, exit_price: e.target.value })}
-                  data-testid="edit-trade-exit"
-                  className="w-full h-9 px-2 bg-white border border-[#D9DDE2] rounded-md text-sm font-mono tabular-nums text-[#1F2933] focus:border-[#2962ff]/60 outline-none"
-                />
-                {stock?.price != null && (
-                  <button
-                    type="button"
-                    onClick={handleUseCurrentPrice}
-                    data-testid="edit-trade-use-current-price"
-                    className="text-[10px] text-[#2962ff] hover:underline mt-0.5"
-                  >
-                    Use current market price (₹{stock.price.toLocaleString("en-IN")})
-                  </button>
-                )}
-              </Field>
+          {form.status === "OPEN" && (
+            <div
+              className="rounded-md border border-[#2962ff]/20 bg-[#2962ff]/5 px-3 py-2 text-xs text-[#2962ff]"
+              data-testid="edit-trade-open-hint"
+            >
+              Position is still open. No exit has been recorded. Select{" "}
+              <span className="font-semibold">CLOSED</span> to enter exit date and
+              exit price.
+            </div>
+          )}
+
+          {showExitFields && (
+            <div
+              className="rounded-md border border-[#D9DDE2] bg-[#FCFCFB] p-3 space-y-2"
+              data-testid="edit-trade-exit-section"
+            >
+              <div className="text-[10px] uppercase tracking-widest text-[#667085]">
+                Exit details
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Exit Date">
+                  <input
+                    type="date"
+                    value={form.exit_date}
+                    onChange={(e) =>
+                      setForm({ ...form, exit_date: e.target.value })
+                    }
+                    data-testid="edit-trade-exit-date"
+                    className="w-full h-9 px-3 bg-white border border-[#D9DDE2] rounded-md text-sm text-[#1F2933] focus:border-[#2962ff]/60 outline-none"
+                  />
+                </Field>
+                <Field label="Exit Price">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={form.exit_price}
+                    onChange={(e) =>
+                      setForm({ ...form, exit_price: e.target.value })
+                    }
+                    data-testid="edit-trade-exit"
+                    className="w-full h-9 px-2 bg-white border border-[#D9DDE2] rounded-md text-sm font-mono tabular-nums text-[#1F2933] focus:border-[#2962ff]/60 outline-none"
+                  />
+                  {stock?.price != null && (
+                    <button
+                      type="button"
+                      onClick={handleUseCurrentPrice}
+                      data-testid="edit-trade-use-current-price"
+                      className="text-[10px] text-[#2962ff] hover:underline mt-0.5 text-left"
+                    >
+                      Use current market price (₹
+                      {stock.price.toLocaleString("en-IN")})
+                    </button>
+                  )}
+                </Field>
+              </div>
             </div>
           )}
 
