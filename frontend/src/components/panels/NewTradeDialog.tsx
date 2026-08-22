@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useCreateTrade } from "@/hooks/useTrades";
 import { useDayRange } from "@/hooks/useMarket";
@@ -22,6 +22,7 @@ type PriceWarning = {
 
 export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
   const createTrade = useCreateTrade();
+  const submittingRef = useRef(false);
   const [form, setForm] = useState({
     symbol: "RELIANCE",
     trade_date: todayIso(),
@@ -53,6 +54,7 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
 
   useEffect(() => {
     if (open) {
+      submittingRef.current = false;
       setForm({
         symbol: "RELIANCE",
         trade_date: todayIso(),
@@ -153,6 +155,7 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (createTrade.isPending || submittingRef.current) return;
     setError(null);
     const entry = parseFloat(form.entry_price);
     const exit = form.exit_price ? parseFloat(form.exit_price) : NaN;
@@ -176,6 +179,7 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
       return setError("Confirm the out-of-range prices before saving.");
     }
 
+    submittingRef.current = true;
     createTrade.mutate(
       {
         symbol,
@@ -190,10 +194,12 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
       },
       {
         onSuccess: () => {
+          submittingRef.current = false;
           showSuccess("Trade saved.", `${symbol} added to your journal.`);
           onClose();
         },
         onError: (err) => {
+          submittingRef.current = false;
           showApiError("Could not save trade", err);
           setError(
             err instanceof Error ? err.message : "Failed to save trade.",
