@@ -21,11 +21,8 @@ import RecommendationCard from "@/components/panels/RecommendationCard";
 import LearnWhyPanel from "@/components/panels/LearnWhyPanel";
 import StockHero from "@/components/panels/StockHero";
 import { Sparkles, TrendingUp, TrendingDown } from "lucide-react";
-<<<<<<< HEAD
 import MetricHelp from "@/components/common/MetricHelp";
-=======
 import { formatChartTooltipLabel } from "@/lib/chartAxisFormat";
->>>>>>> 6f0ebb1 (fix(er-0031): reliable chart x-axis ticks across timeframes)
 import {
   buildChartTimeAxisPlan,
   formatChartXAxisTickLabel,
