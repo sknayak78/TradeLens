@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -21,11 +21,16 @@ import RecommendationCard from "@/components/panels/RecommendationCard";
 import LearnWhyPanel from "@/components/panels/LearnWhyPanel";
 import StockHero from "@/components/panels/StockHero";
 import { Sparkles, TrendingUp, TrendingDown } from "lucide-react";
+<<<<<<< HEAD
 import MetricHelp from "@/components/common/MetricHelp";
+=======
+import { formatChartTooltipLabel } from "@/lib/chartAxisFormat";
+>>>>>>> 6f0ebb1 (fix(er-0031): reliable chart x-axis ticks across timeframes)
 import {
-  formatChartTooltipLabel,
-  formatChartXAxisTick,
-} from "@/lib/chartAxisFormat";
+  buildChartTimeAxisPlan,
+  formatChartXAxisTickLabel,
+  type ChartTimeframe,
+} from "@/lib/chartTimeAxis";
 
 interface ChartCardProps {
   symbol: string;
@@ -76,14 +81,34 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
       ? "#ef5350"
       : "#2962ff";
 
-  const xAxisTickFormatter = useMemo(() => {
-    if (!stock?.series?.length) {
-      return (value: string) => value;
-    }
-    const series = stock.series;
-    return (value: string, index: number) =>
-      formatChartXAxisTick(activeTimeframe, value, index, series);
-  }, [activeTimeframe, stock?.series]);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [chartWidthPx, setChartWidthPx] = useState(600);
+
+  useEffect(() => {
+    const node = chartContainerRef.current;
+    if (!node) return undefined;
+
+    const updateWidth = () => {
+      const width = node.getBoundingClientRect().width;
+      if (width > 0) {
+        setChartWidthPx(width);
+      }
+    };
+
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [stock?.series]);
+
+  const chartAxisPlan = useMemo(() => {
+    if (!stock?.series?.length) return null;
+    return buildChartTimeAxisPlan(
+      activeTimeframe as ChartTimeframe,
+      stock.series,
+      chartWidthPx,
+    );
+  }, [activeTimeframe, chartWidthPx, stock?.series]);
 
   return (
     <PanelCard
@@ -142,12 +167,13 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
 
           {/* Primary visual evidence — placed immediately after the Mentor context */}
           <div
+            ref={chartContainerRef}
             className="h-52 md:h-60 min-h-[220px] w-full -mx-2 relative"
             data-testid="chart-container"
           >
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
-                data={stock.series}
+                data={chartAxisPlan?.series ?? stock.series}
                 margin={{ top: 8, right: 12, bottom: 4, left: 4 }}
               >
                 <CartesianGrid
@@ -161,9 +187,14 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                   tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
                   tickLine={false}
                   axisLine={false}
-                  interval="preserveStartEnd"
-                  minTickGap={24}
-                  tickFormatter={xAxisTickFormatter}
+                  ticks={chartAxisPlan?.tickValues}
+                  interval={0}
+                  tickFormatter={(value) =>
+                    formatChartXAxisTickLabel(
+                      activeTimeframe as ChartTimeframe,
+                      String(value),
+                    )
+                  }
                 />
                 <YAxis
                   stroke="var(--tl-text-muted)"
