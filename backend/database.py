@@ -121,12 +121,14 @@ def _migrate_trades_schema(db_engine: Engine | None = None) -> None:
         if _TRADES_NEW_TABLE in table_names:
             with eng.begin() as connection:
                 _drop_stale_trades_new(connection)
+        _migrate_trades_mentor_snapshot(eng)
         return
 
     # Interrupted migration after DROP TABLE trades: complete the rename only.
     if _TRADES_TABLE not in table_names and _TRADES_NEW_TABLE in table_names:
         with eng.begin() as connection:
             _finalize_trades_rename(connection)
+        _migrate_trades_mentor_snapshot(eng)
         return
 
     if _TRADES_TABLE not in table_names:
@@ -140,6 +142,31 @@ def _migrate_trades_schema(db_engine: Engine | None = None) -> None:
         connection.execute(text(_copy_trades_into_new_table_sql(column_names)))
         connection.execute(text(f"DROP TABLE {_TRADES_TABLE}"))
         _finalize_trades_rename(connection)
+
+    _migrate_trades_mentor_snapshot(eng)
+
+
+def _mentor_snapshot_column_present(db_engine: Engine) -> bool:
+    if _TRADES_TABLE not in _trades_table_names(db_engine):
+        return False
+    columns = inspect(db_engine).get_columns(_TRADES_TABLE)
+    return any(col["name"] == "mentor_snapshot" for col in columns)
+
+
+def _migrate_trades_mentor_snapshot(db_engine: Engine | None = None) -> None:
+    """Add the ER-0030 mentor_snapshot column when missing.
+
+  Safe to call repeatedly; existing trades keep a NULL snapshot.
+    """
+    eng = db_engine or engine
+    if _TRADES_TABLE not in _trades_table_names(eng):
+        return
+    if _mentor_snapshot_column_present(eng):
+        return
+    with eng.begin() as connection:
+        connection.execute(
+            text(f"ALTER TABLE {_TRADES_TABLE} ADD COLUMN mentor_snapshot TEXT")
+        )
 
 
 def init_db(db_engine: Engine | None = None) -> None:

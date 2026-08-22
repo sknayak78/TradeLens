@@ -8,6 +8,7 @@ import {
   tradeService,
   Trade,
   TradeCreatePayload,
+  TradeUpdatePayload,
 } from "@/services/tradeService";
 
 export const TRADES_QUERY_KEY = ["trades"] as const;
@@ -23,6 +24,22 @@ export function useCreateTrade() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: TradeCreatePayload) => tradeService.create(payload),
+    retry: false,
+    onSuccess: () => qc.invalidateQueries({ queryKey: TRADES_QUERY_KEY }),
+  });
+}
+
+export function useUpdateTrade() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: number;
+      payload: TradeUpdatePayload;
+    }) => tradeService.update(id, payload),
+    retry: false,
     onSuccess: () => qc.invalidateQueries({ queryKey: TRADES_QUERY_KEY }),
   });
 }
@@ -31,6 +48,7 @@ export function useDeleteTrade() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => tradeService.remove(id),
+    retry: false,
     onSuccess: () => qc.invalidateQueries({ queryKey: TRADES_QUERY_KEY }),
   });
 }

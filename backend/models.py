@@ -33,6 +33,7 @@ class Trade(Base):
     side: Mapped[str] = mapped_column(String(8), default="LONG", nullable=False)
     exit_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(8), default="CLOSED", nullable=False)
+    mentor_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Settings(Base):

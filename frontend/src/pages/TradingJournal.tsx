@@ -1,11 +1,15 @@
-import { useMemo, useState } from "react";
-import { NotebookPen, Plus, Trash2 } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { NotebookPen, Pencil, Plus, Trash2 } from "lucide-react";
 import PanelCard from "@/components/panels/PanelCard";
 import LoadingState from "@/components/common/LoadingState";
 import ErrorState from "@/components/common/ErrorState";
 import EmptyState from "@/components/common/EmptyState";
 import NewTradeDialog from "@/components/panels/NewTradeDialog";
+import EditTradeDialog from "@/components/panels/EditTradeDialog";
+import TradeMentorSnapshotPanel from "@/components/panels/TradeMentorSnapshotPanel";
+import TradeMyNotePanel from "@/components/panels/TradeMyNotePanel";
 import { useTrades, useDeleteTrade } from "@/hooks/useTrades";
+import { showApiError, showSuccess } from "@/lib/feedback";
 import type { Trade } from "@/services/tradeService";
 
 function formatDate(iso: string): string {
@@ -29,6 +33,26 @@ export default function TradingJournal() {
   const { data: trades = [], isLoading, isError, error, refetch } = useTrades();
   const deleteTrade = useDeleteTrade();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const confirmDelete = () => {
+    if (!deletingTrade) return;
+    const tradeId = deletingTrade.id;
+    setDeletingId(tradeId);
+    deleteTrade.mutate(tradeId, {
+      onSuccess: () => {
+        showSuccess("Trade deleted.");
+        setDeletingId(null);
+        setDeletingTrade(null);
+      },
+      onError: (err) => {
+        showApiError("Could not delete trade", err);
+        setDeletingId(null);
+      },
+    });
+  };
 
   const stats = useMemo(() => {
     const closed = trades.filter((trade) => trade.status === "CLOSED");
@@ -135,7 +159,7 @@ export default function TradingJournal() {
                   <th className="text-right font-normal px-2 pb-2">Qty</th>
                   <th className="text-right font-normal px-2 pb-2">P&amp;L</th>
                   <th className="text-left font-normal px-4 pb-2">Note</th>
-                  <th className="pb-2 w-8"></th>
+                  <th className="pb-2 w-16"></th>
                 </tr>
               </thead>
               <tbody>
@@ -145,87 +169,127 @@ export default function TradingJournal() {
                     ? trade.unrealized_pnl ?? 0
                     : trade.pnl;
                   return (
-                    <tr
-                      key={trade.id}
-                      data-testid={`journal-row-${trade.id}`}
-                      className="tl-row border-t border-[#D9DDE2]/60"
-                    >
-                      <td className="px-4 py-2.5 font-mono tabular-nums text-[#667085] text-xs">
-                        T-{trade.id.toString().padStart(4, "0")}
-                      </td>
-                      <td className="px-2 py-2.5 text-[#1F2933]">
-                        {formatDate(trade.trade_date)}
-                      </td>
-                      <td className="px-2 py-2.5 text-[#1F2933]">
-                        {trade.exit_date ? formatDate(trade.exit_date) : "—"}
-                      </td>
-                      <td className="px-2 py-2.5 text-[#1F2933] font-medium">
-                        {trade.symbol}
-                      </td>
-                      <td className="px-2 py-2.5">
-                        <span
-                          className={`px-1.5 py-0.5 rounded-[3px] text-[10px] font-mono border ${
-                            trade.side === "LONG"
-                              ? "text-[#26a69a] bg-[#26a69a]/10 border-[#26a69a]/25"
-                              : "text-[#ef5350] bg-[#ef5350]/10 border-[#ef5350]/25"
-                          }`}
-                        >
-                          {trade.side}
-                        </span>
-                      </td>
-                      <td className="px-2 py-2.5">
-                        <span
-                          className={`px-1.5 py-0.5 rounded-[3px] text-[10px] font-mono border ${
-                            isOpen
-                              ? "text-[#2962ff] bg-[#2962ff]/10 border-[#2962ff]/25"
-                              : "text-[#667085] bg-[#F0F1EF] border-[#D9DDE2]"
-                          }`}
-                        >
-                          {trade.status}
-                        </span>
-                      </td>
-                      <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
-                        {trade.entry_price.toLocaleString("en-IN")}
-                      </td>
-                      <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
-                        {isOpen
-                          ? trade.current_price?.toLocaleString("en-IN") ?? "—"
-                          : trade.exit_price?.toLocaleString("en-IN") ?? "—"}
-                      </td>
-                      <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
-                        {trade.quantity}
-                      </td>
-                      <td
-                        className={`px-2 py-2.5 text-right font-mono tabular-nums font-semibold ${
-                          pnlValue >= 0 ? "text-[#26a69a]" : "text-[#ef5350]"
-                        }`}
+                    <Fragment key={trade.id}>
+                      <tr
+                        data-testid={`journal-row-${trade.id}`}
+                        className="tl-row border-t border-[#D9DDE2]/60"
                       >
-                        {formatMoney(pnlValue)}
-                        {isOpen && (
-                          <div className="text-[10px] font-normal text-[#667085]">
-                            unrealized
-                          </div>
-                        )}
-                        {!isOpen && trade.holding_period_days != null && (
-                          <div className="text-[10px] font-normal text-[#667085]">
-                            {trade.holding_period_days}d hold
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-[#667085] text-xs max-w-[240px] truncate">
-                        {trade.notes || "—"}
-                      </td>
-                      <td className="px-2 py-2.5">
-                        <button
-                          onClick={() => deleteTrade.mutate(trade.id)}
-                          data-testid={`journal-delete-${trade.id}`}
-                          className="p-1 rounded-md text-[#667085] hover:text-[#ef5350] hover:bg-[#ef5350]/10 transition-colors"
-                          aria-label={`Delete trade ${trade.id}`}
+                        <td className="px-4 py-2.5 font-mono tabular-nums text-[#667085] text-xs">
+                          T-{trade.id.toString().padStart(4, "0")}
+                        </td>
+                        <td className="px-2 py-2.5 text-[#1F2933]">
+                          {formatDate(trade.trade_date)}
+                        </td>
+                        <td className="px-2 py-2.5 text-[#1F2933]">
+                          {trade.exit_date ? formatDate(trade.exit_date) : "—"}
+                        </td>
+                        <td className="px-2 py-2.5 text-[#1F2933] font-medium">
+                          {trade.symbol}
+                        </td>
+                        <td className="px-2 py-2.5">
+                          <span
+                            className={`px-1.5 py-0.5 rounded-[3px] text-[10px] font-mono border ${
+                              trade.side === "LONG"
+                                ? "text-[#26a69a] bg-[#26a69a]/10 border-[#26a69a]/25"
+                                : "text-[#ef5350] bg-[#ef5350]/10 border-[#ef5350]/25"
+                            }`}
+                          >
+                            {trade.side}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2.5">
+                          <span
+                            className={`px-1.5 py-0.5 rounded-[3px] text-[10px] font-mono border ${
+                              isOpen
+                                ? "text-[#2962ff] bg-[#2962ff]/10 border-[#2962ff]/25"
+                                : "text-[#667085] bg-[#F0F1EF] border-[#D9DDE2]"
+                            }`}
+                          >
+                            {trade.status}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]">
+                          {trade.entry_price.toLocaleString("en-IN")}
+                        </td>
+                        <td
+                          className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]"
+                          data-testid={`journal-exit-price-${trade.id}`}
                         >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
+                          {isOpen
+                            ? "—"
+                            : trade.exit_price?.toLocaleString("en-IN") ?? "—"}
+                        </td>
+                        <td
+                          className="px-2 py-2.5 text-right font-mono tabular-nums text-[#1F2933]"
+                          data-testid={`journal-qty-${trade.id}`}
+                        >
+                          {trade.quantity}
+                        </td>
+                        <td
+                          className={`px-2 py-2.5 text-right font-mono tabular-nums font-semibold ${
+                            pnlValue >= 0 ? "text-[#26a69a]" : "text-[#ef5350]"
+                          }`}
+                        >
+                          {formatMoney(pnlValue)}
+                          {isOpen && (
+                            <div className="text-[10px] font-normal text-[#667085]">
+                              unrealized
+                            </div>
+                          )}
+                          {!isOpen && (
+                            <div className="text-[10px] font-normal text-[#667085]">
+                              realized
+                              {trade.holding_period_days != null
+                                ? ` · ${trade.holding_period_days}d hold`
+                                : ""}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-[#667085] text-xs max-w-[240px] truncate">
+                          {trade.notes || "—"}
+                        </td>
+                        <td className="px-2 py-2.5">
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setEditingTrade(trade)}
+                              data-testid={`journal-edit-${trade.id}`}
+                              className="p-1 rounded-md text-[#667085] hover:text-[#2962ff] hover:bg-[#2962ff]/10 transition-colors"
+                              aria-label={`Edit trade ${trade.id}`}
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingTrade(trade)}
+                              disabled={deletingId === trade.id}
+                              data-testid={`journal-delete-${trade.id}`}
+                              className="p-1 rounded-md text-[#667085] hover:text-[#ef5350] hover:bg-[#ef5350]/10 transition-colors disabled:opacity-50"
+                              aria-label={`Delete trade ${trade.id}`}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr
+                        key={`${trade.id}-details`}
+                        className="border-t border-[#D9DDE2]/40 bg-[#FCFCFB]"
+                      >
+                        <td colSpan={12} className="px-4 py-3">
+                          <div className="max-w-3xl">
+                            <TradeMentorSnapshotPanel
+                              snapshot={trade.mentor_snapshot}
+                              tradeId={trade.id}
+                            />
+                            <TradeMyNotePanel
+                              tradeId={trade.id}
+                              notes={trade.notes}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -243,6 +307,51 @@ export default function TradingJournal() {
       </PanelCard>
 
       <NewTradeDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+      <EditTradeDialog
+        trade={editingTrade}
+        onClose={() => setEditingTrade(null)}
+      />
+
+      {deletingTrade && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          data-testid="journal-delete-confirm"
+        >
+          <div
+            className="absolute inset-0 bg-black/70"
+            onClick={() => setDeletingTrade(null)}
+          />
+          <div className="relative w-full max-w-sm bg-white border border-[#D9DDE2] rounded-md shadow-2xl p-4">
+            <h3 className="text-[#1F2933] text-sm font-semibold mb-1">
+              Delete this trade?
+            </h3>
+            <p className="text-xs text-[#667085] mb-4">
+              This will permanently remove T-
+              {deletingTrade.id.toString().padStart(4, "0")} ({deletingTrade.symbol}
+              ). This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingTrade(null)}
+                data-testid="journal-delete-cancel"
+                className="px-3 py-1.5 rounded-md text-sm text-[#667085] hover:bg-[#F0F1EF]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deletingId === deletingTrade.id}
+                data-testid="journal-delete-confirm-btn"
+                className="px-3 py-1.5 rounded-md bg-[#ef5350] hover:bg-[#ef5350]/90 text-white text-sm font-medium disabled:opacity-60"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

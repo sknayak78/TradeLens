@@ -2,8 +2,6 @@ export type ChartTimeframe = "1D" | "1W" | "1M" | "3M" | "1Y";
 
 const IST = "Asia/Kolkata";
 
-type SeriesPoint = { t: string; v: number };
-
 function parseIstDate(isoTimestamp: string): Date {
   return new Date(isoTimestamp);
 }
@@ -79,32 +77,4 @@ export function formatChartTooltipLabel(
     minute: "2-digit",
     hour12: false,
   });
-}
-
-export function formatChartXAxisTick(
-  timeframe: string,
-  isoTimestamp: string,
-  index: number,
-  series: SeriesPoint[],
-): string {
-  const label = formatChartAxisTickLabel(timeframe, isoTimestamp);
-  if (!series.length) return label;
-
-  if (timeframe !== "1D" && index > 0) {
-    const previous = formatChartAxisTickLabel(timeframe, series[index - 1].t);
-    if (label === previous) {
-      return "";
-    }
-  }
-
-  if (timeframe === "3M" || timeframe === "1Y") {
-    const targetTicks = timeframe === "3M" ? 8 : 10;
-    const step = Math.max(1, Math.ceil(series.length / targetTicks));
-    const isEdge = index === 0 || index === series.length - 1;
-    if (!isEdge && index % step !== 0) {
-      return "";
-    }
-  }
-
-  return label;
 }

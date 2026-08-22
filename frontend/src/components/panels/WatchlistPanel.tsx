@@ -6,6 +6,7 @@ import EmptyState from "@/components/common/EmptyState";
 import { useWatchlist, useRemoveFromWatchlist } from "@/hooks/useWatchlist";
 import { showApiError, showSuccess } from "@/lib/feedback";
 import { X } from "lucide-react";
+import MetricHelp from "@/components/common/MetricHelp";
 
 interface WatchlistPanelProps {
   onSelect?: (symbol: string) => void;
@@ -61,8 +62,12 @@ export default function WatchlistPanel({
               <tr className="text-[#667085] text-[10px] uppercase tracking-widest">
                 <th className="text-left font-normal px-4 pb-2">Stock</th>
                 <th className="text-right font-normal px-2 pb-2">Price</th>
-                <th className="text-right font-normal px-2 pb-2">RSI</th>
-                <th className="text-right font-normal px-2 pb-2">EMA20</th>
+                <th className="text-right font-normal px-2 pb-2">
+                  <MetricHelp metric="rsi" label="RSI" className="justify-end w-full" testId="watchlist-help-rsi" />
+                </th>
+                <th className="text-right font-normal px-2 pb-2">
+                  <MetricHelp metric="ema20" label="EMA20" className="justify-end w-full" testId="watchlist-help-ema20" />
+                </th>
                 <th className="text-right font-normal px-2 pb-2">VWAP</th>
                 <th className="text-right font-normal px-2 pb-2">Score</th>
                 <th className="text-left font-normal px-4 pb-2">Trend</th>

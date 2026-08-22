@@ -1,5 +1,6 @@
 """Market-data endpoints backed by the cached provider service."""
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -27,6 +28,10 @@ from services.opportunity_selection import select_opportunities
 from services.stock_decision import decide
 
 logger = logging.getLogger("tradelens.market")
+
+# Short-lived response cache so repeated Dashboard loads do not re-enrich the universe.
+_OPPORTUNITIES_CACHE_TTL_SECONDS = 30.0
+_opportunities_cache: dict[str, Any] = {"expires_at": 0.0, "response": None}
 
 router = APIRouter(tags=["market"])
 
@@ -99,6 +104,12 @@ def market_summary() -> MarketSummary:
     )
 
 
+def clear_opportunities_cache() -> None:
+    """Reset the short-lived opportunities response cache (for tests)."""
+    _opportunities_cache["response"] = None
+    _opportunities_cache["expires_at"] = 0.0
+
+
 @router.get("/opportunities", response_model=OpportunitiesResponse)
 def opportunities() -> OpportunitiesResponse:
     """Today's Rankings — featured rows from the screened market universe.
@@ -107,6 +118,13 @@ def opportunities() -> OpportunitiesResponse:
   screening, evaluated by the Mentor Engine, bucketed by
   ``recommendation.action``, and featured by ``recommendation.score``.
     """
+    now = time.monotonic()
+    cached = _opportunities_cache.get("response")
+    if cached is not None and now < _opportunities_cache["expires_at"]:
+        logger.debug("market.opportunities.cache_hit")
+        return cached
+
+    started = time.perf_counter()
     selection, metadata = select_opportunities(market_data_service)
 
     rankings: List[Ranking] = []
@@ -135,11 +153,20 @@ def opportunities() -> OpportunitiesResponse:
             ),
         ))
 
-    return OpportunitiesResponse(
+    response = OpportunitiesResponse(
         **metadata,
         rankings=rankings,
         actionCounts=selection.action_counts,
     )
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    logger.info(
+        "market.opportunities built rows=%s elapsed_ms=%.1f cached=false",
+        len(rankings),
+        elapsed_ms,
+    )
+    _opportunities_cache["response"] = response
+    _opportunities_cache["expires_at"] = now + _OPPORTUNITIES_CACHE_TTL_SECONDS
+    return response
 
 
 @router.get("/stock/{symbol}", response_model=StockDetail)

@@ -117,6 +117,7 @@ export function LevelTile({
   valueClass = "text-[#1F2933]",
   note,
   emphasis = false,
+  labelHelp,
   testId,
 }: {
   label: string;
@@ -126,6 +127,7 @@ export function LevelTile({
   note?: { text: string; tone: Tone };
   /** Marks a value a trader acts on directly (entry, stop, targets). */
   emphasis?: boolean;
+  labelHelp?: ReactNode;
   testId?: string;
 }) {
   return (
@@ -134,8 +136,9 @@ export function LevelTile({
         emphasis ? "border-[#3a3f4b]" : "border-[#D9DDE2]"
       }`}
     >
-      <div className="text-[9px] uppercase tracking-widest text-[#667085] mb-1">
-        {label}
+      <div className="text-[9px] uppercase tracking-widest text-[#667085] mb-1 flex items-center gap-1">
+        <span>{label}</span>
+        {labelHelp}
       </div>
       <div
         className={`font-mono tabular-nums font-bold leading-tight ${
