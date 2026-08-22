@@ -1,10 +1,10 @@
 /**
  * Chart X-axis tick selection and time-scale helpers.
  *
- * Spacing model: Recharts plots points in series order (trading-session spacing).
- * Weekends and overnight gaps are omitted from the data, so index spacing matches
- * trading bars rather than wall-clock continuity. Tick labels are chosen from
- * actual timestamps so they stay chronologically meaningful.
+ * Spacing model:
+ * - 1D/1W/1M/3M: trading-session spacing via categorical `t` axis (series order).
+ * - 1Y: chronological spacing via numeric epoch-ms `x` axis so months sit at
+ *   their true elapsed-time positions across the year.
  */
 import {
   type ChartTimeframe,
@@ -22,17 +22,22 @@ export interface ChartTimeAxisTick {
   index: number;
   timestamp: string;
   label: string;
+  /** Epoch milliseconds for time-scaled axes. */
+  x: number;
 }
 
 export interface ChartTimeAxisPlan {
   /** Selected ticks with formatted labels. */
   ticks: ChartTimeAxisTick[];
-  /** Timestamp values passed to Recharts `ticks` on the X axis. */
+  /** ISO timestamp values for categorical Recharts `ticks` (non-1Y). */
   tickValues: string[];
-  /**
-   * Series enriched with epoch-ms `x` for optional time-scale rendering.
-   * Kept for future use; ChartCard currently uses categorical `t` spacing.
-   */
+  /** Epoch-ms tick positions for time-scaled Recharts `ticks` (1Y). */
+  tickTimestamps: number[];
+  /** Min/max epoch-ms domain for time-scaled axes (1Y). */
+  timeDomain: [number, number] | null;
+  /** When true, ChartCard renders a numeric/time XAxis on `x`. */
+  useTimeScale: boolean;
+  /** Series enriched with epoch-ms `x` for positioning. */
   series: Array<ChartSeriesPoint & { x: number }>;
 }
 
@@ -58,6 +63,44 @@ function parseTimestamp(isoTimestamp: string): Date {
 
 function toEpochMs(isoTimestamp: string): number {
   return parseTimestamp(isoTimestamp).getTime();
+}
+
+/** True when the chart should plot X by elapsed time rather than series index. */
+export function usesTimeScale(timeframe: ChartTimeframe): boolean {
+  return timeframe === "1Y";
+}
+
+/** Normalized [0,1] position by elapsed time for a series point index. */
+export function getTimePositionRatio(
+  series: ChartSeriesPoint[],
+  index: number,
+): number {
+  if (series.length <= 1) {
+    return 0;
+  }
+  const start = toEpochMs(series[0].t);
+  const end = toEpochMs(series[series.length - 1].t);
+  if (start === end) {
+    return 0;
+  }
+  return (toEpochMs(series[index].t) - start) / (end - start);
+}
+
+/** Normalized [0,1] position by array index (categorical spacing). */
+export function getIndexPositionRatio(length: number, index: number): number {
+  if (length <= 1) {
+    return 0;
+  }
+  return index / (length - 1);
+}
+
+export function isChronologicallyOrdered(series: ChartSeriesPoint[]): boolean {
+  for (let index = 1; index < series.length; index += 1) {
+    if (toEpochMs(series[index].t) < toEpochMs(series[index - 1].t)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function formatIstParts(date: Date): {
@@ -299,11 +342,21 @@ export function buildChartTimeAxisPlan(
     index,
     timestamp: series[index].t,
     label: formatChartAxisTickLabel(timeframe, series[index].t),
+    x: enrichedSeries[index].x,
   }));
+
+  const useTimeScale = usesTimeScale(timeframe);
+  const timeDomain: [number, number] | null =
+    useTimeScale && enrichedSeries.length
+      ? [enrichedSeries[0].x, enrichedSeries[enrichedSeries.length - 1].x]
+      : null;
 
   return {
     ticks,
-    tickValues: ticks.map((tick) => tick.timestamp),
+    tickValues: useTimeScale ? [] : ticks.map((tick) => tick.timestamp),
+    tickTimestamps: useTimeScale ? ticks.map((tick) => tick.x) : [],
+    timeDomain,
+    useTimeScale,
     series: enrichedSeries,
   };
 }
@@ -313,9 +366,15 @@ export function buildChartTimeAxisPlan(
  */
 export function formatChartXAxisTickLabel(
   timeframe: ChartTimeframe,
-  isoTimestamp: string,
+  isoTimestampOrEpoch: string | number,
 ): string {
-  return formatChartAxisTickLabel(timeframe, isoTimestamp);
+  if (typeof isoTimestampOrEpoch === "number") {
+    return formatChartAxisTickLabel(
+      timeframe,
+      new Date(isoTimestampOrEpoch).toISOString(),
+    );
+  }
+  return formatChartAxisTickLabel(timeframe, isoTimestampOrEpoch);
 }
 
 /**

@@ -178,21 +178,42 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                   strokeDasharray="2 4"
                   vertical={false}
                 />
-                <XAxis
-                  dataKey="t"
-                  stroke="var(--tl-text-muted)"
-                  tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
-                  tickLine={false}
-                  axisLine={false}
-                  ticks={chartAxisPlan?.tickValues}
-                  interval={0}
-                  tickFormatter={(value) =>
-                    formatChartXAxisTickLabel(
-                      activeTimeframe as ChartTimeframe,
-                      String(value),
-                    )
-                  }
-                />
+                {chartAxisPlan?.useTimeScale ? (
+                  <XAxis
+                    dataKey="x"
+                    type="number"
+                    scale="time"
+                    domain={chartAxisPlan.timeDomain ?? ["dataMin", "dataMax"]}
+                    stroke="var(--tl-text-muted)"
+                    tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
+                    tickLine={false}
+                    axisLine={false}
+                    ticks={chartAxisPlan.tickTimestamps}
+                    interval={0}
+                    tickFormatter={(value) =>
+                      formatChartXAxisTickLabel(
+                        activeTimeframe as ChartTimeframe,
+                        Number(value),
+                      )
+                    }
+                  />
+                ) : (
+                  <XAxis
+                    dataKey="t"
+                    stroke="var(--tl-text-muted)"
+                    tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
+                    tickLine={false}
+                    axisLine={false}
+                    ticks={chartAxisPlan?.tickValues}
+                    interval={0}
+                    tickFormatter={(value) =>
+                      formatChartXAxisTickLabel(
+                        activeTimeframe as ChartTimeframe,
+                        String(value),
+                      )
+                    }
+                  />
+                )}
                 <YAxis
                   stroke="var(--tl-text-muted)"
                   tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
@@ -211,9 +232,17 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                     color: "var(--tl-text)",
                   }}
                   labelStyle={{ color: "var(--tl-text-muted)" }}
-                  labelFormatter={(value) =>
-                    formatChartTooltipLabel(activeTimeframe, String(value))
-                  }
+                  labelFormatter={(value, payload) => {
+                    const point = payload?.[0]?.payload as
+                      | { t?: string }
+                      | undefined;
+                    const timestamp =
+                      point?.t ??
+                      (typeof value === "number"
+                        ? new Date(value).toISOString()
+                        : String(value));
+                    return formatChartTooltipLabel(activeTimeframe, timestamp);
+                  }}
                   itemStyle={{ color: "var(--tl-text)" }}
                   formatter={(v: number) => [
                     `₹${v.toLocaleString("en-IN")}`,

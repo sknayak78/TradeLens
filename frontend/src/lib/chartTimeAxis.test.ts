@@ -1,7 +1,11 @@
 import {
   buildChartTimeAxisPlan,
   estimateTickLabelOverlap,
+  getIndexPositionRatio,
+  getTimePositionRatio,
+  isChronologicallyOrdered,
   selectChartXAxisTickIndices,
+  usesTimeScale,
   type ChartSeriesPoint,
 } from "@/lib/chartTimeAxis";
 
@@ -163,6 +167,75 @@ describe("chartTimeAxis", () => {
     expect(plan.ticks[plan.ticks.length - 1].label).toMatch(/2026/);
     expect(plan.ticks.map((tick) => tick.label)).toContain("Aug 2025");
     expect(plan.ticks.map((tick) => tick.label)).toContain("Aug 2026");
+  });
+
+  it("1Y uses chronologically scaled numeric X values", () => {
+    const series = buildYearlySeries();
+    const plan = buildChartTimeAxisPlan("1Y", series, 900);
+
+    expect(usesTimeScale("1Y")).toBe(true);
+    expect(plan.useTimeScale).toBe(true);
+    expect(isChronologicallyOrdered(series)).toBe(true);
+    expect(plan.series.every((point) => typeof point.x === "number")).toBe(true);
+    expect(plan.series.every((point, index) => {
+      if (index === 0) return true;
+      return point.x > plan.series[index - 1].x;
+    })).toBe(true);
+
+    expect(plan.timeDomain).toEqual([
+      plan.series[0].x,
+      plan.series[plan.series.length - 1].x,
+    ]);
+
+    plan.tickTimestamps.forEach((timestamp) => {
+      expect(timestamp).toBeGreaterThanOrEqual(plan.timeDomain![0]);
+      expect(timestamp).toBeLessThanOrEqual(plan.timeDomain![1]);
+    });
+
+    const uniqueTickTimestamps = new Set(plan.tickTimestamps);
+    expect(uniqueTickTimestamps.size).toBe(plan.tickTimestamps.length);
+
+    plan.series.forEach((point, index) => {
+      expect(point.x).toBe(new Date(series[index].t).getTime());
+    });
+  });
+
+  it("1Y time positions diverge from index positions when density is uneven", () => {
+    const sparseMonths: ChartSeriesPoint[] = [];
+    for (let month = 1; month <= 6; month += 1) {
+      sparseMonths.push({
+        t: istTimestamp(2025, month, 15),
+        v: 100 + month,
+      });
+    }
+    const denseMonths = buildDailySeries({ year: 2025, month: 7, day: 1 }, 120);
+    const series = [...sparseMonths, ...denseMonths];
+    const plan = buildChartTimeAxisPlan("1Y", series, 900);
+
+    expect(plan.useTimeScale).toBe(true);
+
+    const midIndex = Math.floor(series.length / 2);
+    const indexRatio = getIndexPositionRatio(series.length, midIndex);
+    const timeRatio = getTimePositionRatio(series, midIndex);
+    expect(Math.abs(indexRatio - timeRatio)).toBeGreaterThan(0.05);
+  });
+
+  it("shorter timeframes keep categorical axis spacing", () => {
+    const scenarios: Array<["1D" | "1W" | "1M" | "3M", ChartSeriesPoint[]]> = [
+      ["1D", buildIntradayWeekSeries().slice(0, 26)],
+      ["1W", buildIntradayWeekSeries()],
+      ["1M", buildDailySeries({ year: 2025, month: 7, day: 25 }, 22)],
+      ["3M", buildDailySeries({ year: 2025, month: 6, day: 2 }, 66)],
+    ];
+
+    scenarios.forEach(([timeframe, series]) => {
+      const plan = buildChartTimeAxisPlan(timeframe, series, 720);
+      expect(usesTimeScale(timeframe)).toBe(false);
+      expect(plan.useTimeScale).toBe(false);
+      expect(plan.tickValues.length).toBeGreaterThan(0);
+      expect(plan.tickTimestamps).toEqual([]);
+      expect(plan.timeDomain).toBeNull();
+    });
   });
 
   it("duplicate timestamps do not produce duplicate visible labels", () => {
