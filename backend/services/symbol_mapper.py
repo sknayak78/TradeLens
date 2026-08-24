@@ -18,7 +18,29 @@ class SymbolMapper:
         "M&M": "M&M.NS",
     }
 
+    _ALIASES = {
+        "ZOMATO": "ETERNAL",
+    }
+
+    _REVERSE_YAHOO = {
+        v: k for k, v in _YAHOO_SYMBOLS.items()
+    }
+
+    def resolve_alias(self, symbol_or_query: str) -> str:
+        """Resolve corporate renames/aliases (e.g. Zomato -> Eternal)."""
+        normalized = symbol_or_query.strip().upper()
+        return self._ALIASES.get(normalized, symbol_or_query.strip())
+
     def to_yahoo(self, symbol: str) -> str:
         """Return the Yahoo NSE ticker for a normalized application symbol."""
-        normalized = symbol.strip().upper()
-        return self._YAHOO_SYMBOLS.get(normalized, f"{normalized}.NS")
+        resolved = self.resolve_alias(symbol).upper()
+        return self._YAHOO_SYMBOLS.get(resolved, f"{resolved}.NS")
+
+    def to_canonical(self, yahoo_symbol: str) -> str:
+        """Return the TradeLens canonical symbol for a Yahoo ticker."""
+        normalized = yahoo_symbol.strip().upper()
+        if normalized in self._REVERSE_YAHOO:
+            return self._REVERSE_YAHOO[normalized]
+        if normalized.endswith(".NS"):
+            return normalized[:-3]
+        return normalized
