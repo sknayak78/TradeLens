@@ -208,6 +208,9 @@ def _to_out(trade: Trade) -> TradeOut:
         current_price=current_price,
         holding_period_days=holding_period_days,
         mentor_snapshot=_mentor_snapshot_out(trade),
+        user_decision=trade.user_decision,  # type: ignore[arg-type]
+        user_thesis=trade.user_thesis,
+        user_invalidation=trade.user_invalidation,
     )
 
 
@@ -301,6 +304,9 @@ def create_trade(payload: TradeCreate, db: Session = Depends(get_db)) -> TradeOu
         side=payload.side,
         status=status_value,
         mentor_snapshot=serialize_mentor_snapshot(snapshot),
+        user_decision=payload.user_decision,
+        user_thesis=payload.user_thesis,
+        user_invalidation=payload.user_invalidation,
     )
     db.add(trade)
     db.commit()
@@ -330,6 +336,12 @@ def update_trade(
         trade.quantity = payload.quantity
     if payload.notes is not None:
         trade.notes = payload.notes
+    if payload.user_decision is not None:
+        trade.user_decision = payload.user_decision
+    if payload.user_thesis is not None:
+        trade.user_thesis = payload.user_thesis
+    if payload.user_invalidation is not None:
+        trade.user_invalidation = payload.user_invalidation
 
     trade.status = status_value
     trade.exit_date = exit_date

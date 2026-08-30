@@ -5,16 +5,23 @@ import WatchlistPanel from "@/components/panels/WatchlistPanel";
 import ChartCard from "@/components/panels/ChartCard";
 import MarketTicker from "@/components/panels/MarketTicker";
 import EducationalDisclaimer from "@/components/common/EducationalDisclaimer";
+import { useRankings } from "@/hooks/useMarket";
 export default function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const symbolFromUrl = searchParams.get("symbol")?.trim().toUpperCase() ?? "";
-  const [activeSymbol, setActiveSymbol] = useState(symbolFromUrl || "RELIANCE");
+  const { data: rankingsData } = useRankings();
+  const [activeSymbol, setActiveSymbol] = useState(symbolFromUrl);
 
   useEffect(() => {
     if (symbolFromUrl) {
       setActiveSymbol(symbolFromUrl);
+      return;
     }
-  }, [symbolFromUrl]);
+    const firstSymbol = rankingsData?.rankings?.[0]?.symbol;
+    if (!activeSymbol && firstSymbol) {
+      setActiveSymbol(firstSymbol);
+    }
+  }, [symbolFromUrl, rankingsData, activeSymbol]);
 
   const handleSelectSymbol = (symbol: string) => {
     setActiveSymbol(symbol);

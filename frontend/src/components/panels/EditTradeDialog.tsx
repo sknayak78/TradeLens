@@ -9,7 +9,7 @@ import {
   type EditTradeFormValues,
 } from "@/lib/editTradeForm";
 import { showApiError, showSuccess } from "@/lib/feedback";
-import type { Trade, TradeStatus } from "@/services/tradeService";
+import type { Trade, TradeStatus, UserDecision } from "@/services/tradeService";
 
 interface EditTradeDialogProps {
   trade: Trade | null;
@@ -35,6 +35,9 @@ function formFromTrade(trade: Trade): EditTradeFormValues {
     exit_date: toDateInput(trade.exit_date),
     exit_price: trade.exit_price != null ? String(trade.exit_price) : "",
     notes: trade.notes ?? "",
+    user_decision: trade.user_decision ?? "",
+    user_thesis: trade.user_thesis ?? "",
+    user_invalidation: trade.user_invalidation ?? "",
   };
 }
 
@@ -51,6 +54,9 @@ export default function EditTradeDialog({ trade, onClose }: EditTradeDialogProps
     exit_date: "",
     exit_price: "",
     notes: "",
+    user_decision: "",
+    user_thesis: "",
+    user_invalidation: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [priceWarnings, setPriceWarnings] = useState<PriceWarning[]>([]);
@@ -351,6 +357,67 @@ export default function EditTradeDialog({ trade, onClose }: EditTradeDialogProps
               )}
             </div>
           )}
+
+          <div className="rounded-[4px] border border-[#2962ff]/20 bg-[#2962ff]/[0.04] p-3">
+            <div className="text-[10px] uppercase tracking-widest text-[#2962ff] font-semibold mb-1">
+              My Decision
+            </div>
+            <p className="text-[11px] text-[#667085] leading-relaxed mb-3">
+              Your own call and reasoning — separate from the TradeLens Mentor view.
+            </p>
+            <Field label="Decision">
+              <div className="flex gap-2">
+                {(["BUY", "SELL", "WATCH", "AVOID"] as UserDecision[]).map(
+                  (decision) => {
+                    const selected = form.user_decision === decision;
+                    return (
+                      <button
+                        key={decision}
+                        type="button"
+                        onClick={() =>
+                          setForm({ ...form, user_decision: decision })
+                        }
+                        data-testid={`edit-trade-decision-${decision.toLowerCase()}`}
+                        className={`px-3 py-1.5 rounded-md text-xs font-mono border transition-colors ${
+                          selected
+                            ? "bg-[#2962ff]/10 text-[#2962ff] border-[#2962ff]/40 font-semibold"
+                            : "text-[#667085] border-[#D9DDE2] hover:bg-[#F0F1EF]"
+                        }`}
+                      >
+                        {decision.charAt(0) + decision.slice(1).toLowerCase()}
+                      </button>
+                    );
+                  },
+                )}
+              </div>
+            </Field>
+            <div className="mt-3 space-y-3">
+              <Field label="My thesis">
+                <textarea
+                  value={form.user_thesis}
+                  onChange={(e) =>
+                    setForm({ ...form, user_thesis: e.target.value })
+                  }
+                  rows={2}
+                  placeholder="What do you believe will happen, and why?"
+                  data-testid="edit-trade-thesis"
+                  className="w-full px-2.5 py-2 bg-white border border-[#D9DDE2] rounded-md text-sm text-[#1F2933] focus:border-[#2962ff]/60 outline-none resize-none break-words [overflow-wrap:anywhere]"
+                />
+              </Field>
+              <Field label="My invalidation">
+                <textarea
+                  value={form.user_invalidation}
+                  onChange={(e) =>
+                    setForm({ ...form, user_invalidation: e.target.value })
+                  }
+                  rows={2}
+                  placeholder="What would prove your thesis wrong?"
+                  data-testid="edit-trade-invalidation"
+                  className="w-full px-2.5 py-2 bg-white border border-[#D9DDE2] rounded-md text-sm text-[#1F2933] focus:border-[#2962ff]/60 outline-none resize-none break-words [overflow-wrap:anywhere]"
+                />
+              </Field>
+            </div>
+          </div>
 
           <Field label="My Note">
             <textarea

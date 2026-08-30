@@ -2,6 +2,7 @@ import { api } from "@/services/api";
 
 export type TradeSide = "LONG" | "SHORT";
 export type TradeStatus = "OPEN" | "CLOSED";
+export type UserDecision = "BUY" | "SELL" | "WATCH" | "AVOID";
 
 export interface MentorSnapshot {
   action: string | null;
@@ -34,6 +35,9 @@ export interface Trade {
   current_price: number | null;
   holding_period_days: number | null;
   mentor_snapshot: MentorSnapshot | null;
+  user_decision: UserDecision | null;
+  user_thesis: string | null;
+  user_invalidation: string | null;
 }
 
 export interface TradeCreatePayload {
@@ -45,6 +49,9 @@ export interface TradeCreatePayload {
   exit_date?: string | null;
   quantity: number;
   notes?: string;
+  user_decision?: UserDecision | null;
+  user_thesis?: string | null;
+  user_invalidation?: string | null;
   confirm_out_of_range?: boolean;
 }
 
@@ -57,6 +64,9 @@ export interface TradeUpdatePayload {
   quantity?: number;
   notes?: string;
   status?: TradeStatus;
+  user_decision?: UserDecision | null;
+  user_thesis?: string | null;
+  user_invalidation?: string | null;
   confirm_out_of_range?: boolean;
 }
 

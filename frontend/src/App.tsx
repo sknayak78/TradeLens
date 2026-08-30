@@ -3,6 +3,7 @@ import AppShell from "@/components/layout/AppShell";
 import Dashboard from "@/pages/Dashboard";
 import WatchlistPage from "@/pages/WatchlistPage";
 import TradingJournal from "@/pages/TradingJournal";
+import LearningJourneyPage from "@/pages/LearningJourneyPage";
 import SettingsPage from "@/pages/SettingsPage";
 import HowToUseHubPage from "@/pages/HowToUseHubPage";
 import HowToUsePage from "@/pages/HowToUsePage";
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/community" element={<CommunityPage />} />
           <Route path="/watchlist" element={<WatchlistPage />} />
           <Route path="/journal" element={<TradingJournal />} />
+          <Route path="/learning" element={<LearningJourneyPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

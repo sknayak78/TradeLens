@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import {
   BookOpen,
+  GraduationCap,
   LayoutDashboard,
   NotebookPen,
   Settings as SettingsIcon,
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard", end: true },
   { to: "/watchlist", label: "Watchlist", icon: Star, testId: "nav-watchlist", end: true },
   { to: "/journal", label: "Trading Journal", icon: NotebookPen, testId: "nav-journal", end: true },
+  { to: "/learning", label: "Guided Research", icon: GraduationCap, testId: "nav-learning", end: true },
   {
     to: "/how-to-use",
     label: "How to Use TradeLens",

@@ -20,6 +20,7 @@ from routers import watchlist as watchlist_router
 from routers import trades as trades_router
 from routers import settings as settings_router
 from routers import market as market_router
+from routers import learning as learning_router
 
 
 ROOT_DIR = Path(__file__).parent
@@ -81,6 +82,7 @@ api_router.include_router(watchlist_router.router)
 api_router.include_router(trades_router.router)
 api_router.include_router(settings_router.router)
 api_router.include_router(market_router.router)
+api_router.include_router(learning_router.router)
 
 app.include_router(api_router)
 

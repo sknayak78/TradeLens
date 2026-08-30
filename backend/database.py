@@ -169,6 +169,34 @@ def _migrate_trades_mentor_snapshot(db_engine: Engine | None = None) -> None:
         )
 
 
+_USER_DECISION_COLUMNS = (
+    ("user_decision", "VARCHAR(8)"),
+    ("user_thesis", "TEXT"),
+    ("user_invalidation", "TEXT"),
+)
+
+
+def _migrate_trades_user_decision(db_engine: Engine | None = None) -> None:
+    """Add the ER-0034 user decision/thesis/invalidation columns when missing.
+
+    Additive and idempotent: each column is added only when absent, so it is
+    safe to call repeatedly and safe on an existing local database. Existing
+    trades keep a NULL value for the new columns.
+    """
+    eng = db_engine or engine
+    if _TRADES_TABLE not in _trades_table_names(eng):
+        return
+    columns = {col["name"] for col in inspect(eng).get_columns(_TRADES_TABLE)}
+    missing = [(name, sql_type) for name, sql_type in _USER_DECISION_COLUMNS if name not in columns]
+    if not missing:
+        return
+    with eng.begin() as connection:
+        for name, sql_type in missing:
+            connection.execute(
+                text(f"ALTER TABLE {_TRADES_TABLE} ADD COLUMN {name} {sql_type}")
+            )
+
+
 def init_db(db_engine: Engine | None = None) -> None:
     """Create tables (if not already present)."""
     # Import models so metadata is populated
@@ -178,3 +206,4 @@ def init_db(db_engine: Engine | None = None) -> None:
     _recover_interrupted_trades_migration(eng)
     Base.metadata.create_all(bind=eng)
     _migrate_trades_schema(eng)
+    _migrate_trades_user_decision(eng)

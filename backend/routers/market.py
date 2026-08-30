@@ -183,7 +183,7 @@ def stock_detail(symbol: str, timeframe: str = "1W") -> StockDetail:
     decision = decide(stock, insight)
 
     try:
-        series, timeframe_label, timeframe_fallback = build_chart_series(
+        series, timeframe_label, timeframe_fallback, indicators = build_chart_series(
             market_data_service,
             symbol,
             normalized_timeframe,
@@ -198,6 +198,7 @@ def stock_detail(symbol: str, timeframe: str = "1W") -> StockDetail:
         series = insight.get("series", [])
         timeframe_label = "Recent"
         timeframe_fallback = True
+        indicators = None
 
     return StockDetail(
         **stock_result.metadata.to_api_dict(),
@@ -232,6 +233,7 @@ def stock_detail(symbol: str, timeframe: str = "1W") -> StockDetail:
             if decision.recommendation is None
             else _recommendation_out(decision.recommendation)
         ),
+        indicators=indicators,
     )
 
 

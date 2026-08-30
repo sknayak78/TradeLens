@@ -134,18 +134,18 @@ function formatIstParts(date: Date): {
   };
 }
 
-function calendarDayKey(isoTimestamp: string): string {
+export function calendarDayKey(isoTimestamp: string): string {
   const { year, month, day } = formatIstParts(parseTimestamp(isoTimestamp));
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function calendarMonthKey(isoTimestamp: string): string {
+export function calendarMonthKey(isoTimestamp: string): string {
   const { year, month } = formatIstParts(parseTimestamp(isoTimestamp));
   return `${year}-${String(month).padStart(2, "0")}`;
 }
 
 /** Monday-based ISO week key in IST (YYYY-Www). */
-function isoWeekKey(isoTimestamp: string): string {
+export function isoWeekKey(isoTimestamp: string): string {
   const date = parseTimestamp(isoTimestamp);
   const { year, month, day } = formatIstParts(date);
   const utc = Date.UTC(year, month - 1, day);

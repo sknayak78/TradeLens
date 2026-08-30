@@ -1,14 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ReferenceLine,
-  CartesianGrid,
-} from "recharts";
+import { useEffect, useMemo, useState } from "react";
 import { useStock } from "@/hooks/useMarket";
 import { useWatchlist } from "@/hooks/useWatchlist";
 import { useAppSettings } from "@/context/SettingsContext";
@@ -20,14 +10,10 @@ import AnalysisBadges, { Stars, ActionPill } from "@/components/panels/AnalysisB
 import RecommendationCard from "@/components/panels/RecommendationCard";
 import LearnWhyPanel from "@/components/panels/LearnWhyPanel";
 import StockHero from "@/components/panels/StockHero";
+import CandlestickChart from "@/components/charts/CandlestickChart";
 import { Sparkles, TrendingUp, TrendingDown } from "lucide-react";
 import MetricHelp from "@/components/common/MetricHelp";
-import { formatChartTooltipLabel } from "@/lib/chartAxisFormat";
-import {
-  buildChartTimeAxisPlan,
-  formatChartXAxisTickLabel,
-  type ChartTimeframe,
-} from "@/lib/chartTimeAxis";
+import type { ChartTimeframe } from "@/lib/chartTimeAxis";
 
 interface ChartCardProps {
   symbol: string;
@@ -77,35 +63,6 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
     : stock?.trend === "bearish"
       ? "#ef5350"
       : "#2962ff";
-
-  const chartContainerRef = useRef<HTMLDivElement>(null);
-  const [chartWidthPx, setChartWidthPx] = useState(600);
-
-  useEffect(() => {
-    const node = chartContainerRef.current;
-    if (!node) return undefined;
-
-    const updateWidth = () => {
-      const width = node.getBoundingClientRect().width;
-      if (width > 0) {
-        setChartWidthPx(width);
-      }
-    };
-
-    updateWidth();
-    const observer = new ResizeObserver(updateWidth);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [stock?.series]);
-
-  const chartAxisPlan = useMemo(() => {
-    if (!stock?.series?.length) return null;
-    return buildChartTimeAxisPlan(
-      activeTimeframe as ChartTimeframe,
-      stock.series,
-      chartWidthPx,
-    );
-  }, [activeTimeframe, chartWidthPx, stock?.series]);
 
   return (
     <PanelCard
@@ -163,129 +120,13 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
           <StockHero stock={stock} dayLow={stats.min} dayHigh={stats.max} />
 
           {/* Primary visual evidence — placed immediately after the Mentor context */}
-          <div
-            ref={chartContainerRef}
-            className="h-52 md:h-60 min-h-[220px] w-full -mx-2 relative"
-            data-testid="chart-container"
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={chartAxisPlan?.series ?? stock.series}
-                margin={{ top: 8, right: 12, bottom: 4, left: 4 }}
-              >
-                <CartesianGrid
-                  stroke="var(--tl-border)"
-                  strokeDasharray="2 4"
-                  vertical={false}
-                />
-                {chartAxisPlan?.useTimeScale ? (
-                  <XAxis
-                    dataKey="x"
-                    type="number"
-                    scale="time"
-                    domain={chartAxisPlan.timeDomain ?? ["dataMin", "dataMax"]}
-                    stroke="var(--tl-text-muted)"
-                    tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
-                    tickLine={false}
-                    axisLine={false}
-                    ticks={chartAxisPlan.tickTimestamps}
-                    interval={0}
-                    tickFormatter={(value) =>
-                      formatChartXAxisTickLabel(
-                        activeTimeframe as ChartTimeframe,
-                        Number(value),
-                      )
-                    }
-                  />
-                ) : (
-                  <XAxis
-                    dataKey="t"
-                    stroke="var(--tl-text-muted)"
-                    tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
-                    tickLine={false}
-                    axisLine={false}
-                    ticks={chartAxisPlan?.tickValues}
-                    interval={0}
-                    tickFormatter={(value) =>
-                      formatChartXAxisTickLabel(
-                        activeTimeframe as ChartTimeframe,
-                        String(value),
-                      )
-                    }
-                  />
-                )}
-                <YAxis
-                  stroke="var(--tl-text-muted)"
-                  tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
-                  tickLine={false}
-                  axisLine={false}
-                  domain={["dataMin - 5", "dataMax + 5"]}
-                  width={50}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--tl-surface)",
-                    border: "1px solid var(--tl-border)",
-                    borderRadius: 4,
-                    fontFamily: "JetBrains Mono",
-                    fontSize: 12,
-                    color: "var(--tl-text)",
-                  }}
-                  labelStyle={{ color: "var(--tl-text-muted)" }}
-                  labelFormatter={(value, payload) => {
-                    const point = payload?.[0]?.payload as
-                      | { t?: string }
-                      | undefined;
-                    const timestamp =
-                      point?.t ??
-                      (typeof value === "number"
-                        ? new Date(value).toISOString()
-                        : String(value));
-                    return formatChartTooltipLabel(activeTimeframe, timestamp);
-                  }}
-                  itemStyle={{ color: "var(--tl-text)" }}
-                  formatter={(v: number) => [
-                    `₹${v.toLocaleString("en-IN")}`,
-                    "Price",
-                  ]}
-                />
-                <ReferenceLine
-                  y={stock.support}
-                  stroke="#26a69a"
-                  strokeDasharray="3 3"
-                  strokeOpacity={0.5}
-                  label={{
-                    value: "S",
-                    fill: "#26a69a",
-                    fontSize: 10,
-                    position: "insideLeft",
-                  }}
-                />
-                <ReferenceLine
-                  y={stock.resistance}
-                  stroke="#ef5350"
-                  strokeDasharray="3 3"
-                  strokeOpacity={0.5}
-                  label={{
-                    value: "R",
-                    fill: "#ef5350",
-                    fontSize: 10,
-                    position: "insideLeft",
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="v"
-                  stroke={lineColor}
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4, fill: lineColor, stroke: "var(--tl-surface)" }}
-                  isAnimationActive
-                  animationDuration={900}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <CandlestickChart
+            series={stock.series}
+            timeframe={activeTimeframe as ChartTimeframe}
+            support={stock.support}
+            resistance={stock.resistance}
+            lineColor={lineColor}
+          />
 
           {/* Quick symbol switcher */}
           <div

@@ -13,6 +13,9 @@ const openForm: EditTradeFormValues = {
   exit_date: "",
   exit_price: "",
   notes: "my note",
+  user_decision: "",
+  user_thesis: "",
+  user_invalidation: "",
 };
 
 describe("editTradeForm", () => {
@@ -77,5 +80,27 @@ describe("editTradeForm", () => {
   it("does not auto-populate exit price from market data helpers", () => {
     const payload = buildEditTradePayload(openForm, false);
     expect(payload.exit_price).toBeNull();
+  });
+
+  it("maps user decision fields into the payload", () => {
+    const payload = buildEditTradePayload(
+      {
+        ...openForm,
+        user_decision: "BUY",
+        user_thesis: "Momentum continues.",
+        user_invalidation: "Close below support.",
+      },
+      false,
+    );
+    expect(payload.user_decision).toBe("BUY");
+    expect(payload.user_thesis).toBe("Momentum continues.");
+    expect(payload.user_invalidation).toBe("Close below support.");
+  });
+
+  it("sends null user decision fields when blank", () => {
+    const payload = buildEditTradePayload(openForm, false);
+    expect(payload.user_decision).toBeNull();
+    expect(payload.user_thesis).toBeNull();
+    expect(payload.user_invalidation).toBeNull();
   });
 });

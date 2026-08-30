@@ -1,4 +1,8 @@
-import type { TradeStatus, TradeUpdatePayload } from "@/services/tradeService";
+import type {
+  TradeStatus,
+  TradeUpdatePayload,
+  UserDecision,
+} from "@/services/tradeService";
 
 export interface EditTradeFormValues {
   trade_date: string;
@@ -8,6 +12,9 @@ export interface EditTradeFormValues {
   exit_date: string;
   exit_price: string;
   notes: string;
+  user_decision: UserDecision | "";
+  user_thesis: string;
+  user_invalidation: string;
 }
 
 export function shouldShowExitFields(status: TradeStatus): boolean {
@@ -49,6 +56,9 @@ export function buildEditTradePayload(
     quantity: parseInt(form.quantity, 10),
     notes: form.notes,
     status: form.status,
+    user_decision: form.user_decision || null,
+    user_thesis: form.user_thesis.trim() || null,
+    user_invalidation: form.user_invalidation.trim() || null,
     confirm_out_of_range: confirmOutOfRange,
   };
 

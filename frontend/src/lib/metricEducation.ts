@@ -4,6 +4,7 @@ export type MetricId =
   | "rsi"
   | "ema20"
   | "ema50"
+  | "ema200"
   | "support"
   | "resistance"
   | "headroom"
@@ -67,6 +68,12 @@ const STATIC: Record<MetricId, Omit<MetricHelpContent, "meaning">> = {
     usage:
       "EMA50 helps you see whether the stock is holding above a medium-term average. It is one piece of the picture — not a guarantee of future direction.",
   },
+  ema200: {
+    title: "EMA200",
+    what: "The 200-day Exponential Moving Average (EMA200) reflects the long-term price trend.",
+    usage:
+      "EMA200 helps you judge the long-term backdrop. Price above EMA200 often points to a supportive long-term trend; below suggests the backdrop is still weak. It is context, not a certainty.",
+  },
   support: {
     title: "Support",
     what: "Support is a price zone where buying interest has historically appeared, slowing or reversing declines.",
@@ -123,6 +130,15 @@ export function buildMetricHelp(
       } else {
         meaning =
           "EMA50 reflects medium-term direction. Compare price to EMA50 alongside EMA20 and the broader trend.";
+      }
+      break;
+    case "ema200":
+      if (finite(context.value) && finite(context.price)) {
+        const above = context.price > context.value;
+        meaning = `Current price ${formatMoney(context.price)} is ${above ? "above" : "below"} EMA200 ${formatMoney(context.value)}, a ${above ? "supportive" : "cautious"} long-term signal.`;
+      } else {
+        meaning =
+          "EMA200 reflects the long-term trend. Compare price to EMA200 alongside the shorter averages for context.";
       }
       break;
     case "support":

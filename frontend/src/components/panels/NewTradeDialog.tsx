@@ -4,11 +4,14 @@ import { useCreateTrade } from "@/hooks/useTrades";
 import { useDayRange } from "@/hooks/useMarket";
 import { marketService } from "@/services/marketService";
 import { showApiError, showSuccess } from "@/lib/feedback";
-import type { TradeSide } from "@/services/tradeService";
+import type { TradeSide, UserDecision } from "@/services/tradeService";
 
 interface NewTradeDialogProps {
   open: boolean;
   onClose: () => void;
+  /** Pre-fill the symbol field with a stock (e.g. the one being researched).
+   *  Defaults to RELIANCE to preserve existing behaviour when absent. */
+  initialSymbol?: string;
 }
 
 function todayIso(): string {
@@ -20,7 +23,13 @@ type PriceWarning = {
   message: string;
 };
 
-export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
+const USER_DECISIONS: UserDecision[] = ["BUY", "SELL", "WATCH", "AVOID"];
+
+export default function NewTradeDialog({
+  open,
+  onClose,
+  initialSymbol = "RELIANCE",
+}: NewTradeDialogProps) {
   const createTrade = useCreateTrade();
   const submittingRef = useRef(false);
   const [form, setForm] = useState({
@@ -32,6 +41,9 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
     quantity: "",
     side: "LONG" as TradeSide,
     notes: "",
+    user_decision: "" as UserDecision | "",
+    user_thesis: "",
+    user_invalidation: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [symbolValid, setSymbolValid] = useState(true);
@@ -56,7 +68,7 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
     if (open) {
       submittingRef.current = false;
       setForm({
-        symbol: "RELIANCE",
+        symbol: initialSymbol.trim().toUpperCase() || "RELIANCE",
         trade_date: todayIso(),
         exit_date: "",
         entry_price: "",
@@ -64,6 +76,9 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
         quantity: "",
         side: "LONG",
         notes: "",
+        user_decision: "",
+        user_thesis: "",
+        user_invalidation: "",
       });
       setError(null);
       setSymbolValid(true);
@@ -71,7 +86,7 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
       setConfirmOutOfRange(false);
       setSymbolSuggestions([]);
     }
-  }, [open]);
+  }, [open, initialSymbol]);
 
   useEffect(() => {
     if (!open) return;
@@ -190,6 +205,9 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
         exit_price: form.exit_date ? exit : null,
         quantity: qty,
         notes: form.notes,
+        user_decision: form.user_decision || null,
+        user_thesis: form.user_thesis.trim() || null,
+        user_invalidation: form.user_invalidation.trim() || null,
         confirm_out_of_range: confirmOutOfRange,
       },
       {
@@ -374,6 +392,59 @@ export default function NewTradeDialog({ open, onClose }: NewTradeDialogProps) {
               )}
             </div>
           )}
+
+          <div className="rounded-[4px] border border-[#2962ff]/20 bg-[#2962ff]/[0.04] p-3">
+            <div className="text-[10px] uppercase tracking-widest text-[#2962ff] font-semibold mb-1">
+              My Decision
+            </div>
+            <p className="text-[11px] text-[#667085] leading-relaxed mb-3">
+              Your own call and reasoning — separate from the TradeLens Mentor view.
+            </p>
+            <Field label="Decision">
+              <div className="flex gap-2">
+                {USER_DECISIONS.map((decision) => {
+                  const selected = form.user_decision === decision;
+                  return (
+                    <button
+                      key={decision}
+                      type="button"
+                      onClick={() => setForm({ ...form, user_decision: decision })}
+                      data-testid={`new-trade-decision-${decision.toLowerCase()}`}
+                      className={`px-3 py-1.5 rounded-md text-xs font-mono border transition-colors ${
+                        selected
+                          ? "bg-[#2962ff]/10 text-[#2962ff] border-[#2962ff]/40 font-semibold"
+                          : "text-[#667085] border-[#D9DDE2] hover:bg-[#F0F1EF]"
+                      }`}
+                    >
+                      {decision.charAt(0) + decision.slice(1).toLowerCase()}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+            <div className="mt-3 space-y-3">
+              <Field label="My thesis">
+                <textarea
+                  value={form.user_thesis}
+                  onChange={(e) => setForm({ ...form, user_thesis: e.target.value })}
+                  rows={2}
+                  placeholder="What do you believe will happen, and why?"
+                  data-testid="new-trade-thesis"
+                  className="w-full px-3 py-2 bg-white border border-[#D9DDE2] rounded-md text-sm text-[#1F2933] focus:border-[#2962ff]/60 outline-none resize-none"
+                />
+              </Field>
+              <Field label="My invalidation">
+                <textarea
+                  value={form.user_invalidation}
+                  onChange={(e) => setForm({ ...form, user_invalidation: e.target.value })}
+                  rows={2}
+                  placeholder="What would prove your thesis wrong?"
+                  data-testid="new-trade-invalidation"
+                  className="w-full px-3 py-2 bg-white border border-[#D9DDE2] rounded-md text-sm text-[#1F2933] focus:border-[#2962ff]/60 outline-none resize-none"
+                />
+              </Field>
+            </div>
+          </div>
 
           <Field label="Notes">
             <textarea

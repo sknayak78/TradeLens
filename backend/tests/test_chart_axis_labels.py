@@ -34,6 +34,27 @@ def _bar(
     )
 
 
+def _ohlcv_bar(
+    year: int,
+    month: int,
+    day: int,
+    *,
+    open: float,
+    high: float,
+    low: float,
+    close: float,
+    volume: float | None,
+) -> OHLCVBar:
+    return OHLCVBar(
+        timestamp=datetime(year, month, day, 9, 15, tzinfo=IST),
+        open=open,
+        high=high,
+        low=low,
+        close=close,
+        volume=volume,
+    )
+
+
 def test_1d_axis_uses_ist_intraday_time():
     bar = _bar(2026, 8, 20, 9, 30)
     assert format_axis_tick_label("1D", bar.timestamp) == "09:30"
@@ -73,6 +94,43 @@ def test_bars_to_series_returns_iso_timestamps():
     assert len(series) == 2
     assert "T" in series[0]["t"]
     assert series[0]["v"] == 101.0
+
+
+def test_bars_to_series_exposes_ohlcv_fields_for_candles():
+    bars = [
+        _ohlcv_bar(
+            2026, 8, 14,
+            open=100.0,
+            high=106.0,
+            low=99.0,
+            close=104.0,
+            volume=1_250_000,
+        ),
+        _ohlcv_bar(
+            2026, 8, 15,
+            open=104.0,
+            high=107.0,
+            low=102.0,
+            close=103.5,
+            volume=None,
+        ),
+    ]
+    series = bars_to_series(bars, max_points=10)
+    assert len(series) == 2
+
+    first = series[0]
+    assert first["v"] == 104.0
+    assert first["o"] == 100.0
+    assert first["h"] == 106.0
+    assert first["l"] == 99.0
+    assert first["vol"] == 1_250_000
+
+    second = series[1]
+    assert second["o"] == 104.0
+    assert second["h"] == 107.0
+    assert second["l"] == 102.0
+    assert second["v"] == 103.5
+    assert second["vol"] is None
 
 
 def test_utc_bar_is_converted_to_ist_for_1d_label():
