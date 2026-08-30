@@ -36,6 +36,11 @@ from services.market_data.normalized_provider import NormalizedMarketDataProvide
 from services.market_data.session import current_market_status
 from services.market_data_provider import MarketDataProvider
 from services.providers.seed_provider import SeedMarketDataProvider, SeedProvider
+from services.providers.yahoo_discovery import (
+    DiscoveredInstrument,
+    SearchFetcher,
+    discover_nse_equities,
+)
 from services.symbol_mapper import SymbolMapper
 
 logger = logging.getLogger("tradelens.market_data.yahoo")
@@ -81,6 +86,7 @@ class YahooMarketDataProvider(
         symbol_mapper: SymbolMapper | None = None,
         history_fetcher: HistoryFetcher | None = None,
         quote_fetcher: QuoteFetcher | None = None,
+        search_fetcher: SearchFetcher | None = None,
         bundle_ttl_seconds: float = _DEFAULT_BUNDLE_TTL_SECONDS,
         clock: Callable[[], float] | None = None,
     ):
@@ -88,10 +94,12 @@ class YahooMarketDataProvider(
         self._symbol_mapper = symbol_mapper or SymbolMapper()
         self._history_fetcher = history_fetcher or YahooFinanceProvider._fetch_history
         self._quote_fetcher = quote_fetcher
+        self._search_fetcher = search_fetcher
         self._bundle_ttl_seconds = bundle_ttl_seconds
         self._clock = clock or time.monotonic
         self._bundle_cache: dict[str, _BundleCacheEntry] = {}
         self._quote_history_context: dict[str, Any] = {}
+        self._discovered_metadata: dict[str, tuple[str, str]] = {}
 
     def bind_quote_fetcher(self, fetcher: QuoteFetcher) -> None:
         """Attach the legacy façade quote hook used by compatibility tests."""
@@ -101,9 +109,27 @@ class YahooMarketDataProvider(
         """Attach the legacy façade history hook used by compatibility tests."""
         self._history_fetcher = fetcher
 
+    def bind_search_fetcher(self, fetcher: SearchFetcher) -> None:
+        """Attach a custom search fetcher for testing instrument discovery."""
+        self._search_fetcher = fetcher
+
+    def register_discovered_instrument(self, symbol: str, name: str, sector: str) -> None:
+        """Cache company name and sector for a dynamically discovered symbol."""
+        self._discovered_metadata[symbol.strip().upper()] = (name, sector)
+
+    def _resolve_discovered_metadata(self, symbol: str) -> tuple[str, str]:
+        normalized = symbol.strip().upper()
+        if normalized in self._discovered_metadata:
+            return self._discovered_metadata[normalized]
+        seed_snap = self._seed.stock_snapshot(normalized)
+        if seed_snap is not None:
+            return seed_snap.name, seed_snap.sector
+        return normalized, "Equities"
+
     def clear_bundle_cache(self) -> None:
         self._bundle_cache.clear()
         self._quote_history_context.clear()
+        self._discovered_metadata.clear()
 
     def bundle_cache_size(self) -> int:
         return len(self._bundle_cache)
@@ -145,30 +171,58 @@ class YahooMarketDataProvider(
         return "delayed"
 
     def stock_snapshot(self, symbol: str) -> StockSnapshot | None:
-        seed_snapshot = self._seed.stock_snapshot(symbol)
-        if seed_snapshot is None:
-            return None
-        bundle = self._load_bundle(symbol)
-        if bundle is None:
-            return seed_snapshot
-        return self._merge_snapshot(seed_snapshot, bundle.snapshot)
+        normalized = self._symbol_mapper.resolve_alias(symbol).upper()
+        seed_snapshot = self._seed.stock_snapshot(normalized)
+        bundle = self._load_bundle(normalized)
+        if bundle is not None:
+            if seed_snapshot is not None:
+                return self._merge_snapshot(seed_snapshot, bundle.snapshot)
+            return bundle.snapshot
+        return seed_snapshot
 
     def stock_insight(self, symbol: str) -> StockInsight | None:
-        seed_insight = self._seed.stock_insight(symbol)
-        if seed_insight is None:
-            return None
-        if self._seed.stock_snapshot(symbol) is None:
-            return seed_insight
-        bundle = self._load_bundle(symbol)
-        if bundle is None:
-            return seed_insight
-        return bundle.insight
+        normalized = self._symbol_mapper.resolve_alias(symbol).upper()
+        bundle = self._load_bundle(normalized)
+        if bundle is not None:
+            return bundle.insight
+        return self._seed.stock_insight(normalized)
 
     def all_stock_snapshots(self) -> Sequence[StockSnapshot]:
         return self._seed.all_stock_snapshots()
 
     def search_stock_snapshots(self, query: str, limit: int = 20) -> Sequence[StockSnapshot]:
-        return self._seed.search_stock_snapshots(query, limit)
+        clean_query = query.strip()
+        if not clean_query:
+            return self._seed.search_stock_snapshots(query, limit)
+
+        discovered = discover_nse_equities(
+            clean_query,
+            max_results=limit,
+            search_fetcher=self._search_fetcher,
+            symbol_mapper=self._symbol_mapper,
+        )
+
+        if not discovered:
+            return self._seed.search_stock_snapshots(query, limit)
+
+        results: list[StockSnapshot] = []
+        seen: set[str] = set()
+
+        for item in discovered:
+            self.register_discovered_instrument(item.symbol, item.name, item.sector)
+            snap = self.stock_snapshot(item.symbol)
+            if snap is not None:
+                results.append(snap)
+                seen.add(item.symbol)
+
+        # Merge matching seed snapshots not already included
+        for seed_snap in self._seed.search_stock_snapshots(query, limit):
+            if seed_snap.symbol not in seen and len(results) < limit:
+                full_snap = self.stock_snapshot(seed_snap.symbol) or seed_snap
+                results.append(full_snap)
+                seen.add(seed_snap.symbol)
+
+        return results[:limit]
 
     def market_summary(self) -> dict[str, Any]:
         summary = deepcopy(self._seed.market_summary())
@@ -199,7 +253,7 @@ class YahooMarketDataProvider(
         return YahooFinanceProvider._fetch_quote(ticker_symbol)
 
     def _load_bundle(self, symbol: str) -> _YahooSymbolBundle | None:
-        normalized = symbol.strip().upper()
+        normalized = self._symbol_mapper.resolve_alias(symbol).upper()
         now = self._clock()
         cached = self._bundle_cache.get(normalized)
         if cached is not None and cached.expires_at > now:
@@ -208,8 +262,6 @@ class YahooMarketDataProvider(
             del self._bundle_cache[normalized]
 
         seed_snapshot = self._seed.stock_snapshot(normalized)
-        if seed_snapshot is None:
-            return None
 
         try:
             yahoo_symbol = self._symbol_mapper.to_yahoo(normalized)
@@ -223,23 +275,45 @@ class YahooMarketDataProvider(
             finally:
                 self._quote_history_context.pop(yahoo_symbol, None)
 
-            bundle = self._build_bundle(
-                normalized,
-                seed_snapshot=seed_snapshot,
-                seed_insight=self._seed.stock_insight(normalized),
-                history=history,
-                price=price,
-                change_pct=change_pct,
-                volume=volume,
-            )
+            if seed_snapshot is not None:
+                bundle = self._build_bundle(
+                    normalized,
+                    seed_snapshot=seed_snapshot,
+                    seed_insight=self._seed.stock_insight(normalized),
+                    history=history,
+                    price=price,
+                    change_pct=change_pct,
+                    volume=volume,
+                )
+            else:
+                name, sector = self._resolve_discovered_metadata(normalized)
+                bundle = self._build_dynamic_bundle(
+                    normalized,
+                    name=name,
+                    sector=sector,
+                    history=history,
+                    price=price,
+                    change_pct=change_pct,
+                    volume=volume,
+                )
+
             self._store_bundle(normalized, bundle, now)
             return bundle
         except Exception:
-            logger.warning(
-                "market_data.yahoo_live_fetch_failed_falling_back_to_seed",
-                exc_info=True,
-            )
+            if seed_snapshot is not None:
+                logger.warning(
+                    "market_data.yahoo_live_fetch_failed_falling_back_to_seed symbol=%s",
+                    normalized,
+                    exc_info=True,
+                )
+            else:
+                logger.warning(
+                    "market_data.yahoo_dynamic_fetch_failed symbol=%s",
+                    normalized,
+                    exc_info=True,
+                )
             return None
+
 
     def _store_bundle(
         self,
@@ -330,6 +404,80 @@ class YahooMarketDataProvider(
             fetched_at=when,
         )
 
+    def _build_dynamic_bundle(
+        self,
+        symbol: str,
+        *,
+        name: str,
+        sector: str,
+        history: Any,
+        price: float,
+        change_pct: float,
+        volume: int | None,
+    ) -> _YahooSymbolBundle:
+        emas = YahooFinanceProvider._build_emas(history)
+        support_resistance = YahooFinanceProvider._build_support_resistance(history)
+        rsi = YahooFinanceProvider._build_rsi(history)
+        vwap = YahooFinanceProvider._build_vwap(history)
+        chart_series = YahooFinanceProvider._build_chart_series(history)
+        if not chart_series:
+            raise RuntimeError(f"Yahoo returned no chart points for {symbol}")
+
+        complete = YahooFinanceProvider._complete_bars(history)
+        day_high = YahooFinanceProvider._finite(complete["High"].iloc[-1], "day_high") if "High" in complete else price
+        volumes = [float(v) for v in complete["Volume"] if v is not None and math.isfinite(float(v))] if "Volume" in complete else []
+        avg_volume = int(sum(volumes) / len(volumes)) if volumes else (volume or 0)
+        resolved_volume = volume if volume is not None else (int(volumes[-1]) if volumes else 0)
+
+        when = datetime.now(timezone.utc)
+        snapshot = StockSnapshot(
+            symbol=symbol,
+            name=name,
+            sector=sector,
+            price=price,
+            change_pct=change_pct,
+            rsi=rsi,
+            ema20=emas["ema20"],
+            ema50=emas["ema50"],
+            ema200=emas["ema200"],
+            vwap=vwap,
+            volume=resolved_volume,
+            trend="neutral",
+            day_high=day_high,
+            avg_volume=avg_volume,
+            score=None,
+            support=support_resistance["support"],
+            resistance=support_resistance["resistance"],
+        )
+        insight = StockInsight(
+            symbol=symbol,
+            support=support_resistance["support"],
+            resistance=support_resistance["resistance"],
+            ai_insight=YahooFinanceProvider._build_ai_insight(
+                price,
+                emas["ema20"],
+                support_resistance["support"],
+                support_resistance["resistance"],
+            ),
+            series=tuple(dict(point) for point in chart_series),
+        )
+        quote = Quote(
+            symbol=symbol,
+            price=price,
+            change_pct=change_pct,
+            volume=resolved_volume,
+            observed_at=when,
+        )
+        ohlcv_bars = tuple(YahooFinanceProvider._history_to_ohlcv_bars(history))
+        return _YahooSymbolBundle(
+            symbol=symbol,
+            quote=quote,
+            ohlcv_bars=ohlcv_bars,
+            snapshot=snapshot,
+            insight=insight,
+            fetched_at=when,
+        )
+
     @staticmethod
     def _merge_snapshot(
         seed_snapshot: StockSnapshot,
@@ -378,6 +526,7 @@ class YahooFinanceProvider(MarketDataProvider):
         universe: Any | None = None,
         bundle_ttl_seconds: float = _DEFAULT_BUNDLE_TTL_SECONDS,
         clock: Callable[[], float] | None = None,
+        search_fetcher: SearchFetcher | None = None,
     ):
         self._seed_provider = seed_provider or SeedProvider(universe)
         seed_normalized = self._seed_provider._adapter.normalized
@@ -388,10 +537,24 @@ class YahooFinanceProvider(MarketDataProvider):
             symbol_mapper=symbol_mapper,
             history_fetcher=lambda sym, period, interval: self._history(sym, period, interval),
             quote_fetcher=lambda sym: self._quote(sym),
+            search_fetcher=search_fetcher,
             bundle_ttl_seconds=bundle_ttl_seconds,
             clock=clock,
         )
         self._adapter = LegacyProviderAdapter(self._normalized)
+
+    def bind_search_fetcher(self, fetcher: SearchFetcher) -> None:
+        """Attach a custom search fetcher for testing instrument discovery."""
+        self._normalized.bind_search_fetcher(fetcher)
+
+    def bind_quote_fetcher(self, fetcher: QuoteFetcher) -> None:
+        """Attach the legacy façade quote hook used by compatibility tests."""
+        self._normalized.bind_quote_fetcher(fetcher)
+
+    def bind_history_fetcher(self, fetcher: HistoryFetcher) -> None:
+        """Attach the legacy façade history hook used by compatibility tests."""
+        self._normalized.bind_history_fetcher(fetcher)
+
 
     def _history(self, ticker_symbol: str, period: str = "2y", interval: str = "1d"):
         return YahooFinanceProvider._fetch_history(ticker_symbol, period, interval)

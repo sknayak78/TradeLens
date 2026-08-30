@@ -7,6 +7,7 @@ import type {
   Insight,
   Ranking,
   Recommendation,
+  ChartSeriesPoint,
 } from "@/types";
 
 export interface MarketSummary {
@@ -29,7 +30,7 @@ export interface StockDetail extends Stock {
   support: number;
   resistance: number;
   aiInsight: string;
-  series: { t: string; v: number }[];
+  series: ChartSeriesPoint[];
   timeframe?: string;
   timeframeLabel?: string;
   timeframeFallback?: boolean;
@@ -59,6 +60,33 @@ export interface StockSummary {
   sector: string;
 }
 
+export interface LearningJourneyStudy {
+  symbol: string;
+  name: string;
+  price: number;
+  changePct: number;
+  trend: "bullish" | "bearish" | "neutral";
+  sector: string;
+  rsi: number | null;
+  ema20: number | null;
+  ema50: number | null;
+  ema200: number | null;
+  vwap: number | null;
+  volume: number | null;
+  support: number | null;
+  resistance: number | null;
+  series: ChartSeriesPoint[];
+  timeframe: string;
+  timeframeLabel: string;
+  timeframeFallback: boolean;
+  dataQuality: "Complete" | "Partial";
+}
+
+export interface LearningJourneyData extends LearningJourneyStudy {
+  /** Present only when the mentor view was requested via `reveal=true`. */
+  recommendation: Recommendation | null;
+}
+
 export const marketService = {
   summary: async (): Promise<MarketSummary> => {
     const { data } = await api.get<MarketSummary>("/market-summary");
@@ -66,7 +94,9 @@ export const marketService = {
   },
 
   opportunities: async (): Promise<OpportunitiesResponse> => {
-    const { data } = await api.get<OpportunitiesResponse>("/opportunities");
+    const { data } = await api.get<OpportunitiesResponse>("/opportunities", {
+      timeout: 60_000,
+    });
     return data;
   },
 
@@ -98,6 +128,18 @@ export const marketService = {
     const { data } = await api.get<StockSummary[]>("/stocks", {
       params: { q: query, limit },
     });
+    return data;
+  },
+
+  learningJourney: async (
+    symbol: string,
+    timeframe = "1W",
+    reveal = false,
+  ): Promise<LearningJourneyData> => {
+    const { data } = await api.get<LearningJourneyData>(
+      `/learning/stock/${symbol}`,
+      { params: { timeframe, reveal } },
+    );
     return data;
   },
 };

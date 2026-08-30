@@ -31,17 +31,23 @@ def _detail(symbol: str = "RELIANCE") -> Dict[str, Any]:
 def test_existing_contract_is_unchanged(seeded: None) -> None:
     payload = _detail()
 
-    # Every field the endpoint served before the recommendation engine landed.
+    # Every field the endpoint served before the recommendation engine landed,
+    # plus the additive timeframe meta fields added by ER-0031 and the EMA
+    # availability map added by the chart aggregation work.
     expected = {
         "symbol", "name", "price", "changePct", "score", "trend", "rsi", "ema20",
         "vwap", "volume", "sector", "support", "resistance", "aiInsight",
         "series", "strengthScore", "stars", "classification", "tradeSetup",
         "riskLevel", "suggestedAction", "insight",
         "provider", "cached", "asOf", "marketStatus",
+        "timeframe", "timeframeLabel", "timeframeFallback",
+        "indicators",
     }
 
     assert expected <= payload.keys()
     assert payload.keys() - expected == {"recommendation"}
+    assert payload["indicators"] is not None
+    assert set(payload["indicators"].keys()) == {"ema20", "ema50", "ema200"}
     assert payload["symbol"] == "RELIANCE"
     assert payload["series"]
 
@@ -175,3 +181,22 @@ def test_unknown_symbol_still_returns_404(seeded: None) -> None:
         market_router.stock_detail("NOSUCHSYMBOL")
 
     assert excinfo.value.status_code == 404
+
+
+def test_series_points_expose_ohlcv_fields(seeded: None) -> None:
+    """The response series must carry OHLCV so the chart can draw candles.
+
+    `bars_to_series()` already emits these keys; `SeriesPoint` must not strip
+    them. Seed data is degenerate (open=high=low=close), but the keys must
+    still be present and null-volumes are allowed.
+    """
+    payload = _detail()
+    series = payload["series"]
+
+    assert series
+    for point in series:
+        assert "t" in point and "v" in point
+        assert "o" in point and "h" in point and "l" in point
+        assert "vol" in point
+        # Degenerate seed OHLC is still self-consistent (never fabricated).
+        assert point["o"] == point["h"] == point["l"] == point["v"]

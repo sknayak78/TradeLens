@@ -4,6 +4,7 @@ import {
   MarketSummary,
   OpportunitiesResponse,
   StockDetail,
+  LearningJourneyData,
 } from "@/services/marketService";
 import type { Ranking } from "@/types";
 
@@ -13,6 +14,8 @@ export const stockKey = (symbol: string, timeframe: string) =>
   ["market", "stock", symbol, timeframe] as const;
 export const dayRangeKey = (symbol: string, date: string) =>
   ["market", "day-range", symbol, date] as const;
+export const learningKey = (symbol: string, timeframe: string, reveal: boolean) =>
+  ["learning", "stock", symbol, timeframe, reveal] as const;
 
 export function useMarketSummary(): UseQueryResult<MarketSummary, Error> {
   return useQuery({
@@ -25,6 +28,8 @@ export function useRankings(): UseQueryResult<OpportunitiesResponse, Error> {
   return useQuery({
     queryKey: OPPORTUNITIES_KEY,
     queryFn: marketService.opportunities,
+    staleTime: 60_000,
+    retry: 2,
   });
 }
 
@@ -47,5 +52,19 @@ export function useDayRange(symbol: string, date: string, enabled = true) {
     queryKey: dayRangeKey(symbol, date),
     queryFn: () => marketService.dayRange(symbol, date),
     enabled: enabled && Boolean(symbol && date),
+  });
+}
+
+  /** Guided Research evidence; the Mentor view is only fetched when revealed. */
+export function useLearningJourney(
+  symbol: string,
+  timeframe: string,
+  reveal: boolean,
+): UseQueryResult<LearningJourneyData, Error> {
+  return useQuery({
+    queryKey: learningKey(symbol, timeframe, reveal),
+    queryFn: () => marketService.learningJourney(symbol, timeframe, reveal),
+    enabled: Boolean(symbol),
+    staleTime: 30_000,
   });
 }

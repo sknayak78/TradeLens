@@ -95,7 +95,7 @@ def _trade_rows(engine) -> list[dict]:
         rows = connection.execute(
             text(
                 f"""
-                SELECT id, symbol, entry_price, exit_price, side, exit_date, status, notes
+                SELECT id, symbol, entry_price, exit_price, side, exit_date, status, notes, mentor_snapshot
                 FROM {_TRADES_TABLE}
                 ORDER BY id
                 """

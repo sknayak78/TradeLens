@@ -5,26 +5,27 @@ import WatchlistPanel from "@/components/panels/WatchlistPanel";
 import ChartCard from "@/components/panels/ChartCard";
 import MarketTicker from "@/components/panels/MarketTicker";
 import EducationalDisclaimer from "@/components/common/EducationalDisclaimer";
+import { useRankings } from "@/hooks/useMarket";
 export default function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const symbolFromUrl = searchParams.get("symbol")?.trim().toUpperCase() ?? "";
-  const [activeSymbol, setActiveSymbol] = useState(symbolFromUrl || "RELIANCE");
+  const { data: rankingsData } = useRankings();
+  const [activeSymbol, setActiveSymbol] = useState(symbolFromUrl);
 
   useEffect(() => {
     if (symbolFromUrl) {
       setActiveSymbol(symbolFromUrl);
+      return;
     }
-  }, [symbolFromUrl]);
+    const firstSymbol = rankingsData?.rankings?.[0]?.symbol;
+    if (!activeSymbol && firstSymbol) {
+      setActiveSymbol(firstSymbol);
+    }
+  }, [symbolFromUrl, rankingsData, activeSymbol]);
 
   const handleSelectSymbol = (symbol: string) => {
     setActiveSymbol(symbol);
     setSearchParams({ symbol }, { replace: true });
-  };
-
-  const scrollToOpportunities = () => {
-    document
-      .getElementById("learning-opportunities")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   return (
@@ -54,17 +55,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="px-4 md:px-6 pb-3 space-y-3">
+      <div className="px-4 md:px-6 pb-3">
         <EducationalDisclaimer />
-        <button
-          type="button"
-          onClick={scrollToOpportunities}
-          data-testid="explore-opportunities-cta"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-[#2962ff]/30 bg-[#2962ff]/8 text-[#2962ff] text-sm font-medium hover:bg-[#2962ff]/15 hover:border-[#2962ff]/50 transition-colors"
-        >
-          <span aria-hidden>↓</span>
-          Explore Today&apos;s Learning Opportunities
-        </button>
       </div>
 
       <div className="p-4 md:p-6 pt-0 flex flex-col gap-4 max-w-[1600px] mx-auto w-full">

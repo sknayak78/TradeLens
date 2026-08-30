@@ -1,10 +1,11 @@
 import { NavLink } from "react-router-dom";
 import {
   BookOpen,
+  GraduationCap,
   LayoutDashboard,
-  MessagesSquare,
   NotebookPen,
   Settings as SettingsIcon,
+  Sparkles,
   Star,
   X,
 } from "lucide-react";
@@ -16,10 +17,23 @@ interface SidebarProps {
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testId: "nav-dashboard", end: true },
-  { to: "/learn", label: "Learn", icon: BookOpen, testId: "nav-learn", end: false },
-  { to: "/community", label: "Community", icon: MessagesSquare, testId: "nav-community", end: true },
   { to: "/watchlist", label: "Watchlist", icon: Star, testId: "nav-watchlist", end: true },
   { to: "/journal", label: "Trading Journal", icon: NotebookPen, testId: "nav-journal", end: true },
+  { to: "/learning", label: "Guided Research", icon: GraduationCap, testId: "nav-learning", end: true },
+  {
+    to: "/how-to-use",
+    label: "How to Use TradeLens",
+    icon: BookOpen,
+    testId: "nav-how-to-use",
+    end: true,
+  },
+  {
+    to: "/founders-vision",
+    label: "Founder's Vision",
+    icon: Sparkles,
+    testId: "nav-founders-vision",
+    end: true,
+  },
   { to: "/settings", label: "Settings", icon: SettingsIcon, testId: "nav-settings", end: true },
 ];
 

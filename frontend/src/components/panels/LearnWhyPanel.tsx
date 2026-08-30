@@ -10,6 +10,13 @@ import {
   Lightbulb,
 } from "lucide-react";
 import type { Recommendation } from "@/types";
+import type { MarketContext } from "@/lib/mentorPresentation";
+import {
+  humanizeRule,
+  humanizeWarning,
+  TRADELENS_MENTOR,
+} from "@/lib/mentorPresentation";
+import { RuleEvidenceCard, WarningEvidenceCard } from "@/components/panels/MentorEvidence";
 import {
   Accordion,
   AccordionContent,
@@ -25,6 +32,7 @@ interface LearnWhyPanelProps {
   recommendation: Recommendation;
   symbol: string;
   reason?: string;
+  marketContext?: MarketContext;
   variant?: "embedded" | "button";
   toggleLabel?: string;
   testIdPrefix?: string;
@@ -38,6 +46,7 @@ function LearnWhyContent({
   recommendation,
   symbol,
   reason,
+  marketContext = {},
   testIdPrefix = "learn-why",
 }: Omit<LearnWhyPanelProps, "variant">) {
   const {
@@ -53,6 +62,7 @@ function LearnWhyContent({
     rulesMatched,
     warnings,
     rationale,
+    levels,
   } = recommendation;
 
   const shown = new Set(positives.map(normalise));
@@ -62,7 +72,7 @@ function LearnWhyContent({
     <div className="flex flex-col gap-3" data-testid={`${testIdPrefix}-content`}>
       <div className="rounded-[4px] border border-[#D9DDE2] bg-white p-4">
         <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1">
-          Mentor view · {symbol}
+          {TRADELENS_MENTOR} view · {symbol}
         </div>
         <p className="text-[#1F2933] text-base font-semibold leading-snug">{verdict}</p>
         <p className="text-[13px] text-[#1F2933] leading-relaxed mt-2">{summary}</p>
@@ -88,17 +98,17 @@ function LearnWhyContent({
           <AccordionContent className="pb-3 text-[13px] text-[#1F2933] leading-relaxed">
             <p>
               TradeLens classified this stock as <strong className="text-[#1F2933]">{action}</strong>{" "}
-              based on the technical evidence available in the catalogue. The Mentor reads trend,
+              based on the technical evidence available in the catalogue. {TRADELENS_MENTOR} reads trend,
               momentum, structure, and risk context — then explains the result in plain language.
             </p>
             {rationale && <p className="mt-2">{rationale}</p>}
             {rulesMatched.length > 0 && (
-              <ul className="mt-3 space-y-1.5">
+              <ul className="mt-3 space-y-2">
                 {rulesMatched.map((rule) => (
-                  <li key={rule} className="flex gap-2">
-                    <CheckCircle2 size={12} className="text-[#26a69a] shrink-0 mt-0.5" />
-                    <span>{rule}</span>
-                  </li>
+                  <RuleEvidenceCard
+                    key={rule}
+                    rule={humanizeRule(rule, marketContext)}
+                  />
                 ))}
               </ul>
             )}
@@ -152,9 +162,12 @@ function LearnWhyContent({
                 <div className="text-[10px] uppercase tracking-widest text-[#f5a623] mb-2">
                   Warnings
                 </div>
-                <ul className="space-y-1.5 text-[13px] text-[#1F2933]">
+                <ul className="space-y-2">
                   {warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
+                    <WarningEvidenceCard
+                      key={warning}
+                      warning={humanizeWarning(warning, marketContext, levels)}
+                    />
                   ))}
                 </ul>
               </div>
@@ -166,7 +179,7 @@ function LearnWhyContent({
           <AccordionTrigger className="text-[11px] uppercase tracking-widest text-[#667085] hover:no-underline py-3">
             <span className="flex items-center gap-2">
               <GraduationCap size={12} />
-              Mentor lesson
+              {TRADELENS_MENTOR} lesson
             </span>
           </AccordionTrigger>
           <AccordionContent className="pb-3">
@@ -201,6 +214,7 @@ export default function LearnWhyPanel({
   recommendation,
   symbol,
   reason,
+  marketContext,
   variant = "embedded",
   toggleLabel = "Learn Why",
   testIdPrefix = "learn-why",
@@ -229,6 +243,7 @@ export default function LearnWhyPanel({
               recommendation={recommendation}
               symbol={symbol}
               reason={reason}
+              marketContext={marketContext}
               testIdPrefix={testIdPrefix}
             />
           </div>
@@ -252,6 +267,7 @@ export default function LearnWhyPanel({
         recommendation={recommendation}
         symbol={symbol}
         reason={reason}
+        marketContext={marketContext}
         testIdPrefix={testIdPrefix}
       />
     </div>

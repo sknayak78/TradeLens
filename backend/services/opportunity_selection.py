@@ -8,7 +8,9 @@ candidate screening.  Featured rows are selected by Mentor
 from __future__ import annotations
 
 import logging
+import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Any
 
@@ -23,6 +25,8 @@ from services.stock_decision import StockDecision, decide
 logger = logging.getLogger("tradelens.opportunity_selection")
 
 MAX_OPPORTUNITY_ROWS = 10
+#: Parallel workers for per-symbol enrichment (Yahoo/cache-bound, not CPU-bound).
+OPPORTUNITY_EVAL_WORKERS = 8
 
 #: Mentor action priority — lower index means higher selection priority.
 ACTION_PRIORITY: tuple[str, ...] = ACTIONS
@@ -164,6 +168,93 @@ def _count_actions(candidates: list[EvaluatedCandidate]) -> dict[str, int]:
     return counts
 
 
+def _evaluate_single_candidate(
+    stock: dict[str, Any],
+    market_data_service: MarketDataService,
+    reasons: dict[str, str],
+) -> EvaluatedCandidate | None:
+    """Enrich one screened symbol with live data and a Mentor decision."""
+    symbol = stock["symbol"]
+    try:
+        stock_result = market_data_service.get_stock(symbol)
+        snapshot = stock_result.data
+        if not snapshot:
+            return None
+
+        insight = market_data_service.get_stock_insight(symbol).data
+        analysis = analysis_service.analyse(snapshot)
+        decision = decide(snapshot, insight)
+        if decision.recommendation is None:
+            logger.warning(
+                "opportunity_selection.skipping_no_recommendation symbol=%s",
+                symbol,
+            )
+            return None
+
+        action = decision.recommendation.action
+        return EvaluatedCandidate(
+            symbol=symbol,
+            name=snapshot["name"],
+            price=snapshot["price"],
+            change_pct=snapshot["changePct"],
+            trend=decision.trend,
+            action=action,
+            recommendation_score=decision.score,
+            analysis=analysis,
+            decision=decision,
+            reason=reasons.get(
+                symbol,
+                analysis.classification + " — " + analysis.trade_setup,
+            ),
+        )
+    except Exception:
+        logger.warning(
+            "opportunity_selection.evaluate_failed symbol=%s",
+            symbol,
+            exc_info=True,
+        )
+        return None
+
+
+def _evaluate_candidates_parallel(
+    eligible: list[dict[str, Any]],
+    market_data_service: MarketDataService,
+    reasons: dict[str, str],
+) -> list[EvaluatedCandidate]:
+    """Evaluate eligible symbols concurrently; one failure must not block others."""
+    if not eligible:
+        return []
+
+    workers = min(OPPORTUNITY_EVAL_WORKERS, len(eligible))
+    evaluated: list[EvaluatedCandidate] = []
+    started = time.perf_counter()
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [
+            executor.submit(
+                _evaluate_single_candidate,
+                stock,
+                market_data_service,
+                reasons,
+            )
+            for stock in eligible
+        ]
+        for future in as_completed(futures):
+            candidate = future.result()
+            if candidate is not None:
+                evaluated.append(candidate)
+
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    logger.info(
+        "opportunity_selection.evaluated eligible=%s succeeded=%s workers=%s elapsed_ms=%.1f",
+        len(eligible),
+        len(evaluated),
+        workers,
+        elapsed_ms,
+    )
+    return evaluated
+
+
 def select_opportunities(
     market_data_service: MarketDataService,
     *,
@@ -193,42 +284,11 @@ def select_opportunities(
             universe_result.metadata.to_api_dict(),
         )
 
-    evaluated: list[EvaluatedCandidate] = []
-    for stock in screening.eligible:
-        symbol = stock["symbol"]
-        stock_result = market_data_service.get_stock(symbol)
-        snapshot = stock_result.data
-        if not snapshot:
-            continue
-
-        insight = market_data_service.get_stock_insight(symbol).data
-        analysis = analysis_service.analyse(snapshot)
-        decision = decide(snapshot, insight)
-        if decision.recommendation is None:
-            logger.warning(
-                "opportunity_selection.skipping_no_recommendation symbol=%s",
-                symbol,
-            )
-            continue
-
-        action = decision.recommendation.action
-        evaluated.append(
-            EvaluatedCandidate(
-                symbol=symbol,
-                name=snapshot["name"],
-                price=snapshot["price"],
-                change_pct=snapshot["changePct"],
-                trend=decision.trend,
-                action=action,
-                recommendation_score=decision.score,
-                analysis=analysis,
-                decision=decision,
-                reason=reasons.get(
-                    symbol,
-                    analysis.classification + " — " + analysis.trade_setup,
-                ),
-            )
-        )
+    evaluated = _evaluate_candidates_parallel(
+        screening.eligible,
+        market_data_service,
+        reasons,
+    )
 
     action_counts = _count_actions(evaluated)
     featured = select_featured_candidates(evaluated, max_rows=max_rows)

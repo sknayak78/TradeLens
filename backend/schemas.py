@@ -1,6 +1,6 @@
 """Pydantic schemas for TradeLens API."""
 from datetime import datetime
-from typing import Any, Optional, List, Literal
+from typing import Any, Optional, List, Literal, Dict
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -54,6 +54,23 @@ class WatchlistEnriched(BaseModel):
 
 # ---------- Trades ----------
 
+class MentorSnapshotOut(BaseModel):
+    """Immutable Mentor recommendation captured when the trade was recorded."""
+
+    action: Optional[str] = None
+    strategy: Optional[str] = None
+    entry_range_low: Optional[float] = None
+    entry_range_high: Optional[float] = None
+    actual_entry_price: Optional[float] = None
+    planned_stop_loss: Optional[float] = None
+    target_1: Optional[float] = None
+    target_2: Optional[float] = None
+    risk_reward: Optional[float] = None
+    holding_period: Optional[str] = None
+    reason: Optional[str] = None
+    captured_at: Optional[datetime] = None
+
+
 class TradeCreate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -65,6 +82,26 @@ class TradeCreate(BaseModel):
     exit_date: Optional[datetime] = None
     quantity: int = Field(..., gt=0)
     notes: str = ""
+    user_decision: Optional[Literal["BUY", "SELL", "WATCH", "AVOID"]] = None
+    user_thesis: Optional[str] = None
+    user_invalidation: Optional[str] = None
+    confirm_out_of_range: bool = False
+
+
+class TradeUpdate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    trade_date: Optional[datetime] = None
+    side: Optional[Literal["LONG", "SHORT"]] = None
+    entry_price: Optional[float] = Field(default=None, gt=0)
+    exit_price: Optional[float] = Field(default=None, gt=0)
+    exit_date: Optional[datetime] = None
+    quantity: Optional[int] = Field(default=None, gt=0)
+    notes: Optional[str] = None
+    status: Optional[Literal["OPEN", "CLOSED"]] = None
+    user_decision: Optional[Literal["BUY", "SELL", "WATCH", "AVOID"]] = None
+    user_thesis: Optional[str] = None
+    user_invalidation: Optional[str] = None
     confirm_out_of_range: bool = False
 
 
@@ -85,6 +122,10 @@ class TradeOut(BaseModel):
     unrealized_pnl: Optional[float] = None
     current_price: Optional[float] = None
     holding_period_days: Optional[int] = None
+    mentor_snapshot: Optional[MentorSnapshotOut] = None
+    user_decision: Optional[Literal["BUY", "SELL", "WATCH", "AVOID"]] = None
+    user_thesis: Optional[str] = None
+    user_invalidation: Optional[str] = None
 
 
 # ---------- Settings ----------
@@ -145,6 +186,15 @@ class Opportunity(BaseModel):
 class SeriesPoint(BaseModel):
     t: str
     v: float
+    o: Optional[float] = None
+    h: Optional[float] = None
+    l: Optional[float] = None
+    vol: Optional[float] = None
+    # Additive EMA overlays, warmed over historical lookback beyond the visible
+    # window. Null when the underlying data cannot support that EMA period.
+    ema20: Optional[float] = None
+    ema50: Optional[float] = None
+    ema200: Optional[float] = None
 
 
 class DayRangeOut(BaseModel):
@@ -265,6 +315,52 @@ class StockDetail(MarketMetadata):
     suggestedAction: str = _legacy_field()
     insight: str = _legacy_field()
     # Additive: absent only when live indicators are too sparse to score.
+    recommendation: Optional[RecommendationOut] = None
+    # Additive: per-EMA availability so the chart can explain (not dash) why an
+    # overlay is missing. Keys are ema20/ema50/ema200.
+    indicators: Optional[Dict[str, bool]] = None
+
+
+class LearningJourneyStudySet(BaseModel):
+    """Evidence a user studies on the Learning Journey before deciding.
+
+    `trend` is the Recommendation Engine's own trend, so a shown trend never
+    leaks the Mentor's action. EMA50/EMA200 are additive Optionals because the
+    underlying provider/seed may not expose a full history for every symbol.
+    """
+    symbol: str
+    name: str
+    price: float
+    changePct: float
+    trend: Literal["bullish", "bearish", "neutral"]
+    sector: str
+    rsi: Optional[float] = None
+    ema20: Optional[float] = None
+    ema50: Optional[float] = None
+    ema200: Optional[float] = None
+    vwap: Optional[float] = None
+    volume: Optional[int] = None
+    support: Optional[float] = None
+    resistance: Optional[float] = None
+    series: List[SeriesPoint]
+    timeframe: str = "1W"
+    timeframeLabel: str = "1 Week"
+    timeframeFallback: bool = False
+    # "Complete" only when all headline indicators (EMA20/50/200, RSI, VWAP)
+    # are available; otherwise "Partial".
+    dataQuality: Literal["Complete", "Partial"] = "Partial"
+    # Additive: per-EMA availability so the chart can explain (not dash) why an
+    # overlay is missing. Keys are ema20/ema50/ema200.
+    indicators: Optional[Dict[str, bool]] = None
+
+
+class LearningJourneyOut(LearningJourneyStudySet):
+    """Learning Journey payload for one symbol.
+
+    The Mentor `recommendation` is included ONLY when requested via `reveal`,
+    so the Study phase never receives the Mentor's view before the user has
+    submitted their own decision.
+    """
     recommendation: Optional[RecommendationOut] = None
 
 

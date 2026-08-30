@@ -1,14 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ReferenceLine,
-  CartesianGrid,
-} from "recharts";
 import { useStock } from "@/hooks/useMarket";
 import { useWatchlist } from "@/hooks/useWatchlist";
 import { useAppSettings } from "@/context/SettingsContext";
@@ -20,11 +10,10 @@ import AnalysisBadges, { Stars, ActionPill } from "@/components/panels/AnalysisB
 import RecommendationCard from "@/components/panels/RecommendationCard";
 import LearnWhyPanel from "@/components/panels/LearnWhyPanel";
 import StockHero from "@/components/panels/StockHero";
+import CandlestickChart from "@/components/charts/CandlestickChart";
 import { Sparkles, TrendingUp, TrendingDown } from "lucide-react";
-import {
-  formatChartTooltipLabel,
-  formatChartXAxisTick,
-} from "@/lib/chartAxisFormat";
+import MetricHelp from "@/components/common/MetricHelp";
+import type { ChartTimeframe } from "@/lib/chartTimeAxis";
 
 interface ChartCardProps {
   symbol: string;
@@ -74,15 +63,6 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
     : stock?.trend === "bearish"
       ? "#ef5350"
       : "#2962ff";
-
-  const xAxisTickFormatter = useMemo(() => {
-    if (!stock?.series?.length) {
-      return (value: string) => value;
-    }
-    const series = stock.series;
-    return (value: string, index: number) =>
-      formatChartXAxisTick(activeTimeframe, value, index, series);
-  }, [activeTimeframe, stock?.series]);
 
   return (
     <PanelCard
@@ -140,94 +120,13 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
           <StockHero stock={stock} dayLow={stats.min} dayHigh={stats.max} />
 
           {/* Primary visual evidence — placed immediately after the Mentor context */}
-          <div
-            className="h-52 md:h-60 min-h-[220px] w-full -mx-2 relative"
-            data-testid="chart-container"
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={stock.series}
-                margin={{ top: 8, right: 12, bottom: 4, left: 4 }}
-              >
-                <CartesianGrid
-                  stroke="var(--tl-border)"
-                  strokeDasharray="2 4"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="t"
-                  stroke="var(--tl-text-muted)"
-                  tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
-                  tickLine={false}
-                  axisLine={false}
-                  interval="preserveStartEnd"
-                  minTickGap={24}
-                  tickFormatter={xAxisTickFormatter}
-                />
-                <YAxis
-                  stroke="var(--tl-text-muted)"
-                  tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
-                  tickLine={false}
-                  axisLine={false}
-                  domain={["dataMin - 5", "dataMax + 5"]}
-                  width={50}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--tl-surface)",
-                    border: "1px solid var(--tl-border)",
-                    borderRadius: 4,
-                    fontFamily: "JetBrains Mono",
-                    fontSize: 12,
-                    color: "var(--tl-text)",
-                  }}
-                  labelStyle={{ color: "var(--tl-text-muted)" }}
-                  labelFormatter={(value) =>
-                    formatChartTooltipLabel(activeTimeframe, String(value))
-                  }
-                  itemStyle={{ color: "var(--tl-text)" }}
-                  formatter={(v: number) => [
-                    `₹${v.toLocaleString("en-IN")}`,
-                    "Price",
-                  ]}
-                />
-                <ReferenceLine
-                  y={stock.support}
-                  stroke="#26a69a"
-                  strokeDasharray="3 3"
-                  strokeOpacity={0.5}
-                  label={{
-                    value: "S",
-                    fill: "#26a69a",
-                    fontSize: 10,
-                    position: "insideLeft",
-                  }}
-                />
-                <ReferenceLine
-                  y={stock.resistance}
-                  stroke="#ef5350"
-                  strokeDasharray="3 3"
-                  strokeOpacity={0.5}
-                  label={{
-                    value: "R",
-                    fill: "#ef5350",
-                    fontSize: 10,
-                    position: "insideLeft",
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="v"
-                  stroke={lineColor}
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4, fill: lineColor, stroke: "var(--tl-surface)" }}
-                  isAnimationActive
-                  animationDuration={900}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <CandlestickChart
+            series={stock.series}
+            timeframe={activeTimeframe as ChartTimeframe}
+            support={stock.support}
+            resistance={stock.resistance}
+            lineColor={lineColor}
+          />
 
           {/* Quick symbol switcher */}
           <div
@@ -255,11 +154,27 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
               <LearnWhyPanel
                 recommendation={stock.recommendation}
                 symbol={stock.symbol}
+                marketContext={{
+                  price: stock.price,
+                  ema20: stock.ema20,
+                  rsi: stock.rsi,
+                  support: stock.support,
+                  resistance: stock.resistance,
+                }}
                 variant="button"
                 toggleLabel="Why This View?"
                 testIdPrefix="detail-learn-why"
               />
-              <RecommendationCard recommendation={stock.recommendation} />
+              <RecommendationCard
+                recommendation={stock.recommendation}
+                marketContext={{
+                  price: stock.price,
+                  ema20: stock.ema20,
+                  rsi: stock.rsi,
+                  support: stock.support,
+                  resistance: stock.resistance,
+                }}
+              />
             </>
           ) : (
             <InsightPanel insight={stock.insight} />
@@ -278,13 +193,34 @@ export default function ChartCard({ symbol, onSelectSymbol }: ChartCardProps) {
                 <Stars count={stock.stars} testId="detail-stars" />
               </div>
             </StatTile>
-            <StatTile label="Support">
+            <StatTile
+              label="Support"
+              help={
+                <MetricHelp
+                  metric="support"
+                  context={{ value: stock.support, price: stock.price }}
+                  testId="detail-support-help"
+                />
+              }
+            >
               <span className="text-[#26a69a] font-mono tabular-nums text-sm inline-flex items-center gap-1">
                 <TrendingUp size={13} />
                 {stock.support.toLocaleString("en-IN")}
               </span>
             </StatTile>
-            <StatTile label="Resistance">
+            <StatTile
+              label="Resistance"
+              help={
+                <MetricHelp
+                  metric="resistance"
+                  context={{
+                    value: stock.resistance,
+                    price: stock.price,
+                  }}
+                  testId="detail-resistance-help"
+                />
+              }
+            >
               <span className="text-[#ef5350] font-mono tabular-nums text-sm inline-flex items-center gap-1">
                 <TrendingDown size={13} />
                 {stock.resistance.toLocaleString("en-IN")}
@@ -347,15 +283,18 @@ function InsightPanel({ insight }: { insight: string }) {
 
 function StatTile({
   label,
+  help,
   children,
 }: {
   label: string;
+  help?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="rounded-[4px] border border-[#D9DDE2] bg-white px-3 py-2">
-      <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1">
-        {label}
+      <div className="text-[10px] uppercase tracking-widest text-[#667085] mb-1 flex items-center gap-1">
+        <span>{label}</span>
+        {help}
       </div>
       <div>{children}</div>
     </div>

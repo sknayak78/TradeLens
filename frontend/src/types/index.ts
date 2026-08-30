@@ -119,13 +119,32 @@ export interface TodaysFocusItem {
   changePct: number;
 }
 
+/**
+ * One point of a stock price series. `v` is always the close (kept for the
+ * line-chart fallback and existing consumers); `o`/`h`/`l`/`vol` are the
+ * OHLCV fields exposed for candlestick rendering and are optional so older
+ * backends or fallback ranges remain valid.
+ */
+export interface ChartSeriesPoint {
+  t: string;
+  v: number;
+  o?: number | null;
+  h?: number | null;
+  l?: number | null;
+  vol?: number | null;
+  /** Optional per-point EMA overlays computed over backend lookback. */
+  ema20?: number | null;
+  ema50?: number | null;
+  ema200?: number | null;
+}
+
 export interface Insight {
   symbol: string;
   trend: Trend;
   support: number;
   resistance: number;
   aiInsight: string;
-  series: { t: string; v: number }[];
+  series: ChartSeriesPoint[];
 }
 
 export interface MarketSnapshot {
