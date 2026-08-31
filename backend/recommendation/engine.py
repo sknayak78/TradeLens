@@ -30,6 +30,8 @@ from typing import Any, List, Optional, Tuple
 
 from . import narrative
 from .narrative import Limits
+from . import progress as _progress
+from . import setup as _setup
 from .config import (
     ACTION_BUY_MIN_SCORE,
     ACTION_STRONG_BUY_MIN_SCORE,
@@ -91,6 +93,15 @@ class RecommendationEngine:
         action = self._action(strategy, trend, score)
         levels = self._levels_for(strategy, zone)
 
+        # ER-0036: the stable structural TradingSetup and today's SetupProgress
+        # against it.  The setup is price-independent; progress is not.
+        trading_setup = _setup.build_setup(market, strategy, trend)
+        progress = None
+        if trading_setup is not None:
+            progress = _progress.evaluate_progress(
+                market.price, trading_setup, action
+            )
+
         story = narrative.build(
             market=market,
             trend=trend,
@@ -128,6 +139,8 @@ class RecommendationEngine:
             rules_matched=rules_matched,
             warnings=self._warnings(market, limits),
             levels=levels,
+            setup=trading_setup,
+            progress=progress,
         )
         logger.debug(_event(
             "recommendation.generated",

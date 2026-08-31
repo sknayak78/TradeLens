@@ -82,6 +82,19 @@ SECOND_TARGET_BAND_SHARE: float = 0.5
 # Fresh entries whose reward:risk is below this become "Hold" or "Watch".
 MIN_RISK_REWARD: float = 1.2
 
+# ---------- Structural setup zone (ER-0036) ----------
+#
+# The Trading Setup's entry ceiling is structural, never today's close.  The
+# zone is derived from the floor (the higher of EMA20 and support) and a band
+# measured off the structure: the larger of a percentage of the floor and a
+# share of the support-resistance span, capped below resistance.  Because it is
+# derived from levels rather than `price`, the zone stays stable while Setup
+# Progress tracks where today's price sits inside it.
+# Minimum share of the floor the structural zone must extend before it is usable.
+ENTRY_ZONE_BAND_PCT: float = 0.05
+# Minimum share of the support-resistance span the structural zone must cover.
+ENTRY_ZONE_SPAN_SHARE: float = 0.5
+
 
 SCORING_RULES: list[Rule] = [
     Rule("price_above_ema20", "Price above EMA20", 15, _price_above_ema20),
