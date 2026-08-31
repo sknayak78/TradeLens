@@ -37,7 +37,10 @@ EMA_PERIODS = (20, 50, 200)
 #: converged. `max_points` alone drives the visible candle count, so the
 #: aggregation the user sees is unchanged.
 _DISPLAY_PLAN: dict[str, dict[str, Any]] = {
-    "1D": {"period": "5d", "interval": "5m", "max_points": 78, "weekly": False},
+    # 1D fetches a full month of 5m intraday bars so EMA20/50/200 are warmed
+    # (and EMA200 converges) over history far beyond the ~78 visible candles,
+    # rather than the previous 5-day window which barely supported EMA200.
+    "1D": {"period": "1mo", "interval": "5m", "max_points": 78, "weekly": False},
     "1W": {"period": "1mo", "interval": "30m", "max_points": 65, "weekly": False},
     "1M": {"period": "1y", "interval": "1d", "max_points": 22, "weekly": False},
     "3M": {"period": "2y", "interval": "1d", "max_points": 66, "weekly": False},
