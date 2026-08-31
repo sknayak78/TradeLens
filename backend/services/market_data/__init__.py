@@ -6,6 +6,7 @@ from services.market_data.indicators import (
     calculate_latest_rsi,
     calculate_rsi,
     calculate_rolling_vwap,
+    compute_ema,
     typical_prices,
 )
 from services.market_data.legacy_adapter import LegacyCatalogueSupport, LegacyProviderAdapter
@@ -62,6 +63,7 @@ __all__ = [
     "calculate_latest_rsi",
     "calculate_rsi",
     "calculate_rolling_vwap",
+    "compute_ema",
     "default_universe",
     "ohlcv_bars_from_insight_series",
     "quote_from_snapshot",

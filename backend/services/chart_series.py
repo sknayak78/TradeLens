@@ -13,6 +13,7 @@ from services.chart_timeframe import (
     get_timeframe_config,
     normalize_timeframe,
 )
+from services.market_data import compute_ema as compute_ema
 from services.market_data.models import OHLCVBar
 from services.market_data_service import MarketDataService
 from services.providers.yahoo_finance_provider import YahooFinanceProvider
@@ -95,38 +96,6 @@ def aggregate_weekly(bars: Sequence[OHLCVBar]) -> list[OHLCVBar]:
         )
         for g in groups.values()
     ]
-
-
-def compute_ema(
-    values: Sequence[float | None],
-    period: int,
-) -> list[float | None]:
-    """Exponential moving average over optionally-gapless numeric values.
-
-    A value is emitted only once `period` valid observations have accumulated
-    (seeded by their simple average), so the result never implies meaningfulness
-    from too little history.
-    """
-    out: list[float | None] = [None] * len(values)
-    if period <= 0:
-        return out
-    k = 2.0 / (period + 1)
-    seen = 0
-    seed_sum = 0.0
-    prev = 0.0
-    for i, value in enumerate(values):
-        if value is None:
-            continue
-        if seen < period:
-            seed_sum += value
-            seen += 1
-            if seen == period:
-                prev = seed_sum / period
-                out[i] = prev
-            continue
-        prev = value * k + prev * (1 - k)
-        out[i] = prev
-    return out
 
 
 def _is_finite_number(value: object) -> bool:
