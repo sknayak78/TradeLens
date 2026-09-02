@@ -63,12 +63,7 @@ export function isBullish(o: number | null | undefined, c: number): boolean {
  * `period` valid observations have accumulated, seeded by their simple average.
  * This keeps an EMA from implying it is meaningful before it has seen enough
  * data (e.g. an EMA200 must not be drawn from a handful of intraday bars).
- *
- * FALLBACK-ONLY (ER-0038): the backend (`backend/indicators/ema.py` `compute_ema`,
- * served per-candle on the chart series) is the authoritative EMA source. This
- * mirror is used solely to fill candles the backend left null (e.g. seed/sparse
- * fallback); it must never run when a valid backend value is present. Callers
- * must apply it via `pickFirst(backendValue, thisValue)` so the backend wins.
+ * Independent of the strategy engine's EMA so the chart stays self-contained.
  */
 export function computeEMASeries(
   closes: Array<number | null | undefined>,

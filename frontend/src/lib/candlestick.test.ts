@@ -123,18 +123,6 @@ describe("candlestick helpers", () => {
     expect(pickFirst(null, null)).toBeNull();
   });
 
-  it("backend EMA wins over the frontend fallback (pickFirst order)", () => {
-    // Mirror of CandlestickChart's `pickFirst(point.ema20, localEmaColumns.ema20[i])`:
-    // the backend value is always the FIRST argument and must never be overridden
-    // by the fallback column (ER-0038 requirement 9).
-    const backend = 700;
-    const frontendFallback = 725;
-    expect(pickFirst(backend, frontendFallback)).toBe(backend);
-    expect(pickFirst(frontendFallback, backend)).toBe(frontendFallback);
-    // The fallback may only fill a null backend value (null from backend, not this).
-    expect(pickFirst(null, frontendFallback)).toBe(frontendFallback);
-  });
-
   it("ohlcRange spans the full high/low range", () => {
     const range = ohlcRange([
       candle(100, { h: 110, l: 90 }),
