@@ -2,6 +2,7 @@
 
 from services.market_data.indicators import (
     calculate_ema,
+    calculate_ema_over_lookback,
     calculate_latest_ema,
     calculate_latest_rsi,
     calculate_rsi,
@@ -58,6 +59,7 @@ __all__ = [
     "build_legacy_stock_dict",
     "build_legacy_stock_from_quote",
     "calculate_ema",
+    "calculate_ema_over_lookback",
     "calculate_latest_ema",
     "calculate_latest_rsi",
     "calculate_rsi",

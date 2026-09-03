@@ -6,6 +6,7 @@ from collections import OrderedDict
 from datetime import date, datetime, timezone, timedelta
 from typing import Any, Dict, Sequence
 
+from indicators.ema import calculate_ema_over_lookback
 from services.chart_axis_labels import series_timestamp
 from services.chart_timeframe import (
     INTRADAY_FALLBACK,
@@ -103,30 +104,12 @@ def compute_ema(
 ) -> list[float | None]:
     """Exponential moving average over optionally-gapless numeric values.
 
-    A value is emitted only once `period` valid observations have accumulated
-    (seeded by their simple average), so the result never implies meaningfulness
-    from too little history.
+    This is an alias for :func:`indicators.ema.calculate_ema_over_lookback` —
+    the single authoritative EMA implementation. A value is emitted only once
+    ``period`` valid observations have accumulated (seeded by their simple
+    average), so the result never implies meaningfulness from too little history.
     """
-    out: list[float | None] = [None] * len(values)
-    if period <= 0:
-        return out
-    k = 2.0 / (period + 1)
-    seen = 0
-    seed_sum = 0.0
-    prev = 0.0
-    for i, value in enumerate(values):
-        if value is None:
-            continue
-        if seen < period:
-            seed_sum += value
-            seen += 1
-            if seen == period:
-                prev = seed_sum / period
-                out[i] = prev
-            continue
-        prev = value * k + prev * (1 - k)
-        out[i] = prev
-    return out
+    return calculate_ema_over_lookback(values, period)
 
 
 def _is_finite_number(value: object) -> bool:

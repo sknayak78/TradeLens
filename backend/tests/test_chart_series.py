@@ -17,6 +17,24 @@ from services.market_data.models import OHLCVBar
 IST = ZoneInfo("Asia/Kolkata")
 
 
+def test_ema_is_single_source_of_truth_in_indicators_module():
+    # chart-series EMA must not carry its own algorithm; it must delegate to the
+    # one authoritative implementation in indicators/ema.py and agree with it on
+    # representative inputs (including warm-up and gap handling).
+    import indicators.ema as indicators_ema
+
+    for values, period in [
+        ([10, 11, 12, 13], 3),
+        ([10, 11, 12, 13], 20),
+        ([], 20),
+        ([10.0, 11.0, None, 12.0, 13.0], 3),
+        ([100.0] * 230, 200),
+    ]:
+        assert compute_ema(values, period) == indicators_ema.calculate_ema_over_lookback(
+            values, period
+        )
+
+
 def _week_number(bar: OHLCVBar) -> tuple[int, int]:
     local = bar.timestamp.astimezone(IST)
     week_start = local.date() - timedelta(days=local.date().weekday())
