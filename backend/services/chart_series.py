@@ -6,6 +6,7 @@ from collections import OrderedDict
 from datetime import date, datetime, timezone, timedelta
 from typing import Any, Dict, Sequence
 
+from indicators.ema import calculate_ema_over_lookback
 from services.chart_axis_labels import series_timestamp
 from services.chart_timeframe import (
     INTRADAY_FALLBACK,
@@ -37,7 +38,10 @@ EMA_PERIODS = (20, 50, 200)
 #: converged. `max_points` alone drives the visible candle count, so the
 #: aggregation the user sees is unchanged.
 _DISPLAY_PLAN: dict[str, dict[str, Any]] = {
-    "1D": {"period": "5d", "interval": "5m", "max_points": 78, "weekly": False},
+    # 1D fetches a full month of 5m intraday bars so EMA20/50/200 are warmed
+    # (and EMA200 converges) over history far beyond the ~78 visible candles,
+    # rather than the previous 5-day window which barely supported EMA200.
+    "1D": {"period": "1mo", "interval": "5m", "max_points": 78, "weekly": False},
     "1W": {"period": "1mo", "interval": "30m", "max_points": 65, "weekly": False},
     "1M": {"period": "1y", "interval": "1d", "max_points": 22, "weekly": False},
     "3M": {"period": "2y", "interval": "1d", "max_points": 66, "weekly": False},
@@ -100,30 +104,12 @@ def compute_ema(
 ) -> list[float | None]:
     """Exponential moving average over optionally-gapless numeric values.
 
-    A value is emitted only once `period` valid observations have accumulated
-    (seeded by their simple average), so the result never implies meaningfulness
-    from too little history.
+    This is an alias for :func:`indicators.ema.calculate_ema_over_lookback` —
+    the single authoritative EMA implementation. A value is emitted only once
+    ``period`` valid observations have accumulated (seeded by their simple
+    average), so the result never implies meaningfulness from too little history.
     """
-    out: list[float | None] = [None] * len(values)
-    if period <= 0:
-        return out
-    k = 2.0 / (period + 1)
-    seen = 0
-    seed_sum = 0.0
-    prev = 0.0
-    for i, value in enumerate(values):
-        if value is None:
-            continue
-        if seen < period:
-            seed_sum += value
-            seen += 1
-            if seen == period:
-                prev = seed_sum / period
-                out[i] = prev
-            continue
-        prev = value * k + prev * (1 - k)
-        out[i] = prev
-    return out
+    return calculate_ema_over_lookback(values, period)
 
 
 def _is_finite_number(value: object) -> bool:

@@ -67,10 +67,34 @@ def _recommendation_out(recommendation: Recommendation) -> RecommendationOut:
     )
 
 
-def _is_complete(stock: dict) -> bool:
-    """True only when every headline indicator the Study screen shows is present."""
-    required = ("ema20", "ema50", "ema200", "rsi", "vwap")
-    return all(stock.get(field) is not None for field in required)
+def _latest_series_emas(series: list) -> dict:
+    """EMA20/50/200 at the latest displayed candle from the chart series.
+
+    The chart's EMA overlay is the single authoritative EMA source on the Study
+    screen: it is warmed over the timeframe's historical lookback (beyond the
+    visible window) and sampled per candle. Scans from the last point backwards
+    so the latest candle that actually carries a finite EMA wins.
+    """
+    emas = {"ema20": None, "ema50": None, "ema200": None}
+    for point in reversed(series):
+        for key in emas:
+            value = point.get(key)
+            if emas[key] is None and isinstance(value, (int, float)):
+                emas[key] = value
+        if all(emas.values()):
+            break
+    return emas
+
+
+def _is_complete(display_emas: dict, stock: dict) -> bool:
+    """True only when every headline indicator the Study screen shows is present.
+
+    `display_emas` already resolves the authoritative chart-series EMA with a
+    fallback to the daily `stock` snapshot, so only its presence needs checking.
+    RSI and VWAP remain daily snapshot values.
+    """
+    ema_ok = all(value is not None for value in display_emas.values())
+    return ema_ok and stock.get("rsi") is not None and stock.get("vwap") is not None
 
 
 def _study_set(symbol: str, timeframe: str) -> LearningJourneyStudySet:
@@ -104,6 +128,20 @@ def _study_set(symbol: str, timeframe: str) -> LearningJourneyStudySet:
         timeframe_fallback = True
         indicators = None
 
+    # EMA authority: the timeframe chart series (warmed over the historical
+    # lookback beyond the visible window). The daily `stock` snapshot EMA is used
+    # only when the chart series cannot supply a value (e.g. seed/sparse fallback),
+    # so the Quick Snapshot always agrees with the latest chart candle it can show.
+    series_emas = _latest_series_emas(series)
+    display_emas = {
+        key: (
+            series_emas[key]
+            if series_emas[key] is not None
+            else stock.get(key)
+        )
+        for key in ("ema20", "ema50", "ema200")
+    }
+
     return LearningJourneyStudySet(
         **stock_result.metadata.to_api_dict(),
         symbol=stock["symbol"],
@@ -113,9 +151,9 @@ def _study_set(symbol: str, timeframe: str) -> LearningJourneyStudySet:
         trend=decision.trend,
         sector=stock.get("sector", ""),
         rsi=stock.get("rsi"),
-        ema20=stock.get("ema20"),
-        ema50=stock.get("ema50"),
-        ema200=stock.get("ema200"),
+        ema20=display_emas["ema20"],
+        ema50=display_emas["ema50"],
+        ema200=display_emas["ema200"],
         vwap=stock.get("vwap"),
         volume=stock.get("volume"),
         support=insight.get("support"),
@@ -124,7 +162,7 @@ def _study_set(symbol: str, timeframe: str) -> LearningJourneyStudySet:
         timeframe=normalized_timeframe,
         timeframeLabel=timeframe_label,
         timeframeFallback=timeframe_fallback,
-        dataQuality="Complete" if _is_complete(stock) else "Partial",
+        dataQuality="Complete" if _is_complete(display_emas, stock) else "Partial",
         indicators=indicators,
     )
 

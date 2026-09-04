@@ -1,222 +1,411 @@
+import { useState } from "react";
+import { FlaskConical, Info, ListChecks, Play } from "lucide-react";
 import { InfoCard, InfoSection } from "@/components/layout/InfoPageLayout";
+import { CaseCard, type CaseCardState } from "@/components/learning/CaseCard";
+import { CaseShell } from "@/components/learning/CaseShell";
+import { EvidencePanel } from "@/components/learning/EvidencePanel";
+import { LearningProgress } from "@/components/learning/LearningProgress";
+import { MentorReveal } from "@/components/learning/MentorReveal";
+import { OutcomeReveal } from "@/components/learning/OutcomeReveal";
+import { SelfAssessment } from "@/components/learning/SelfAssessment";
+import { StopLossPlay } from "@/components/learning/StopLossPlay";
+import { TakeawayPanel } from "@/components/learning/TakeawayPanel";
+import { YourCallSelect } from "@/components/learning/YourCallSelect";
+import { useLearningProgress } from "@/context/LearningProgressContext";
 import { TRADELENS_MENTOR } from "@/lib/mentorPresentation";
+import {
+  CASES,
+  CASE_BY_ID,
+  caseDecisionLabels,
+  caseDecisionAgreement,
+  type CaseId,
+  type Confidence,
+  type DecisionAction,
+  type DecisionSubmission,
+} from "@/lib/howToUseLessons";
 
-const MENTOR_ACTIONS = [
+/**
+ * "Learn TradeLens by Doing — the Case Lab" (ER-0043 v2). Ten realistic case
+ * studies replace the earlier quiz-style lessons. Each case follows:
+ * OBSERVE → ANALYSE → FORM A VIEW → MAKE A DECISION → REVEAL MENTOR VIEW →
+ * UNDERSTAND THE REASONING → SEE WHAT HAPPENED → LEARN. Mentor/evidence/outcome
+ * content is never revealed before the learner submits their own call.
+ */
+export default function HowToUsePage() {
+  const [activeCaseId, setActiveCaseId] = useState<CaseId | null>(null);
+
+  return (
+    <div data-testid="how-to-use-page">
+      {activeCaseId === null ? (
+        <CaseLanding onOpenCase={setActiveCaseId} />
+      ) : (
+        <CaseView
+          caseId={activeCaseId}
+          onBackToList={() => setActiveCaseId(null)}
+          onOpenCase={setActiveCaseId}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+ * Landing
+ * ------------------------------------------------------------------------- */
+
+function CaseLanding({ onOpenCase }: { onOpenCase: (id: CaseId) => void }) {
+  const { completed, completedCount, totalLessons, resetProgress } =
+    useLearningProgress();
+
+  const recommended = CASES.find((c) => !completed.includes(c.id))?.id;
+
+  return (
+    <div className="space-y-4">
+      <div
+        data-testid="case-landing"
+        className="rounded-[4px] border border-[#2962ff]/25 bg-gradient-to-br from-[#F6F7F5] to-[#2962ff]/[0.04] p-5"
+      >
+        <div className="flex items-center gap-2">
+          <FlaskConical size={22} className="text-[#2962ff]" />
+          <h2 className="text-xl font-semibold text-[#1F2933] tracking-tight">
+            The TradeLens Case Lab
+          </h2>
+        </div>
+        <p className="mt-1 max-w-3xl text-sm text-[#667085]">
+          Learn how to evaluate a trading setup by working through 10 realistic
+          situations. Each case asks you to observe, form your own view and make
+          a call — then reveals the evidence, the Mentor's reasoning and what
+          happened next.
+        </p>
+        <p className="mt-2 text-xs text-[#C5CAD3]">
+          TradeLens teaches you to reason about a setup — it never tells you
+          what to buy.
+        </p>
+      </div>
+
+      <LearningProgress
+        completedCount={completedCount}
+        totalLessons={totalLessons}
+        onReset={resetProgress}
+      />
+
+      <div className="flex items-center gap-2">
+        <ListChecks size={15} className="text-[#2962ff]" />
+        <span className="text-[10px] uppercase tracking-widest text-[#667085]">
+          Your learning journey
+        </span>
+        {recommended && (
+          <button
+            type="button"
+            onClick={() => onOpenCase(recommended)}
+            data-testid="case-start-next"
+            className="ml-auto inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-medium text-white bg-[#2962ff] hover:bg-[#2962ff]/85 transition-colors"
+          >
+            <Play size={11} /> Continue with the next case
+          </button>
+        )}
+      </div>
+
+      <div
+        data-testid="case-cards-grid"
+        className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+      >
+        {CASES.map((caseStudy) => {
+          const state: CaseCardState = completed.includes(caseStudy.id)
+            ? "completed"
+            : caseStudy.id === recommended
+              ? "current"
+              : "not-started";
+          return (
+            <CaseCard
+              key={caseStudy.id}
+              caseStudy={caseStudy}
+              state={state}
+              onClick={() => onOpenCase(caseStudy.id)}
+            />
+          );
+        })}
+      </div>
+
+      {/* Preserved reference content from the earlier How-to-Use guide */}
+      <ReferenceGuide />
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+ * Case view
+ * ------------------------------------------------------------------------- */
+
+function CaseView({
+  caseId,
+  onBackToList,
+  onOpenCase,
+}: {
+  caseId: CaseId;
+  onBackToList: () => void;
+  onOpenCase: (id: CaseId) => void;
+}) {
+  const caseStudy = CASE_BY_ID[caseId];
+  const { isComplete, toggleLessonComplete } = useLearningProgress();
+  const completed = isComplete(caseStudy.id);
+
+  const [action, setAction] = useState<DecisionAction | null>(null);
+  const [confidence, setConfidence] = useState<Confidence | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  // Separate flags used by stop-loss / self-assessment interactions which
+  // reveal their own completion via a callback rather than a submit button.
+  const [playDone, setPlayDone] = useState(false);
+  const [revision, setRevision] = useState(0);
+
+  const interaction = caseStudy.interaction;
+  const kind = interaction.kind;
+
+  const canSubmit =
+    kind === "decision" ? action !== null && confidence !== null : false;
+
+  const canContinue =
+    kind === "decision" ? submitted : kind === "stopLoss" || kind === "selfAssessment" ? playDone : false;
+
+  const revealed = kind === "decision" ? submitted : kind === "stopLoss" || kind === "selfAssessment" ? playDone : false;
+
+  const previousCase = CASES[caseStudy.number - 2];
+  const nextCase = CASES[caseStudy.number];
+
+  const comparison =
+    revealed && kind === "decision" && action
+      ? {
+          learner: { action, confidence: confidence ?? "Medium" } satisfies DecisionSubmission,
+          mentor: caseStudy.mentorView,
+          agreement: caseDecisionAgreement(action, caseStudy.mentorView.action),
+        }
+      : null;
+
+  function handleSubmit() {
+    if (!canSubmit) return;
+    if (!completed) toggleLessonComplete(caseStudy.id);
+    setSubmitted(true);
+  }
+
+  function handlePlayDone() {
+    if (!completed) toggleLessonComplete(caseStudy.id);
+    setPlayDone(true);
+  }
+
+  function handleContinue() {
+    if (nextCase) onOpenCase(nextCase.id);
+  }
+
+  function handleRestart() {
+    setAction(null);
+    setConfidence(null);
+    setSubmitted(false);
+    setPlayDone(false);
+    setRevision((r) => r + 1);
+  }
+
+  return (
+    <CaseShell
+      caseStudy={caseStudy}
+      onBackToList={onBackToList}
+      onPrevious={previousCase ? () => onOpenCase(previousCase.id) : undefined}
+      previousNumber={previousCase?.number}
+      onContinue={canContinue ? handleContinue : undefined}
+      nextNumber={nextCase?.number}
+      onRestart={handleRestart}
+      continueLabel={canContinue && nextCase ? "Next case" : "Continue"}
+      continueDisabled={!canContinue}
+      completed={completed}
+    >
+      {/* Interaction */}
+      {kind === "decision" && (
+        <div
+          data-testid="case-interaction"
+          className="rounded-[4px] border border-[#D9DDE2] bg-white p-4"
+        >
+          <YourCallSelect
+            prompt={interaction.prompt}
+            action={action}
+            setAction={setAction}
+            confidence={confidence}
+            setConfidence={setConfidence}
+            disabled={submitted}
+          />
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              data-testid="case-submit"
+              className={`inline-flex items-center gap-1.5 rounded px-4 py-2 text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                canSubmit
+                  ? "bg-[#26a69a] text-white hover:bg-[#26a69a]/85"
+                  : "bg-[#E5E7EB] text-[#9CA3AF]"
+              }`}
+            >
+              Submit my call
+            </button>
+            {!canSubmit && !submitted && (
+              <span className="ml-2 text-[11px] text-[#667085]">
+                Pick your call and confidence to reveal the reasoning.
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {kind === "stopLoss" && (
+        <StopLossPlay
+          key={revision}
+          caseStudy={caseStudy}
+          onComplete={handlePlayDone}
+        />
+      )}
+
+      {kind === "selfAssessment" && (
+        <SelfAssessment
+          key={revision}
+          caseStudy={caseStudy}
+          onComplete={handlePlayDone}
+        />
+      )}
+
+      {/* Reveal-only content (after the learner's own call) */}
+      {revealed && (
+        <>
+          <EvidencePanel evidence={caseStudy.evidence} testId={`evidence-${caseStudy.id}`} />
+
+          {comparison && kind === "decision" && (
+            <MentorReveal
+              mentor={caseStudy.mentorView}
+              learnerAction={comparison.learner.action}
+              agreement={comparison.agreement}
+              rationale={caseStudy.mentorView.rationale}
+              takeaway={caseStudy.mentorView.takeaway}
+              testId={`mentor-reveal-${caseStudy.id}`}
+            />
+          )}
+
+          {(kind === "stopLoss" || kind === "selfAssessment") && (
+            <MentorReveal
+              mentor={caseStudy.mentorView}
+              rationale={caseStudy.mentorView.rationale}
+              takeaway={caseStudy.mentorView.takeaway}
+              testId={`mentor-reveal-${caseStudy.id}`}
+            />
+          )}
+
+          {caseStudy.outcome && (
+            <OutcomeReveal
+              learnerDecision={action ? caseDecisionLabels[action] : "No call"}
+              outcomes={caseStudy.outcome.steps}
+              decisionPointPrice={caseStudy.outcome.decisionPointPrice}
+              testId={`outcome-reveal-${caseStudy.id}`}
+            />
+          )}
+
+          <TakeawayPanel
+            takeaway={caseStudy.takeaway}
+            learnWhy={caseStudy.learnWhy}
+            testId={`takeaway-${caseStudy.id}`}
+          />
+        </>
+      )}
+    </CaseShell>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+ * Reference guide (preserved educational content)
+ * ------------------------------------------------------------------------- */
+
+const METRIC_REFERENCE = [
   {
-    name: "Strong Buy",
-    summary: "Multiple independent signals align constructively.",
-    detail: `${TRADELENS_MENTOR} sees a strong educational case for studying an entry. This is not a guarantee of profit — it means the technical picture is unusually supportive for learning about a potential setup.`,
-    contrast: "Stronger conviction than Buy; still requires your own risk check.",
+    title: "RSI (Relative Strength Index)",
+    detail:
+      "A momentum indicator on a 0–100 scale measuring the strength of recent price movements. Higher readings suggest stronger recent buying momentum; lower readings suggest weaker momentum. Use it to sense momentum, not as a standalone buy/sell rule.",
   },
+  {
+    title: "EMA20 / EMA50 / EMA200",
+    detail:
+      "Exponential moving averages that emphasise recent sessions. Price above an average is generally supportive on that timeframe; averages stacked EMA20 > EMA50 > EMA200 indicate a bullish alignment. EMAs provide context — they are not independent entry signals.",
+  },
+  {
+    title: "Support & Resistance",
+    detail:
+      "Price zones where buyers (support) or sellers (resistance) have historically appeared. Location relative to these levels decides how attractive an entry is, not just trend direction.",
+  },
+  {
+    title: "Sufficient Headroom",
+    detail:
+      "The percentage distance from the current price up to the next resistance level. More headroom can make a setup more attractive; thin headroom means upside may be limited relative to risk. It is calculated from data — not a forecast.",
+  },
+  {
+    title: "Risk / Reward",
+    detail:
+      "How much you might lose (to a stop) against how much you might gain (to a target). A favourable ratio does not guarantee profit, but an unfavourable one makes a disciplined entry less attractive.",
+  },
+];
+
+/* Map our four-bucket decisions onto reference definitions for the glossary. */
+const ACTION_REFERENCE = [
   {
     name: "Buy",
     summary: "The evidence leans positive, but confirmation still matters.",
-    detail: "Trend and structure look constructive, yet you should still confirm risk, levels, and your own plan before acting.",
-    contrast: "More constructive than Watch; less emphatic than Strong Buy.",
+    contrast: "More constructive than Watch/WAIT; you are prepared to act near the plan.",
   },
   {
     name: "Watch",
-    summary: "Something interesting is developing — observe first.",
-    detail: "The setup may improve if price comes to a better level or structure tightens. The lesson is patience and observation.",
-    contrast: "More engaged than Wait; you are tracking a developing case, not sitting out entirely.",
+    summary: "Something interesting is developing — observe and track it first.",
+    contrast: "More engaged than WAIT; you are tracking a developing case.",
   },
   {
     name: "Wait",
-    summary: "Conditions are mixed or incomplete.",
-    detail: "Forcing a trade here is usually low quality. Sitting on your hands is a valid position while evidence improves.",
-    contrast: "Less constructive than Watch; more neutral than Avoid.",
+    summary: "Conditions are mixed or the price location is poor right now.",
+    contrast: "Silting on your hands is a valid, disciplined position while evidence improves.",
   },
   {
     name: "Avoid",
     summary: "The technical picture is weak or unfavourable for a fresh entry.",
-    detail: "The learning goal is recognising when staying away is the more disciplined decision — especially for beginners.",
     contrast: "The most cautious fresh-entry view; not a comment on the company forever.",
   },
 ];
 
-export default function HowToUsePage() {
+function ReferenceGuide() {
   return (
-    <div data-testid="how-to-use-page" className="space-y-2">
-      <InfoSection title="A. Getting Started">
-        <p>
-          TradeLens is a learning and decision-support platform for Indian markets. It
-          combines market data, structured analysis, and {TRADELENS_MENTOR} explanations
-          to help you understand <em>how</em> experienced traders evaluate a stock — not
-          to tell you what to buy or sell.
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 not-prose mt-3">
-          <InfoCard title="Dashboard" accent="border-l-[#2962ff]">
-            Your home base. Review Today&apos;s Learning Opportunities, study a stock&apos;s
-            chart, and read the {TRADELENS_MENTOR} view for the symbol you select.
-          </InfoCard>
-          <InfoCard title="Watchlist" accent="border-l-[#2962ff]">
-            Track symbols you want to study over time. Compare price, RSI, EMA20 and trend
-            at a glance.
-          </InfoCard>
-          <InfoCard title="Trading Journal" accent="border-l-[#2962ff]">
-            Log paper or real trades, review outcomes, and build the habit of honest
-            reflection after every decision.
-          </InfoCard>
-          <InfoCard title={TRADELENS_MENTOR} accent="border-l-[#2962ff]">
-            A structured guide that translates technical evidence into plain language —
-            including when the best lesson is to wait. It is not a prediction engine.
-          </InfoCard>
-        </div>
-        <p className="mt-3 text-[#667085] text-sm">
-          TradeLens helps you learn disciplined decision-making. It does not guarantee
-          trading outcomes.
-        </p>
-      </InfoSection>
+    <div className="mt-8" data-testid="case-reference">
+      <div className="mb-4 flex items-center gap-2">
+        <Info size={15} className="text-[#667085]" />
+        <span className="text-[10px] uppercase tracking-widest text-[#667085]">
+          Reference · the concepts behind the cases
+        </span>
+      </div>
 
-      <InfoSection title="B. Understanding Technical Indicators">
-        <MetricGuide
-          title="RSI (Relative Strength Index)"
-          what="A momentum indicator on a 0–100 scale that measures the strength of recent price movements."
-          indicates="Higher readings often suggest stronger recent buying momentum; lower readings suggest weaker momentum. Readings above ~70 can mean momentum is strong but stretched; below ~30 can mean selling pressure has been heavy."
-          use="Use RSI to sense momentum — not as a standalone buy/sell rule. Combine it with trend, support/resistance, and the Mentor view."
-          avoid="Do not assume RSI above 70 always means sell, or below 30 always means buy. Trends can stay overbought or oversold for extended periods."
-        />
-        <MetricGuide
-          title="EMA20 (20-day Exponential Moving Average)"
-          what="A short-term average price that gives more weight to recent sessions."
-          indicates="When price trades above EMA20, short-term momentum is often supportive. Below EMA20 can mean recent momentum has softened."
-          use="Compare the current price to EMA20 when reading trend and pullback behaviour on the chart."
-          avoid="A single close above or below EMA20 is not a complete trade plan. Context from EMA50 and structure matters."
-        />
-        <MetricGuide
-          title="EMA50 (50-day Exponential Moving Average)"
-          what="A medium-term average that smooths price over roughly ten trading weeks."
-          indicates="Price above EMA50 often aligns with a healthier medium-term trend; below can signal caution on the intermediate timeframe."
-          use="Read EMA50 together with EMA20 — alignment can strengthen the trend story; divergence can signal transition."
-          avoid="EMA50 alone does not predict the next move. It is one line of evidence among several."
-        />
-      </InfoSection>
-
-      <InfoSection title="C. Support & Resistance">
-        <MetricGuide
-          title="Support"
-          what="A price zone where buying interest has historically appeared, slowing or pausing declines."
-          indicates="Price holding above support can provide a buffer before the next test of that level."
-          use="Use support to think about downside risk and where your thesis might be wrong."
-          avoid="Support levels are identified from past behaviour — they can break without warning."
-        />
-        <MetricGuide
-          title="Resistance"
-          what="A price zone where selling pressure has historically appeared, slowing or pausing advances."
-          indicates="Price approaching resistance may slow down; a clean break with follow-through can change the picture."
-          use="Use resistance to judge how much upside room a setup may have before the next hurdle."
-          avoid="Resistance is not a fixed ceiling. Markets can gap, news can override technical levels."
-        />
-      </InfoSection>
-
-      <InfoSection title='D. Sufficient Headroom'>
-        <p>
-          <strong className="text-[#1F2933]">Headroom</strong> is the percentage distance
-          from the current price up to the next resistance level. TradeLens describes
-          setups with enough room as having &quot;sufficient headroom.&quot;
-        </p>
-        <ul className="list-disc pl-5 space-y-2 mt-2">
-          <li>More headroom can make a setup more attractive because price has space to move before the next hurdle.</li>
-          <li>Thin headroom does not forbid a trade — it means upside may be limited relative to the risk.</li>
-          <li>Headroom is calculated from available price and resistance data — it is not a forecast.</li>
-        </ul>
-      </InfoSection>
-
-      <InfoSection title="E. Risk / Reward">
-        <p>
-          Every trade has <strong className="text-[#1F2933]">risk</strong> (how much you
-          might lose if wrong) and <strong className="text-[#1F2933]">potential reward</strong>{" "}
-          (how much you might gain if right). The{" "}
-          <strong className="text-[#1F2933]">risk/reward ratio</strong> compares these.
-        </p>
-        <p>
-          TradeLens Mentor may highlight when the ratio is below its preferred minimum.
-          That means the estimated reward may not justify the estimated downside for
-          this setup — a learning signal to pause and reconsider, not a command.
-        </p>
-        <p className="text-[#667085] text-sm">
-          A favourable ratio does not guarantee profit. An unfavourable ratio does not
-          mean the stock cannot rise — it means the geometry of the setup is less
-          attractive for disciplined entries.
-        </p>
-      </InfoSection>
-
-      <InfoSection title={`F. ${TRADELENS_MENTOR} Actions`}>
-        <p className="mb-3">
-          These classifications describe what the available technical evidence suggests
-          for learning. They are not personalized investment advice or trade instructions.
-        </p>
-        <div className="grid grid-cols-1 gap-2 not-prose">
-          {MENTOR_ACTIONS.map((action) => (
-            <InfoCard key={action.name} title={action.name} accent="border-l-[#2962ff]">
-              <p className="font-medium text-[#1F2933]">{action.summary}</p>
-              <p className="mt-1">{action.detail}</p>
-              <p className="mt-2 text-[#667085] text-xs">{action.contrast}</p>
+      <InfoSection title="Metric glossary">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 not-prose">
+          {METRIC_REFERENCE.map((metric) => (
+            <InfoCard key={metric.title} title={metric.title} accent="border-l-[#2962ff]">
+              {metric.detail}
             </InfoCard>
           ))}
         </div>
       </InfoSection>
 
-      <InfoSection title="G. Reading a Technical Picture">
-        <p>
-          Experienced traders rarely act on a single indicator. TradeLens encourages you
-          to combine:
+      <InfoSection title={`The ${TRADELENS_MENTOR} decisions`}>
+        <p className="mb-3 text-sm text-[#667085]">
+          These are the four choices you make in the case lab. They describe what
+          the available technical evidence suggests for learning — not
+          personalized investment advice or trade instructions.
         </p>
-        <ul className="list-disc pl-5 space-y-1 mt-2">
-          <li>Current price and recent trend</li>
-          <li>RSI for momentum context</li>
-          <li>EMA20 and EMA50 for short/medium-term structure</li>
-          <li>Support and resistance for risk geometry</li>
-          <li>Headroom before the next resistance hurdle</li>
-          <li>Risk/reward when a trading plan is available</li>
-          <li>The {TRADELENS_MENTOR} view synthesising the evidence</li>
-        </ul>
-        <p className="mt-3 font-medium text-[#1F2933]">
-          Do not make a decision from one metric. Look at the overall picture.
-        </p>
-        <p className="mt-2 text-sm text-[#667085]">
-          On the Dashboard and stock detail screens, tap the ⓘ icons next to metrics for
-          concise contextual explanations using live values where available.
-        </p>
+        <div className="grid grid-cols-1 gap-2 not-prose">
+          {ACTION_REFERENCE.map((action) => (
+            <InfoCard key={action.name} title={action.name} accent="border-l-[#2962ff]">
+              <p className="mt-1">{action.summary}</p>
+              <p className="mt-2 text-[#667085] text-xs">{action.contrast}</p>
+            </InfoCard>
+          ))}
+        </div>
       </InfoSection>
-    </div>
-  );
-}
-
-function MetricGuide({
-  title,
-  what,
-  indicates,
-  use,
-  avoid,
-}: {
-  title: string;
-  what: string;
-  indicates: string;
-  use: string;
-  avoid: string;
-}) {
-  return (
-    <div className="rounded-[4px] border border-[#D9DDE2] bg-white p-4 mb-3 not-prose">
-      <h3 className="text-sm font-semibold text-[#1F2933] mb-2">{title}</h3>
-      <dl className="space-y-2 text-sm text-[#1F2933]">
-        <div>
-          <dt className="text-[10px] uppercase tracking-widest text-[#667085]">What is it?</dt>
-          <dd className="mt-0.5">{what}</dd>
-        </div>
-        <div>
-          <dt className="text-[10px] uppercase tracking-widest text-[#667085]">What does the value generally indicate?</dt>
-          <dd className="mt-0.5">{indicates}</dd>
-        </div>
-        <div>
-          <dt className="text-[10px] uppercase tracking-widest text-[#667085]">How can I use it?</dt>
-          <dd className="mt-0.5">{use}</dd>
-        </div>
-        <div>
-          <dt className="text-[10px] uppercase tracking-widest text-[#667085]">What should I NOT conclude?</dt>
-          <dd className="mt-0.5 text-[#667085]">{avoid}</dd>
-        </div>
-      </dl>
     </div>
   );
 }

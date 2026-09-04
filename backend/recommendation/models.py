@@ -258,6 +258,11 @@ class Recommendation:
     rules_matched: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     levels: Optional[TradeLevels] = None
+    #: ER-0036: the stable structural thesis (additive, price-independent) and
+    #: today's progress against it.  ``levels`` continues to derive from the
+    #: same structural inputs for the published legacy zone.
+    setup: Optional["TradingSetup"] = None
+    progress: Optional["SetupProgress"] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
