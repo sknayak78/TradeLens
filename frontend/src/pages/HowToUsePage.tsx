@@ -16,8 +16,8 @@ import { TRADELENS_MENTOR } from "@/lib/mentorPresentation";
 import {
   CASES,
   CASE_BY_ID,
-  DECISION_LABELS,
-  decisionAgreement,
+  caseDecisionLabels,
+  caseDecisionAgreement,
   type CaseId,
   type Confidence,
   type DecisionAction,
@@ -177,7 +177,7 @@ function CaseView({
       ? {
           learner: { action, confidence: confidence ?? "Medium" } satisfies DecisionSubmission,
           mentor: caseStudy.mentorView,
-          agreement: decisionAgreement(action, caseStudy.mentorView.action),
+          agreement: caseDecisionAgreement(action, caseStudy.mentorView.action),
         }
       : null;
 
@@ -297,7 +297,7 @@ function CaseView({
 
           {caseStudy.outcome && (
             <OutcomeReveal
-              learnerDecision={action ? DECISION_LABELS[action] : "No call"}
+              learnerDecision={action ? caseDecisionLabels[action] : "No call"}
               outcomes={caseStudy.outcome.steps}
               decisionPointPrice={caseStudy.outcome.decisionPointPrice}
               testId={`outcome-reveal-${caseStudy.id}`}

@@ -1,5 +1,5 @@
 import { TrendingUp, Wallet } from "lucide-react";
-import { DECISION_LABELS, type CaseOutcomeStep } from "@/lib/howToUseLessons";
+import { caseDecisionLabels, type CaseOutcomeStep } from "@/lib/howToUseLessons";
 
 interface OutcomeRevealProps {
   learnerDecision: string;
@@ -10,7 +10,7 @@ interface OutcomeRevealProps {
 
 function decisionLabel(value: string): string {
   const upper = value.toUpperCase();
-  if (upper in DECISION_LABELS) return DECISION_LABELS[upper as keyof typeof DECISION_LABELS];
+  if (upper in caseDecisionLabels) return caseDecisionLabels[upper as keyof typeof caseDecisionLabels];
   return value;
 }
 

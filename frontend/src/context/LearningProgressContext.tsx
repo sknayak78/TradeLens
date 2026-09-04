@@ -20,7 +20,7 @@ import {
 } from "@/lib/howToUseLessons";
 
 /**
- * Feature-scoped progress state for the How to Use TradeLens interactive
+ * Feature-scoped progress state for the TradeLens Academy interactive
  * learning experience (ER-0043). Deliberately local to the learning feature —
  * NOT a generic global onboarding context.
  */

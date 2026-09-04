@@ -28,7 +28,7 @@ import ErrorState from "@/components/common/ErrorState";
 import { type ChartTimeframe } from "@/lib/chartTimeAxis";
 import {
   DECISION_OPTIONS,
-  DECISION_LABELS,
+  journalDecisionLabels,
   buildDebrief,
   isSubmissionReady,
   type UserDecision,
@@ -705,7 +705,7 @@ function DecisionForm({
                 : "bg-white border-[#D9DDE2] text-[#1F2933] hover:border-[#2962ff]/40 hover:bg-[#2962ff]/5"
             }`}
           >
-            {DECISION_LABELS[opt]}
+            {journalDecisionLabels[opt]}
           </button>
         ))}
       </div>
@@ -793,7 +793,7 @@ function ComparisonAndLearning({
               Your Decision
             </div>
             <div className="text-lg font-mono font-semibold text-[#1F2933]">
-              {decision ? DECISION_LABELS[decision] : "—"}
+              {decision ? journalDecisionLabels[decision] : "—"}
             </div>
           </div>
           <div className="rounded-[4px] border border-[#26a69a]/30 bg-[#26a69a]/[0.06] p-3" data-testid="lj-mentor-side">

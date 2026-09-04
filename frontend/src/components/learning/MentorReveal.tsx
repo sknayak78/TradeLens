@@ -1,10 +1,10 @@
 import { CheckCircle2, EyeOff, MinusCircle } from "lucide-react";
 import {
-  DECISION_LABELS,
-  type Agreement,
+  caseDecisionLabels,
   type DecisionAction,
   type MentorView,
 } from "@/lib/howToUseLessons";
+import type { Agreement } from "@/lib/decisions";
 import { TRADELENS_MENTOR } from "@/lib/mentorPresentation";
 
 interface MentorRevealProps {
@@ -61,7 +61,7 @@ export function MentorReveal({
               Your decision
             </div>
             <div className="text-lg font-mono font-semibold text-[#1F2933]">
-              {DECISION_LABELS[learnerAction]}
+              {caseDecisionLabels[learnerAction]}
             </div>
           </div>
         )}

@@ -11,9 +11,9 @@ import {
   buildCaseOutcome,
   buildMentorComparison,
   caseCount,
-  decisionAgreement,
+  caseDecisionAgreement,
   caseKind,
-  mentorDecisionBucket,
+  caseMentorBucket,
   expandCaseChart,
   revealStopLossDay,
   stopLossDayCount,
@@ -95,20 +95,20 @@ describe("howToUseLessons: decision vocabulary", () => {
   });
 
   it("maps mentor-style actions onto the scale", () => {
-    expect(mentorDecisionBucket("Strong Buy")).toBe("BUY");
-    expect(mentorDecisionBucket("Buy")).toBe("BUY");
-    expect(mentorDecisionBucket("Watch")).toBe("WATCH");
-    expect(mentorDecisionBucket("Wait")).toBe("WAIT");
-    expect(mentorDecisionBucket("Avoid")).toBe("AVOID");
+    expect(caseMentorBucket("Strong Buy")).toBe("BUY");
+    expect(caseMentorBucket("Buy")).toBe("BUY");
+    expect(caseMentorBucket("Watch")).toBe("WATCH");
+    expect(caseMentorBucket("Wait")).toBe("WAIT");
+    expect(caseMentorBucket("Avoid")).toBe("AVOID");
   });
 
   it("classifies agreement between user and mentor buckets", () => {
-    expect(decisionAgreement("BUY", "BUY")).toBe("agree");
-    expect(decisionAgreement("WATCH", "WATCH")).toBe("agree");
-    expect(decisionAgreement("BUY", "AVOID")).toBe("differ");
-    expect(decisionAgreement("AVOID", "BUY")).toBe("differ");
-    expect(decisionAgreement("WATCH", "BUY")).toBe("partial");
-    expect(decisionAgreement(null, "BUY")).toBe("partial");
+    expect(caseDecisionAgreement("BUY", "BUY")).toBe("agree");
+    expect(caseDecisionAgreement("WATCH", "WATCH")).toBe("agree");
+    expect(caseDecisionAgreement("BUY", "AVOID")).toBe("differ");
+    expect(caseDecisionAgreement("AVOID", "BUY")).toBe("differ");
+    expect(caseDecisionAgreement("WATCH", "BUY")).toBe("partial");
+    expect(caseDecisionAgreement(null, "BUY")).toBe("partial");
   });
 });
 

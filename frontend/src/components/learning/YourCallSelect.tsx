@@ -1,4 +1,4 @@
-import { DECISION_LABELS, CONFIDENCE_OPTIONS, type Confidence, type DecisionAction } from "@/lib/howToUseLessons";
+import { caseDecisionLabels, CONFIDENCE_OPTIONS, type Confidence, type DecisionAction } from "@/lib/howToUseLessons";
 
 interface YourCallSelectProps {
   prompt: string;
@@ -45,7 +45,7 @@ export function YourCallSelect({
                 : "bg-white border-[#D9DDE2] text-[#1F2933] hover:border-[#2962ff]/40 hover:bg-[#2962ff]/5"
             }`}
           >
-            {DECISION_LABELS[option]}
+            {caseDecisionLabels[option]}
           </button>
         ))}
       </div>

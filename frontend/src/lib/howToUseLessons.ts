@@ -1,5 +1,5 @@
 /**
- * Case-study content model for the How to Use TradeLens Case Lab (ER-0043 v2).
+ * Case-study content model for the TradeLens Academy Case Lab (ER-0043 v2).
  *
  * The concept-based quiz lessons were replaced by ten realistic case studies
  * ("case lab"). Each case embeds the concepts (trend, EMA, support/resistance,
@@ -19,16 +19,17 @@
 import { TRADELENS_MENTOR, PREFERRED_MIN_RISK_REWARD } from "./mentorPresentation";
 import type { ChartSeriesPoint } from "@/types";
 import type { ChartTimeframe } from "@/lib/chartAxisFormat";
+import type { Agreement } from "./decisions";
 
 /* ---------------------------------------------------------------------------
- * Shared decision vocabulary
+ * Academy decision vocabulary
  * ------------------------------------------------------------------------- */
 
-/** The four-bucket decision scale used by the product and Guided Research. */
+/** The four-bucket decision scale used by the Academy Case Lab. */
 export const DECISION_ACTIONS = ["BUY", "WATCH", "WAIT", "AVOID"] as const;
 export type DecisionAction = (typeof DECISION_ACTIONS)[number];
 
-export const DECISION_LABELS: Record<DecisionAction, string> = {
+export const caseDecisionLabels: Record<DecisionAction, string> = {
   BUY: "Buy",
   WATCH: "Watch",
   WAIT: "Wait",
@@ -47,10 +48,20 @@ export interface AnswerOption {
   preferred?: boolean;
 }
 
-export type Agreement = "agree" | "partial" | "differ";
+/**
+ * `Agreement` is shared with the Learning Journey — see `./decisions`.
+ * Re-exported here so Academy consumers keep a single stable import path.
+ */
+export type { Agreement };
 
-/** Map a Mentor-style action label onto the Academy four-bucket scale. */
-export function mentorDecisionBucket(action: string): DecisionAction {
+/**
+ * Map a Mentor-style action label onto the Academy four-bucket scale.
+ *
+ * The Academy taxonomy includes a real `WAIT` action, so a mentor "Wait" maps
+ * to `WAIT`. This intentionally differs from the Journal's `journalMentorBucket`,
+ * which folds a mentor "Wait" into `AVOID`.
+ */
+export function caseMentorBucket(action: string): DecisionAction {
   switch (action) {
     case "Strong Buy":
       return "BUY";
@@ -67,7 +78,12 @@ export function mentorDecisionBucket(action: string): DecisionAction {
   }
 }
 
-export function decisionAgreement(
+/**
+ * Classify how close an Academy learner decision is to the Mentor's direction.
+ * The Academy decision may be null (learner has not chosen) and has no `SELL`
+ * action. No `SELL`/`BUY` differ case exists here — that is Journal territory.
+ */
+export function caseDecisionAgreement(
   user: DecisionAction | null,
   mentor: DecisionAction | null,
 ): Agreement {
@@ -1550,7 +1566,7 @@ export function buildMentorComparison(
   return {
     learner: submission,
     mentor: caseStudy.mentorView,
-    agreement: decisionAgreement(submission.action, caseStudy.mentorView.action),
+    agreement: caseDecisionAgreement(submission.action, caseStudy.mentorView.action),
     targetProvided: true,
     invalidationProvided: true,
   };

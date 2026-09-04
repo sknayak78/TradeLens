@@ -1,21 +1,32 @@
 import type { Recommendation } from "@/types";
+import type { Agreement } from "./decisions";
 
 /** A user's own call — mirrors the ER-0034 `user_decision` union. */
 export type UserDecision = "BUY" | "SELL" | "WATCH" | "AVOID";
 
 export const DECISION_OPTIONS: UserDecision[] = ["BUY", "SELL", "WATCH", "AVOID"];
 
-export const DECISION_LABELS: Record<UserDecision, string> = {
+export const journalDecisionLabels: Record<UserDecision, string> = {
   BUY: "Buy",
   SELL: "Sell",
   WATCH: "Watch",
   AVOID: "Avoid",
 };
 
-export type Agreement = "agree" | "partial" | "differ";
+/**
+ * `Agreement` is shared with the TradeLens Academy Case Lab — see `./decisions`.
+ * Re-exported here so Journal consumers keep a single stable import path.
+ */
+export type { Agreement };
 
-/** Map a Mentor action on to the user's four-bucket scale for comparison. */
-export function mentorBucket(action: string): UserDecision {
+/**
+ * Map a Mentor action on to the Journal four-bucket scale for comparison.
+ *
+ * Note: a mentor "Wait" folds into "AVOID" here because the Journal taxonomy
+ * has no "WAIT" action — this intentionally differs from the Academy's
+ * `caseMentorBucket`, which maps "Wait" to "WAIT".
+ */
+export function journalMentorBucket(action: string): UserDecision {
   switch (action) {
     case "Strong Buy":
     case "Buy":
@@ -30,7 +41,7 @@ export function mentorBucket(action: string): UserDecision {
 }
 
 /** Classify how close a user decision is to the Mentor's direction. */
-export function decisionAgreement(
+export function journalDecisionAgreement(
   user: UserDecision,
   mentor: UserDecision,
 ): Agreement {
@@ -69,7 +80,7 @@ function mentorFromRecommendation(
   recommendation: Recommendation | null,
 ): MentorDecision {
   if (!recommendation) return { action: "—", bucket: "WATCH" };
-  return { action: recommendation.action, bucket: mentorBucket(recommendation.action) };
+  return { action: recommendation.action, bucket: journalMentorBucket(recommendation.action) };
 }
 
 export interface DebriefInput {
@@ -100,14 +111,14 @@ export function buildDebrief(
   if (userDecision === null) return null;
 
   const mentor = mentorFromRecommendation(recommendation);
-  const agreement = decisionAgreement(userDecision, mentor.bucket);
+  const agreement = journalDecisionAgreement(userDecision, mentor.bucket);
 
   const whereAgreed =
     agreement === "agree"
-      ? `You and the Mentor read the same direction: ${DECISION_LABELS[userDecision].toUpperCase()}. When your own reasoning matches an independent analysis, that is a useful signal — but keep checking the reasons, not just the label.`
+      ? `You and the Mentor read the same direction: ${journalDecisionLabels[userDecision].toUpperCase()}. When your own reasoning matches an independent analysis, that is a useful signal — but keep checking the reasons, not just the label.`
       : agreement === "partial"
-        ? `You lean ${DECISION_LABELS[userDecision].toUpperCase()} while the Mentor leans ${mentor.action}. The two of you largely agree on the backdrop but not on the action — that is exactly the kind of nuance worth studying.`
-        : `You chose ${DECISION_LABELS[userDecision].toUpperCase()} while the Mentor chose ${mentor.action}. A genuine difference is valuable: write down the single piece of evidence that changed your mind, and see whether it holds up.`;
+        ? `You lean ${journalDecisionLabels[userDecision].toUpperCase()} while the Mentor leans ${mentor.action}. The two of you largely agree on the backdrop but not on the action — that is exactly the kind of nuance worth studying.`
+        : `You chose ${journalDecisionLabels[userDecision].toUpperCase()} while the Mentor chose ${mentor.action}. A genuine difference is valuable: write down the single piece of evidence that changed your mind, and see whether it holds up.`;
 
   const mentorContext = recommendation
     ? Array.from(
@@ -166,7 +177,7 @@ export function buildDebrief(
       couldImprove:
         agreement === "agree"
           ? "Since you agreed with the Mentor, test whether you can articulate the reasons independently rather than only the direction."
-          : `Your call was ${DECISION_LABELS[userDecision].toUpperCase()} against the Mentor's ${mentor.action}. Focus on the evidence that drove the difference.`,
+          : `Your call was ${journalDecisionLabels[userDecision].toUpperCase()} against the Mentor's ${mentor.action}. Focus on the evidence that drove the difference.`,
       watchNext: recommendation
         ? recommendation.nextTrigger
         : "Watch the levels and indicators you studied on the Study screen.",

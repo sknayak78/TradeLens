@@ -1,7 +1,7 @@
 import {
   DECISION_OPTIONS,
-  decisionAgreement,
-  mentorBucket,
+  journalDecisionAgreement,
+  journalMentorBucket,
   buildDebrief,
   isSubmissionReady,
   type UserDecision,
@@ -45,21 +45,21 @@ describe("learningJourney decison model", () => {
   });
 
   it("maps mentor actions onto the four-bucket scale", () => {
-    expect(mentorBucket("Strong Buy")).toBe("BUY");
-    expect(mentorBucket("Buy")).toBe("BUY");
-    expect(mentorBucket("Watch")).toBe("WATCH");
-    expect(mentorBucket("Wait")).toBe("AVOID");
-    expect(mentorBucket("Avoid")).toBe("AVOID");
+    expect(journalMentorBucket("Strong Buy")).toBe("BUY");
+    expect(journalMentorBucket("Buy")).toBe("BUY");
+    expect(journalMentorBucket("Watch")).toBe("WATCH");
+    expect(journalMentorBucket("Wait")).toBe("AVOID");
+    expect(journalMentorBucket("Avoid")).toBe("AVOID");
   });
 
   it("classifies agreement between user and mentor buckets", () => {
-    expect(decisionAgreement("BUY", "BUY")).toBe("agree");
-    expect(decisionAgreement("WATCH", "WATCH")).toBe("agree");
-    expect(decisionAgreement("BUY", "AVOID")).toBe("differ");
-    expect(decisionAgreement("AVOID", "BUY")).toBe("differ");
-    expect(decisionAgreement("SELL", "BUY")).toBe("differ");
-    expect(decisionAgreement("WATCH", "BUY")).toBe("partial");
-    expect(decisionAgreement("BUY", "WATCH")).toBe("partial");
+    expect(journalDecisionAgreement("BUY", "BUY")).toBe("agree");
+    expect(journalDecisionAgreement("WATCH", "WATCH")).toBe("agree");
+    expect(journalDecisionAgreement("BUY", "AVOID")).toBe("differ");
+    expect(journalDecisionAgreement("AVOID", "BUY")).toBe("differ");
+    expect(journalDecisionAgreement("SELL", "BUY")).toBe("differ");
+    expect(journalDecisionAgreement("WATCH", "BUY")).toBe("partial");
+    expect(journalDecisionAgreement("BUY", "WATCH")).toBe("partial");
   });
 
   it("requires a decision before submission, not a thesis", () => {

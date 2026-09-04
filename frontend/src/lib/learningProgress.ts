@@ -1,5 +1,5 @@
 /**
- * Learning-progress persistence for the How to Use TradeLens interactive
+ * Learning-progress persistence for the TradeLens Academy interactive
  * education feature (ER-0043).
  *
  * Persistence is isolated behind a small repository so that a future ER can

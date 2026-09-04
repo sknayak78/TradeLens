@@ -7,7 +7,7 @@ export default function HowToUseHubPage() {
   return (
     <div data-testid="how-to-use-hub" className="min-h-full">
       <InfoPageLayout
-        title="How to Use TradeLens"
+        title="TradeLens Academy"
         subtitle="Learn how to evaluate a trading setup by doing — work through 10 realistic cases, then compare your reasoning with the TradeLens Mentor."
         testId="how-to-use-header"
       >

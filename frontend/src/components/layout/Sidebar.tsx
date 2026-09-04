@@ -22,7 +22,7 @@ const NAV_ITEMS = [
   { to: "/learning", label: "Guided Research", icon: GraduationCap, testId: "nav-learning", end: true },
   {
     to: "/how-to-use",
-    label: "How to Use TradeLens",
+    label: "TradeLens Academy",
     icon: BookOpen,
     testId: "nav-how-to-use",
     end: true,
