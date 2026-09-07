@@ -79,6 +79,11 @@ class _RowProvider(MarketDataProvider):
     def get_market_summary(self) -> Dict[str, Any]:
         return self._seed.get_market_summary()
 
+    def get_historical_ohlcv(self, symbol, *, period="2y", interval="1d"):
+        return self._seed.get_historical_ohlcv(
+            symbol, period=period, interval=interval
+        )
+
     def get_stock(self, symbol: str) -> Optional[Dict[str, Any]]:
         return {**self._row, "symbol": symbol}
 

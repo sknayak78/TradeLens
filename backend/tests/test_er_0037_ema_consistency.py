@@ -51,6 +51,11 @@ class _FakePrimary:
         self._stock = stock
         self._insight = insight
 
+    def get_historical_ohlcv(self, symbol, *, period, interval) -> list[OHLCVBar]:
+        return self._normalized.get_historical_ohlcv(
+            symbol, period=period, interval=interval
+        )
+
     def get_stock(self, symbol: str) -> dict:
         return {**self._stock, "symbol": symbol}
 

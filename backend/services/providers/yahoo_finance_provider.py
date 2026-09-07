@@ -555,6 +555,18 @@ class YahooFinanceProvider(MarketDataProvider):
         """Attach the legacy façade history hook used by compatibility tests."""
         self._normalized.bind_history_fetcher(fetcher)
 
+    def get_historical_ohlcv(
+        self,
+        symbol: str,
+        *,
+        period: str = "2y",
+        interval: str = "1d",
+    ) -> Sequence[OHLCVBar]:
+        """Return real Yahoo OHLCV bars for the requested period/interval."""
+        normalized = symbol.strip().upper()
+        yahoo_symbol = self._normalized._symbol_mapper.to_yahoo(normalized)
+        history = self._history(yahoo_symbol, period, interval)
+        return YahooFinanceProvider._history_to_ohlcv_bars(history)
 
     def _history(self, ticker_symbol: str, period: str = "2y", interval: str = "1d"):
         return YahooFinanceProvider._fetch_history(ticker_symbol, period, interval)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -27,9 +28,17 @@ class _FakePrimary:
     def __init__(self, bars: list[OHLCVBar]) -> None:
         self._normalized = _FakeNormalized(bars)
 
+    def get_historical_ohlcv(self, symbol, *, period, interval) -> list[OHLCVBar]:
+        return self._normalized.get_historical_ohlcv(
+            symbol, period=period, interval=interval
+        )
+
 
 class _FakeFallback:
     name = "fake"
+
+    def get_historical_ohlcv(self, symbol, *, period, interval) -> list[OHLCVBar]:
+        return []
 
 
 def _generate_daily(window_years: int = 5) -> list[OHLCVBar]:
@@ -118,3 +127,67 @@ def test_series_are_aligned_and_one_point_per_candle():
     for point in series:
         assert point["t"]
         assert isinstance(point["v"], (int, float))
+
+
+def test_chart_series_uses_only_the_public_service_boundary():
+    # MD-01: chart_series must obtain OHLCV through the MarketDataService public
+    # contract and must not reach provider-private state or Yahoo-specific code.
+    source = (Path(__file__).parents[1] / "services" / "chart_series.py").read_text()
+    for token in (
+        "._primary",
+        "._normalized",
+        "._adapter",
+        "._history",
+        "._quote",
+        "._symbol_mapper",
+        "YahooFinanceProvider",
+        "noqa: SLF001",
+    ):
+        assert token not in source, f"chart_series.py leaks provider internals: {token}"
+
+
+def test_intraday_seed_fallback_uses_daily_plan_and_marks_fallback():
+    sentinel = 9999.0
+
+    class _FailIntradayPrimary:
+        name = "yahoo_finance"
+
+        def __init__(self) -> None:
+            self.intervals: list[str] = []
+
+        def get_historical_ohlcv(self, symbol, *, period, interval):
+            self.intervals.append(interval)
+            if interval == "1d":
+                return _generate_daily(window_years=1)
+            raise RuntimeError("intraday history unavailable")
+
+    class _SeedLikeFallback:
+        name = "seed"
+
+        def get_historical_ohlcv(self, symbol, *, period, interval):
+            return [
+                OHLCVBar(
+                    timestamp=datetime(2026, 1, 15, 9, 15, tzinfo=IST),
+                    open=sentinel,
+                    high=sentinel,
+                    low=sentinel,
+                    close=sentinel,
+                    volume=1.0,
+                )
+                for _ in range(30)
+            ]
+
+    primary = _FailIntradayPrimary()
+    service = MarketDataService(primary, _SeedLikeFallback())
+
+    series, label, used_fallback, indicators = build_chart_series(
+        service, "RELIANCE", "1D"
+    )
+
+    assert "5m" in primary.intervals
+    assert primary.intervals[-1] == "1d"
+    assert used_fallback is True
+    assert label == "Recent Sessions"
+    assert len(series) == 5
+    for point in series:
+        assert point["v"] != sentinel

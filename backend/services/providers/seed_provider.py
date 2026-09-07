@@ -151,6 +151,17 @@ class SeedProvider(MarketDataProvider):
     def __init__(self, universe: InstrumentUniverse | None = None):
         self._adapter = LegacyProviderAdapter(SeedMarketDataProvider(universe))
 
+    def get_historical_ohlcv(
+        self,
+        symbol: str,
+        *,
+        period: str = "2y",
+        interval: str = "1d",
+    ) -> Sequence[OHLCVBar]:
+        return self._adapter.get_historical_ohlcv(
+            symbol, period=period, interval=interval
+        )
+
     def get_market_summary(self) -> dict[str, Any]:
         return self._adapter.get_market_summary()
 

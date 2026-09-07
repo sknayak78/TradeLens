@@ -7,6 +7,7 @@ import pandas as pd
 
 from services.cache import InMemoryTTLCache
 from indicators.rsi import calculate_latest_rsi, calculate_rsi
+from services.market_data.models import OHLCVBar
 from services.market_data_provider import MarketDataProvider
 from services.market_data_service import MarketDataService
 from services.providers.seed_provider import SeedProvider
@@ -29,6 +30,15 @@ class StubProvider(MarketDataProvider):
 
     def get_market_summary(self):
         return self._result({"indices": [], "todaysFocus": []})
+
+    def get_historical_ohlcv(
+        self,
+        symbol: str,
+        *,
+        period: str = "2y",
+        interval: str = "1d",
+    ):
+        return self._result([])
 
     def get_stock(self, symbol: str):
         self.stock_calls += 1
@@ -276,3 +286,88 @@ def test_symbol_mapper_uses_nse_suffix_and_explicit_aliases():
     assert mapper.to_yahoo("SBIN") == "SBIN.NS"
     assert mapper.to_yahoo("infy") == "INFY.NS"
     assert mapper.to_yahoo("M&M") == "M&M.NS"
+
+
+def _bar(close: float) -> OHLCVBar:
+    return OHLCVBar(
+        timestamp=pd.Timestamp("2026-01-15", tz="UTC").to_pydatetime(),
+        open=close - 1.0,
+        high=close + 2.0,
+        low=close - 3.0,
+        close=close,
+        volume=1000.0,
+    )
+
+
+class BarsProvider(MarketDataProvider):
+    name = "bars"
+
+    def __init__(self, bars: list[OHLCVBar], error: Exception | None = None):
+        self.bars = bars
+        self.error = error
+        self.ohlcv_calls: list[tuple[str, str, str]] = []
+
+    def get_historical_ohlcv(self, symbol, *, period="2y", interval="1d"):
+        self.ohlcv_calls.append((symbol, period, interval))
+        if self.error:
+            raise self.error
+        return self.bars
+
+    def get_market_summary(self):
+        return {"indices": [], "todaysFocus": []}
+
+    def get_stock(self, symbol):
+        return None
+
+    def get_stock_insight(self, symbol):
+        return {"support": 1, "resistance": 2, "aiInsight": "test", "series": []}
+
+    def search_stocks(self, query, limit=20):
+        return []
+
+    def get_opportunities(self):
+        return []
+
+    def get_all_stocks(self):
+        return []
+
+    def get_default_watchlist_symbols(self):
+        return []
+
+
+def test_historical_ohlcv_obtained_through_service():
+    bars = [_bar(100.0), _bar(101.0)]
+    primary = BarsProvider(bars)
+    service = MarketDataService(primary, BarsProvider([]))
+
+    result = service.get_historical_ohlcv("RELIANCE", period="1y", interval="1d")
+
+    assert result.data == bars
+    assert result.metadata.provider == "bars"
+    assert primary.ohlcv_calls == [("RELIANCE", "1y", "1d")]
+
+
+def test_historical_ohlcv_primary_failure_falls_back():
+    primary = BarsProvider([], error=RuntimeError("provider unavailable"))
+    fallback = BarsProvider([_bar(99.0)])
+    service = MarketDataService(primary, fallback)
+
+    result = service.get_historical_ohlcv("RELIANCE")
+
+    assert [bar.close for bar in result.data] == [99.0]
+    assert result.metadata.provider == "bars"
+    assert fallback.ohlcv_calls == [("RELIANCE", "2y", "1d")]
+
+
+def test_historical_ohlcv_is_cached_per_symbol_period_interval():
+    primary = BarsProvider([_bar(100.0)])
+    service = MarketDataService(primary, BarsProvider([]))
+
+    service.get_historical_ohlcv("RELIANCE", period="1y", interval="1d")
+    service.get_historical_ohlcv("RELIANCE", period="1y", interval="1d")
+    service.get_historical_ohlcv("RELIANCE", period="2y", interval="1d")
+
+    assert [call[:2] for call in primary.ohlcv_calls] == [
+        ("RELIANCE", "1y"),
+        ("RELIANCE", "2y"),
+    ]

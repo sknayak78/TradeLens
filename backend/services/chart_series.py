@@ -16,7 +16,6 @@ from services.chart_timeframe import (
 )
 from services.market_data.models import OHLCVBar
 from services.market_data_service import MarketDataService
-from services.providers.yahoo_finance_provider import YahooFinanceProvider
 
 logger = logging.getLogger("tradelens.chart_series")
 
@@ -219,40 +218,20 @@ def _fetch_bars(
     bar_period = period or config.period
     bar_interval = interval or config.interval
     normalized_symbol = symbol.strip().upper()
-    primary = service._primary  # noqa: SLF001 — internal reuse within services layer
-
-    if isinstance(primary, YahooFinanceProvider):
-        yahoo_symbol = primary._normalized._symbol_mapper.to_yahoo(normalized_symbol)  # noqa: SLF001
-        history = primary._history(yahoo_symbol, bar_period, bar_interval)  # noqa: SLF001
-        return YahooFinanceProvider._history_to_ohlcv_bars(history)  # noqa: SLF001
-
-    normalized = getattr(primary, "_normalized", None)
-    if normalized is None and hasattr(primary, "_adapter"):
-        normalized = primary._adapter.normalized  # type: ignore[attr-defined]
-
-    if normalized is not None:
-        return list(
-            normalized.get_historical_ohlcv(
-                normalized_symbol,
-                period=bar_period,
-                interval=bar_interval,
-            )
+    result = service.get_historical_ohlcv(
+        normalized_symbol,
+        period=bar_period,
+        interval=bar_interval,
+    )
+    if (
+        config.intraday
+        and result.metadata.provider != service.provider_status()["provider"]
+    ):
+        raise RuntimeError(
+            "intraday OHLCV fell back to provider "
+            f"'{result.metadata.provider}'; rejecting as intraday data"
         )
-
-    # Seed-only fallback via default insight series.
-    insight = service.get_stock_insight(normalized_symbol).data
-    seed_series = insight.get("series", [])
-    return [
-        OHLCVBar(
-            timestamp=datetime.now(timezone.utc),
-            open=point["v"],
-            high=point["v"],
-            low=point["v"],
-            close=point["v"],
-            volume=None,
-        )
-        for point in seed_series
-    ]
+    return list(result.data)
 
 
 def _build_series_for_plan(

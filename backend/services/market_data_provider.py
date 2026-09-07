@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any, Sequence
+
+if TYPE_CHECKING:
+    from services.market_data.models import OHLCVBar
 
 
 class MarketDataProvider(ABC):
@@ -13,6 +16,16 @@ class MarketDataProvider(ABC):
     """
 
     name: str
+
+    @abstractmethod
+    def get_historical_ohlcv(
+        self,
+        symbol: str,
+        *,
+        period: str = "2y",
+        interval: str = "1d",
+    ) -> Sequence[OHLCVBar]:
+        """Return historical OHLCV bars for one symbol."""
 
     @abstractmethod
     def get_market_summary(self) -> dict[str, Any]:

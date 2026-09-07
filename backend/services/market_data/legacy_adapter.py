@@ -4,7 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Protocol, Sequence, runtime_checkable
 
-from services.market_data.models import StockInsight, StockSnapshot
+from services.market_data.models import OHLCVBar, StockInsight, StockSnapshot
 from services.market_data.normalized_provider import NormalizedMarketDataProvider
 from services.market_data.snapshot_builder import (
     build_legacy_insight_dict,
@@ -60,6 +60,17 @@ class LegacyProviderAdapter(MarketDataProvider):
     @property
     def normalized(self) -> NormalizedMarketDataProvider:
         return self._normalized
+
+    def get_historical_ohlcv(
+        self,
+        symbol: str,
+        *,
+        period: str = "2y",
+        interval: str = "1d",
+    ) -> Sequence[OHLCVBar]:
+        return self._normalized.get_historical_ohlcv(
+            symbol, period=period, interval=interval
+        )
 
     def _catalogue(self) -> LegacyCatalogueSupport | None:
         if isinstance(self._normalized, LegacyCatalogueSupport):

@@ -86,7 +86,13 @@ class MarketDataService:
             market_status=self._market_status(),
         )
 
-    def _read(self, key: str, operation: str, *args: Any) -> MarketDataResult:
+    def _read(
+        self,
+        key: str,
+        operation: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> MarketDataResult:
         cached = self._cache.get(key)
         if cached is not CACHE_MISS:
             logger.info(_event("market_data.cache_hit", cache_key=key))
@@ -97,7 +103,7 @@ class MarketDataService:
 
         for attempt in range(1, 3):
             try:
-                value = getattr(self._primary, operation)(*args)
+                value = getattr(self._primary, operation)(*args, **kwargs)
                 self._primary_healthy = True
                 self._last_successful_fetch = datetime.now(timezone.utc)
                 logger.info(_event(
@@ -128,7 +134,7 @@ class MarketDataService:
                 fallback=self._fallback.name,
                 operation=operation,
             ))
-            value = getattr(self._fallback, operation)(*args)
+            value = getattr(self._fallback, operation)(*args, **kwargs)
             self._cache.set(
                 key, _CachedProviderValue(value, provider=self._fallback.name)
             )
@@ -160,6 +166,22 @@ class MarketDataService:
 
     def get_default_watchlist_symbols(self) -> MarketDataResult:
         return self._read("default_watchlist", "get_default_watchlist_symbols")
+
+    def get_historical_ohlcv(
+        self,
+        symbol: str,
+        *,
+        period: str = "2y",
+        interval: str = "1d",
+    ) -> MarketDataResult:
+        normalized = symbol.strip().upper()
+        return self._read(
+            f"ohlcv:{normalized}:{period}:{interval}",
+            "get_historical_ohlcv",
+            normalized,
+            period=period,
+            interval=interval,
+        )
 
     def provider_status(self) -> dict[str, Any]:
         return {
