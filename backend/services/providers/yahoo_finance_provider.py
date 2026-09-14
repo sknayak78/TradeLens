@@ -70,6 +70,14 @@ class _BundleCacheEntry:
     expires_at: float
 
 
+class _ProvenancedRows(list):
+    """Legacy list payload carrying the provider of its catalogue rows."""
+
+    def __init__(self, rows: list[dict[str, Any]] | list[str], provider: str):
+        super().__init__(rows)
+        self.provider = provider
+
+
 class YahooMarketDataProvider(
     NormalizedMarketDataProvider,
     LegacyCatalogueSupport,
@@ -581,22 +589,39 @@ class YahooFinanceProvider(MarketDataProvider):
         return self._adapter.get_market_summary()
 
     def get_stock(self, symbol: str) -> dict[str, Any] | None:
-        return self._adapter.get_stock(symbol)
+        normalized = symbol.strip().upper()
+        result = self._adapter.get_stock(normalized)
+        if result is not None and normalized not in self._normalized._bundle_cache:
+            result["_market_data_provider"] = "seed"
+        return result
 
     def get_stock_insight(self, symbol: str) -> dict[str, Any]:
-        return self._adapter.get_stock_insight(symbol)
+        normalized = symbol.strip().upper()
+        result = self._adapter.get_stock_insight(normalized)
+        if normalized not in self._normalized._bundle_cache:
+            result["_market_data_provider"] = "seed"
+        return result
 
     def search_stocks(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
-        return self._adapter.search_stocks(query, limit)
+        rows = self._adapter.search_stocks(query, limit)
+        yahoo_rows = sum(
+            row["symbol"] in self._normalized._bundle_cache for row in rows
+        )
+        provider = (
+            "mixed"
+            if 0 < yahoo_rows < len(rows)
+            else "yahoo_finance" if yahoo_rows else "seed"
+        )
+        return _ProvenancedRows(rows, provider)
 
     def get_opportunities(self) -> list[dict[str, Any]]:
-        return self._adapter.get_opportunities()
+        return _ProvenancedRows(self._adapter.get_opportunities(), "seed")
 
     def get_all_stocks(self) -> list[dict[str, Any]]:
-        return self._adapter.get_all_stocks()
+        return _ProvenancedRows(self._adapter.get_all_stocks(), "seed")
 
     def get_default_watchlist_symbols(self) -> list[str]:
-        return self._adapter.get_default_watchlist_symbols()
+        return _ProvenancedRows(self._adapter.get_default_watchlist_symbols(), "seed")
 
     @staticmethod
     def _ticker(symbol: str):

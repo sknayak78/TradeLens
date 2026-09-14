@@ -1,20 +1,30 @@
-"""Upstox historical OHLCV provider behind the MarketDataProvider boundary.
+"""Upstox market data provider behind the MarketDataProvider boundary.
 
-MD-02 makes Upstox *technically available* as a market-data provider.  It is
-NOT wired as the production primary (Yahoo remains primary, Seed remains the
-fallback).  This provider currently implements only the historical OHLCV part
-of the ``MarketDataProvider`` contract; the remaining legacy-catalogue
-operations raise ``NotImplementedError`` so the existing MarketDataService
-fallback to the seed catalogue applies for those reads.
+MD-02 added the historical OHLCV part of the ``MarketDataProvider`` contract.
+MD-03 completes the contract with live LTP quotes and OHLCV-derived snapshot
+and insight reads, and wires Upstox as an *optional* production primary behind
+the existing MarketDataService (chain: Upstox -> Yahoo -> Seed).  Catalogue-only
+operations (search, opportunities, all-stocks, watchlist) remain
+``NotImplementedError`` so the MarketDataService chain delegates them to the
+seed catalogue.
 
 All Upstox-specific concerns stay inside this module and its instrument-mapping
 seam:
 
 - Upstox Historical Candle V3 request construction (``unit``/``interval`` and
-  absolute ``YYYY-MM-DD`` dates vs the app's relative Yahoo-style ``period``).
-- Bearer access-token authentication.
-- Parsing of the Upstox candle JSON and conversion to ``OHLCVBar``.
+  absolute ``YYYY-MM-DD`` dates vs the app's relative Yahoo-style ``period``),
+  including Upstox's intraday lookback caps (1-15 minute candles = 28 days;
+  30+ minute and hourly candles = 90 days).
+- Bearer access-token authentication and the live LTP quote
+  (``/v2/market-quote/ltp``).
+- Parsing of the Upstox candle / quote JSON and conversion to ``OHLCVBar``.
 - Instrument-key resolution (delegated to ``UpstoxInstrumentMapper``).
+
+Price semantics follow ADR-003: the snapshot ``price`` is the live LTP quote
+from Upstox (never a daily close), ``changePct`` is measured against the
+Upstox previous close, and all indicators (RSI/EMA/VWAP/support/resistance)
+derive from the same Upstox OHLCV bars as the charts.  Catalogue metadata
+(name, sector, score, trend, day-high, average volume) stays seeded.
 
 No consumer imports or knows about Upstox JSON, HTTP details, or instrument
 keys; consumers talk to ``MarketDataProvider`` / ``MarketDataService`` only.
@@ -28,10 +38,20 @@ from calendar import monthrange
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Mapping, Sequence
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import requests
 
-from services.market_data.models import OHLCVBar
+from services.market_data.indicators import (
+    calculate_latest_ema,
+    calculate_latest_rsi,
+    calculate_rolling_vwap,
+)
+from services.market_data.models import Instrument, OHLCVBar, Quote, StockInsight
+from services.market_data.snapshot_builder import (
+    build_legacy_insight_dict,
+    build_legacy_stock_from_quote,
+)
 from services.market_data_provider import MarketDataProvider
 from services.providers.upstox_instrument_mapper import UpstoxInstrumentMapper
 
@@ -42,6 +62,17 @@ _DEFAULT_TIMEOUT_SECONDS = 10.0
 
 _ACCESS_TOKEN_ENV = "UPSTOX_ACCESS_TOKEN"
 _BASE_URL_ENV = "UPSTOX_BASE_URL"
+
+_IST = ZoneInfo("Asia/Kolkata")
+
+#: Intraday lookback caps imposed by Upstox's Historical Candle V3 API.
+_MAX_LOOKBACK_DAYS_MINUTE = 28
+_MAX_LOOKBACK_DAYS_HOURLY = 90
+
+#: Daily OHLCV window used to derive snapshot indicators for one symbol.
+#: Two years gives ~500 daily bars so EMA20/50/200 and RSI14 are all supported,
+#: matching the Yahoo overlay's lookback.
+_SNAPSHOT_PERIOD = "2y"
 
 CandleFetcher = Callable[[str, dict[str, str], float], Any]
 
@@ -109,8 +140,10 @@ class UpstoxMarketDataProvider(MarketDataProvider):
         base_url: str | None = None,
         instrument_mapper: UpstoxInstrumentMapper | None = None,
         fetcher: CandleFetcher | None = None,
+        quote_fetcher: CandleFetcher | None = None,
         request_timeout: float = _DEFAULT_TIMEOUT_SECONDS,
         now: Callable[[], datetime] | None = None,
+        seed_provider: Any | None = None,
     ):
         self._access_token = (
             access_token if access_token is not None else _access_token_from_env()
@@ -118,8 +151,10 @@ class UpstoxMarketDataProvider(MarketDataProvider):
         self._base_url = (base_url or _base_url_from_env()).rstrip("/")
         self._instrument_mapper = instrument_mapper or UpstoxInstrumentMapper()
         self._fetcher = fetcher or _default_fetch
+        self._quote_fetcher = quote_fetcher or _default_fetch
         self._request_timeout = request_timeout
         self._now = now or (lambda: datetime.now(timezone.utc))
+        self._seed_provider = seed_provider
 
     def get_historical_ohlcv(
         self,
@@ -131,12 +166,15 @@ class UpstoxMarketDataProvider(MarketDataProvider):
         normalized = symbol.strip().upper()
         instrument_key = self._instrument_mapper.to_instrument_key(normalized)
         unit, candle_interval = self._translate_interval(interval)
-        from_date, to_date = self._translate_period(period)
+        from_date, to_date = self._translate_period(period, unit, candle_interval)
         url = self._build_url(instrument_key, unit, candle_interval, from_date, to_date)
         headers = self._build_headers()
         payload = self._fetch_json(url, headers)
         candles = self._extract_candles(payload)
         bars = [self._candle_to_bar(candle) for candle in candles]
+        # Upstox returns candles oldest-first, but some responses are unordered;
+        # consumers rely on ascending order, so normalize deterministically.
+        bars.sort(key=lambda bar: bar.timestamp)
         logger.info(
             "fetched %d Upstox candles for %s (%s/%s)",
             len(bars),
@@ -150,10 +188,68 @@ class UpstoxMarketDataProvider(MarketDataProvider):
         return self._unsupported("get_market_summary")
 
     def get_stock(self, symbol: str) -> dict[str, Any] | None:
-        return self._unsupported("get_stock")  # type: ignore[return-value]
+        normalized = symbol.strip().upper()
+        instrument_key = self._instrument_mapper.to_instrument_key(normalized)
+        bars = list(
+            self.get_historical_ohlcv(normalized, period=_SNAPSHOT_PERIOD, interval="1d")
+        )
+        if not bars:
+            raise RuntimeError(f"Upstox returned no candles for {normalized}")
+
+        if len(bars) < 2:
+            raise RuntimeError(
+                f"Upstox returned too few candles for {normalized} to calculate previous close"
+            )
+        latest, previous = bars[-1], bars[-2]
+        ltp, quote_volume = self._fetch_ltp(instrument_key)
+        change_pct = round(
+            ((ltp - previous.close) / previous.close * 100.0) if previous.close else 0.0,
+            2,
+        )
+        volume = (
+            quote_volume
+            if quote_volume is not None
+            else int(latest.volume or 0)
+        )
+
+        snapshot_kwargs = self._build_live_snapshot(normalized, bars)
+        payload = build_legacy_stock_from_quote(
+            Instrument(
+                symbol=normalized,
+                name=snapshot_kwargs.pop("name"),
+                sector=snapshot_kwargs.pop("sector"),
+            ),
+            Quote(
+                symbol=normalized,
+                price=ltp,
+                change_pct=change_pct,
+                volume=volume,
+                observed_at=self._now(),
+            ),
+            **snapshot_kwargs,
+        )
+        # ADR-003: the published price is the live LTP, never a daily close.
+        payload["priceSource"] = "ltp"
+        return payload
 
     def get_stock_insight(self, symbol: str) -> dict[str, Any]:
-        return self._unsupported("get_stock_insight")
+        normalized = symbol.strip().upper()
+        bars = list(
+            self.get_historical_ohlcv(normalized, period=_SNAPSHOT_PERIOD, interval="1d")
+        )
+        if not bars:
+            raise RuntimeError(f"Upstox returned no candles for {normalized}")
+
+        support, resistance, ai_insight, series = self._build_insight(normalized, bars)
+        return build_legacy_insight_dict(
+            StockInsight(
+                symbol=normalized,
+                support=support,
+                resistance=resistance,
+                ai_insight=ai_insight,
+                series=tuple(series),
+            )
+        )
 
     def search_stocks(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
         return self._unsupported("search_stocks")  # type: ignore[return-value]
@@ -169,9 +265,188 @@ class UpstoxMarketDataProvider(MarketDataProvider):
 
     def _unsupported(self, operation: str) -> Any:
         raise NotImplementedError(
-            f"UpstoxMarketDataProvider currently supports historical OHLCV only; "
-            f"{operation} is not implemented for Upstox"
+            f"UpstoxMarketDataProvider does not implement catalogue operation "
+            f"{operation}; MarketDataService delegates it to the seed catalogue"
         )
+
+    def _seed_stock_row(self, symbol: str) -> dict[str, Any] | None:
+        """Return the seed catalogue row for metadata provenance (or ``None``)."""
+        if self._seed_provider is None:
+            return None
+        row = self._seed_provider.get_stock(symbol)
+        return row if isinstance(row, dict) else None
+
+    def _fetch_ltp(self, instrument_key: str) -> tuple[float, int | None]:
+        """Fetch a live LTP quote; returns ``(price, volume)``.
+
+        The price is accepted only from the documented ``last_price`` field.
+        The v2 response may key a quote by a display symbol, so the
+        ``instrument_token`` inside the record is used to match the requested
+        instrument key.
+        """
+        encoded = quote(instrument_key, safe="")
+        url = f"{self._base_url}/v2/market-quote/ltp?instrument_key={encoded}"
+        headers = self._build_headers()
+        try:
+            body = self._quote_fetcher(url, headers, self._request_timeout)
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            raise RuntimeError(
+                f"Upstox LTP quote request failed for {instrument_key}: {exc}"
+            ) from exc
+        payload = _as_payload(body)
+        return self._ltp_from_payload(payload, instrument_key)
+
+    @staticmethod
+    def _ltp_from_payload(payload: dict[str, Any], instrument_key: str) -> tuple[float, int | None]:
+        if payload.get("status") == "error":
+            errors = payload.get("errors")
+            message = errors[0].get("message") if isinstance(errors, list) and errors and isinstance(errors[0], dict) else payload.get("message", "unknown error")
+            raise RuntimeError(f"Upstox LTP API error: {message}")
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise RuntimeError("Upstox LTP response is missing the 'data' object")
+
+        quote = data.get(instrument_key)
+        if not isinstance(quote, dict):
+            quote = next(
+                (
+                    value
+                    for value in data.values()
+                    if isinstance(value, dict)
+                    and value.get("instrument_token") == instrument_key
+                ),
+                None,
+            )
+        if not isinstance(quote, dict):
+            raise RuntimeError(
+                f"Upstox LTP response has no quote for {instrument_key}"
+            )
+
+        raw_price = quote.get("last_price")
+        try:
+            price = float(raw_price)
+        except (TypeError, ValueError):
+            price = float("nan")
+        if not math.isfinite(price) or price <= 0:
+            raise RuntimeError(
+                f"Upstox LTP quote for {instrument_key} has no usable last_price field"
+            )
+        price = round(price, 2)
+
+        volume: int | None = None
+        raw_volume = quote.get("volume")
+        if raw_volume is not None:
+            try:
+                parsed = int(float(raw_volume))
+                if parsed >= 0:
+                    volume = parsed
+            except (TypeError, ValueError):
+                volume = None
+        return price, volume
+
+    @staticmethod
+    def _ema_if_available(values: Sequence[float], period: int) -> float | None:
+        if len(values) < period:
+            return None
+        return round(calculate_latest_ema(values, period), 2)
+
+    def _build_live_snapshot(
+        self,
+        symbol: str,
+        bars: Sequence[OHLCVBar],
+    ) -> dict[str, Any]:
+        seed = self._seed_stock_row(symbol)
+        closes = [bar.close for bar in bars if math.isfinite(bar.close)]
+        highs = [bar.high for bar in bars if math.isfinite(bar.high)]
+        lows = [bar.low for bar in bars if math.isfinite(bar.low)]
+        volumes = [bar.volume or 0.0 for bar in bars]
+
+        if len(closes) < 20:
+            raise RuntimeError(
+                f"Upstox returned too few daily candles for {symbol} to compute indicators"
+            )
+        rsi = round(calculate_latest_rsi(closes, 14), 2)
+        ema20 = self._ema_if_available(closes, 20)
+        if ema20 is None:
+            raise RuntimeError(f"Upstox cannot compute EMA20 for {symbol}")
+        ema50 = self._ema_if_available(closes, 50)
+        ema200 = self._ema_if_available(closes, 200)
+        vwap = round(
+            calculate_rolling_vwap(
+                highs=highs,
+                lows=lows,
+                closes=closes,
+                volumes=volumes,
+                period=20,
+            ),
+            2,
+        )
+
+        recent = bars[-20:]
+        support = round(min(bar.low for bar in recent), 2)
+        resistance = round(max(bar.high for bar in recent), 2)
+        computed_day_high = round(max(bar.high for bar in recent), 2)
+        positive_volumes = [int(v) for v in volumes if v and v > 0]
+        computed_avg_volume = (
+            int(sum(positive_volumes) / len(positive_volumes))
+            if positive_volumes
+            else 0
+        )
+
+        if seed is not None:
+            name, sector = seed.get("name", symbol), seed.get("sector", "Equities")
+            trend, score = seed.get("trend", "neutral"), seed.get("score")
+            day_high = float(seed.get("day_high", computed_day_high))
+            avg_volume = int(seed.get("avg_volume", computed_avg_volume))
+        else:
+            name, sector = symbol, "Equities"
+            trend, score = "neutral", None
+            day_high, avg_volume = computed_day_high, computed_avg_volume
+
+        return {
+            "name": name,
+            "sector": sector,
+            "rsi": rsi,
+            "ema20": ema20,
+            "ema50": ema50,
+            "ema200": ema200,
+            "vwap": vwap,
+            "trend": trend,
+            "score": score,
+            "support": support,
+            "resistance": resistance,
+            "day_high": day_high,
+            "avg_volume": avg_volume,
+        }
+
+    def _build_insight(
+        self,
+        symbol: str,
+        bars: Sequence[OHLCVBar],
+    ) -> tuple[float, float, str, list[dict[str, Any]]]:
+        """Derive support/resistance, an indicator sentence, and a mini series."""
+        recent = bars[-20:]
+        support = round(min(bar.low for bar in recent), 2)
+        resistance = round(max(bar.high for bar in recent), 2)
+        closes = [bar.close for bar in bars if math.isfinite(bar.close)]
+        price = closes[-1] if closes else 0.0
+        ema20 = self._ema_if_available(closes, 20) or price
+        bias = "above" if price >= ema20 else "below"
+        ai_insight = (
+            f"Price {price:.2f} is {bias} EMA20 {ema20:.2f}; "
+            f"support {support:.2f} and resistance {resistance:.2f}."
+        )
+        series = [
+            {
+                "t": bar.timestamp.strftime("%Y-%m-%d"),
+                "v": round(bar.close, 2),
+            }
+            for bar in bars[-13:]
+        ]
+        logger.info("built Upstox insight series=%d symbol=%s", len(series), symbol)
+        return support, resistance, ai_insight, series
 
     def _build_headers(self) -> dict[str, str]:
         if not self._access_token:
@@ -190,8 +465,33 @@ class UpstoxMarketDataProvider(MarketDataProvider):
             raise RuntimeError(f"unsupported Upstox interval {interval!r}")
         return resolved
 
-    def _translate_period(self, period: str) -> tuple[date, date]:
-        to_date = self._now().date()
+    def _translate_period(
+        self,
+        period: str,
+        unit: str,
+        candle_interval: str,
+    ) -> tuple[date, date]:
+        """Translate periods to absolute dates, in IST, respecting V3 caps.
+
+        ``to_date`` is always today in India's timezone (``n/a`` otherwise the
+        API rejects a future/exchange-relative date).  Upstox's V3 lookback
+        limits are enforced for intraday candles regardless of the requested
+        ``period``: 1-15 minute candles go back at most 28 days, and 30+ minute
+        or hourly candles at most 90 days.  Daily/weekly/monthly requests keep
+        the full translated window.
+        """
+        to_date = self._now().astimezone(_IST).date()
+        try:
+            minutes = int(candle_interval)
+        except (TypeError, ValueError):
+            minutes = 0
+        if unit == "minutes" and 0 < minutes <= 15:
+            from_date = to_date - timedelta(days=_MAX_LOOKBACK_DAYS_MINUTE)
+            return from_date, to_date
+        if unit == "minutes" or unit == "hours":
+            from_date = to_date - timedelta(days=_MAX_LOOKBACK_DAYS_HOURLY)
+            return from_date, to_date
+
         token = str(period).strip().lower()
         if token.endswith("mo"):
             months = _parse_positive_int(token[:-2], "period", period)
@@ -234,7 +534,14 @@ class UpstoxMarketDataProvider(MarketDataProvider):
     @staticmethod
     def _extract_candles(payload: dict[str, Any]) -> list[Any]:
         if payload.get("status") == "error":
-            message = payload.get("message", "unknown error")
+            message = None
+            errors = payload.get("errors")
+            if isinstance(errors, list) and errors:
+                first = errors[0]
+                if isinstance(first, dict):
+                    message = first.get("message")
+            if not message:
+                message = payload.get("message", "unknown error")
             raise RuntimeError(f"Upstox API error: {message}")
         data = payload.get("data")
         if not isinstance(data, dict):

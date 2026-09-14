@@ -21,7 +21,10 @@ from schemas import (
 )
 from analysis.service import service as analysis_service
 from recommendation.models import Recommendation
-from services.chart_series import build_chart_series, get_day_ohlc_range
+from services.chart_series import (
+    build_chart_series_with_provider,
+    get_day_ohlc_range,
+)
 from services.chart_timeframe import normalize_timeframe
 from services.market_data_service import market_data_service
 from services.opportunity_selection import select_opportunities
@@ -178,12 +181,19 @@ def stock_detail(symbol: str, timeframe: str = "1W") -> StockDetail:
     if not stock:
         raise HTTPException(status_code=404, detail=f"Stock {symbol} not found")
 
-    insight = market_data_service.get_stock_insight(symbol).data
+    insight_result = market_data_service.get_stock_insight(symbol)
+    insight = insight_result.data
     analysis = analysis_service.analyse(stock)
     decision = decide(stock, insight)
 
     try:
-        series, timeframe_label, timeframe_fallback, indicators = build_chart_series(
+        (
+            series,
+            timeframe_label,
+            timeframe_fallback,
+            indicators,
+            chart_provider,
+        ) = build_chart_series_with_provider(
             market_data_service,
             symbol,
             normalized_timeframe,
@@ -199,6 +209,7 @@ def stock_detail(symbol: str, timeframe: str = "1W") -> StockDetail:
         timeframe_label = "Recent"
         timeframe_fallback = True
         indicators = None
+        chart_provider = insight_result.metadata.provider
 
     return StockDetail(
         **stock_result.metadata.to_api_dict(),
@@ -206,6 +217,10 @@ def stock_detail(symbol: str, timeframe: str = "1W") -> StockDetail:
         name=stock["name"],
         price=stock["price"],
         changePct=stock["changePct"],
+        priceSource=stock.get("priceSource"),
+        snapshotProvider=stock_result.metadata.provider,
+        insightProvider=insight_result.metadata.provider,
+        chartProvider=chart_provider,
         # Parent trend/score are the recommendation's, never the provider's.
         score=decision.score,
         trend=decision.trend,

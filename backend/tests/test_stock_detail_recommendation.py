@@ -5,12 +5,13 @@ tests need no network, no database and no running server.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 import pytest
 
 import routers.market as market_router
-from services.market_data_service import MarketDataService
+from services.market_data_service import MarketDataMetadata, MarketDataResult, MarketDataService
 from services.providers.seed_provider import SeedProvider
 from services.stock_decision import decide
 
@@ -45,11 +46,46 @@ def test_existing_contract_is_unchanged(seeded: None) -> None:
     }
 
     assert expected <= payload.keys()
-    assert payload.keys() - expected == {"recommendation"}
+    assert payload.keys() - expected == {
+        "recommendation", "priceSource", "snapshotProvider",
+        "insightProvider", "chartProvider",
+    }
     assert payload["indicators"] is not None
     assert set(payload["indicators"].keys()) == {"ema20", "ema50", "ema200"}
     assert payload["symbol"] == "RELIANCE"
     assert payload["series"]
+
+
+def test_stock_detail_reports_component_provider_divergence(monkeypatch) -> None:
+    seed = SeedProvider()
+    stock = seed.get_stock("RELIANCE")
+    insight = seed.get_stock_insight("RELIANCE")
+    now = datetime.now(timezone.utc)
+    snapshot_metadata = MarketDataMetadata("upstox", False, now, "CLOSED")
+    insight_metadata = MarketDataMetadata("yahoo_finance", False, now, "CLOSED")
+
+    class DivergingService:
+        def get_stock(self, symbol: str) -> MarketDataResult:
+            return MarketDataResult(stock, snapshot_metadata)
+
+        def get_stock_insight(self, symbol: str) -> MarketDataResult:
+            return MarketDataResult(insight, insight_metadata)
+
+        def provider_status(self) -> dict[str, Any]:
+            return {"activeProvider": "seed"}
+
+    monkeypatch.setattr(market_router, "market_data_service", DivergingService())
+    monkeypatch.setattr(
+        market_router,
+        "build_chart_series_with_provider",
+        lambda *args: (insight["series"], "1 Week", False, None, "seed"),
+    )
+
+    payload = market_router.stock_detail("RELIANCE").model_dump()
+
+    assert payload["snapshotProvider"] == "upstox"
+    assert payload["insightProvider"] == "yahoo_finance"
+    assert payload["chartProvider"] == "seed"
 
 
 def test_recommendation_block_is_camel_cased_and_populated(seeded: None) -> None:

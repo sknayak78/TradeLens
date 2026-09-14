@@ -26,6 +26,25 @@ MARKET_DATA_PROVIDER=yahoo
 MARKET_DATA_CACHE_TTL_SECONDS=30
 ```
 
+`MARKET_DATA_PROVIDER` selects the market-data primary: `yahoo` (default),
+`seed` (offline demo), or `upstox`.  Upstox mode reads a valid versioned
+`NSE_EQ` instrument master and a live quote token:
+
+```dotenv
+MARKET_DATA_PROVIDER=upstox
+UPSTOX_ACCESS_TOKEN=<token, never committed>
+UPSTOX_INSTRUMENT_MASTER=backend/data/upstox_instruments.json
+```
+
+With Upstox primary, the snapshot price is the live Upstox LTP
+(`priceSource: "ltp"`) and every indicator/chart derives from the same Upstox
+OHLCV dataset (ADR-003).  The bundled master is produced at release time with
+`scripts/fetch_upstox_instruments.py` and verified with
+`scripts/validate_upstox_instruments.py`; `scripts/validate_upstox_live.py`
+probes the live Upstox path with a real token.
+The checked-in artifact is deployment-gated and must continue to pass the
+1500-record validation threshold before activation.
+
 | Command | Description |
 | --- | --- |
 | `make dev` | Starts FastAPI and the React development server using `.env.development`. |

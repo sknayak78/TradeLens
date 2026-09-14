@@ -282,6 +282,12 @@ class StockDetail(MarketMetadata):
     name: str
     price: float
     changePct: float
+    # Additive provenance for providers that publish a live quote separately
+    # from historical OHLCV, currently Upstox.
+    priceSource: Optional[str] = None
+    snapshotProvider: Optional[str] = None
+    insightProvider: Optional[str] = None
+    chartProvider: Optional[str] = None
     score: int = Field(
         ..., description="Recommendation score (0-100). Mirrors `recommendation.score`."
     )

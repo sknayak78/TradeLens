@@ -1,0 +1,25 @@
+{
+  "metadata": {
+    "scope": "NSE_EQ",
+    "count": 14,
+    "generated_at": "2026-09-07T00:00:00Z",
+    "generated_by": "TradeLens MD-03 test fixture",
+    "source_version": "sample-v1"
+  },
+  "instruments": [
+    {"symbol": "RELIANCE", "name": "Reliance Industries", "instrument_key": "NSE_EQ|INE002A01018"},
+    {"symbol": "TCS", "name": "Tata Consultancy Services", "instrument_key": "NSE_EQ|INE467B01029"},
+    {"symbol": "INFY", "name": "Infosys", "instrument_key": "NSE_EQ|INE009A01021"},
+    {"symbol": "SBIN", "name": "State Bank of India", "instrument_key": "NSE_EQ|INE062A01020"},
+    {"symbol": "HDFCBANK", "name": "HDFC Bank", "instrument_key": "NSE_EQ|INE040A01034"},
+    {"symbol": "ICICIBANK", "name": "ICICI Bank", "instrument_key": "NSE_EQ|INE090A01021"},
+    {"symbol": "TATAMOTORS", "name": "Tata Motors", "instrument_key": "NSE_EQ|INE155A01022"},
+    {"symbol": "AXISBANK", "name": "Axis Bank", "instrument_key": "NSE_EQ|INE238A01034"},
+    {"symbol": "LT", "name": "Larsen & Toubro", "instrument_key": "NSE_EQ|INE018A01030"},
+    {"symbol": "HINDUNILVR", "name": "Hindustan Unilever", "instrument_key": "NSE_EQ|INE030A01027"},
+    {"symbol": "ITC", "name": "ITC", "instrument_key": "NSE_EQ|INE154A01025"},
+    {"symbol": "MARUTI", "name": "Maruti Suzuki", "instrument_key": "NSE_EQ|INE585B01010"},
+    {"symbol": "VOLTAS", "name": "Voltas", "instrument_key": "NSE_EQ|INE226A01021"},
+    {"symbol": "PIDILITIND", "name": "Pidilite Industries", "instrument_key": "NSE_EQ|INE259A01022"}
+  ]
+}

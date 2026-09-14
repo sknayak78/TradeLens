@@ -207,6 +207,11 @@ def bars_to_series(
     ]
 
 
+def _is_intraday_interval(interval: str) -> bool:
+    """Intraday bars are minute- or hour-denominated (5m, 30m, 1h, ...)."""
+    return interval.endswith("m") or interval.endswith("h")
+
+
 def _fetch_bars(
     service: MarketDataService,
     symbol: str,
@@ -215,6 +220,20 @@ def _fetch_bars(
     period: str | None = None,
     interval: str | None = None,
 ) -> list[OHLCVBar]:
+    bars, _ = _fetch_bars_with_provider(
+        service, symbol, config, period=period, interval=interval
+    )
+    return bars
+
+
+def _fetch_bars_with_provider(
+    service: MarketDataService,
+    symbol: str,
+    config: TimeframeConfig,
+    *,
+    period: str | None = None,
+    interval: str | None = None,
+) -> tuple[list[OHLCVBar], str]:
     bar_period = period or config.period
     bar_interval = interval or config.interval
     normalized_symbol = symbol.strip().upper()
@@ -223,15 +242,20 @@ def _fetch_bars(
         period=bar_period,
         interval=bar_interval,
     )
+    # ADR-003 / D3: reject *intraday* bars that came from the synthetic seed
+    # provider — they are fabricated, never a real tap. Real providers (Upstox,
+    # Yahoo) are accepted even when they are not the configured primary. The
+    # daily fallback plan for an intraday timeframe stays allowed so a fully
+    # seed-backed service can still render its labelled daily fallback.
     if (
         config.intraday
-        and result.metadata.provider != service.provider_status()["provider"]
+        and _is_intraday_interval(bar_interval)
+        and result.metadata.provider == "seed"
     ):
         raise RuntimeError(
-            "intraday OHLCV fell back to provider "
-            f"'{result.metadata.provider}'; rejecting as intraday data"
+            "intraday OHLCV served by synthetic provider 'seed'; rejecting as intraday data"
         )
-    return list(result.data)
+    return list(result.data), result.metadata.provider
 
 
 def _build_series_for_plan(
@@ -239,9 +263,9 @@ def _build_series_for_plan(
     symbol: str,
     timeframe: str,
     plan: dict[str, Any],
-) -> tuple[list[dict[str, Any]], Dict[str, bool]]:
+) -> tuple[list[dict[str, Any]], Dict[str, bool], str]:
     standin = get_timeframe_config(timeframe)
-    bars = _fetch_bars(
+    bars, provider = _fetch_bars_with_provider(
         service,
         symbol,
         standin,
@@ -262,7 +286,7 @@ def _build_series_for_plan(
         display_bars = bars
     indicators = _ema_availability(bars)
     series = build_display_points(display_bars, ema_overlay, plan["max_points"])
-    return series, indicators
+    return series, indicators, provider
 
 
 def build_chart_series(
@@ -270,18 +294,29 @@ def build_chart_series(
     symbol: str,
     timeframe: str,
 ) -> tuple[list[dict[str, Any]], str, bool, Dict[str, bool]]:
-    """Return chart points, a human label, fallback flag, and EMA availability."""
+    series, label, used_fallback, indicators, _ = build_chart_series_with_provider(
+        service, symbol, timeframe
+    )
+    return series, label, used_fallback, indicators
+
+
+def build_chart_series_with_provider(
+    service: MarketDataService,
+    symbol: str,
+    timeframe: str,
+) -> tuple[list[dict[str, Any]], str, bool, Dict[str, bool], str]:
+    """Return chart points, display metadata, EMA availability, and provider."""
     normalized_tf = normalize_timeframe(timeframe)
     config = get_timeframe_config(normalized_tf)
     used_fallback = False
     label = config.label
 
     try:
-        series, indicators = _build_series_for_plan(
+        series, indicators, provider = _build_series_for_plan(
             service, symbol, normalized_tf, _DISPLAY_PLAN[normalized_tf]
         )
         if series:
-            return series, label, used_fallback, indicators
+            return series, label, used_fallback, indicators, provider
         raise RuntimeError("no chart points built for timeframe")
     except Exception:
         if not config.intraday or normalized_tf not in INTRADAY_FALLBACK:
@@ -302,12 +337,12 @@ def build_chart_series(
         "max_points": fallback.max_points,
         "weekly": False,
     }
-    series, indicators = _build_series_for_plan(
+    series, indicators, provider = _build_series_for_plan(
         service, symbol, normalized_tf, fallback_plan
     )
     if not series:
         raise RuntimeError("no fallback chart points available")
-    return series, label, used_fallback, indicators
+    return series, label, used_fallback, indicators, provider
 
 
 def get_day_ohlc_range(

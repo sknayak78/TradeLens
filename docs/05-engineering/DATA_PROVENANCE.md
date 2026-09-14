@@ -10,7 +10,9 @@ only authority for a trading decision, and no field may contradict it.**
 | --- | --- |
 | Trend, score, action, strategy, confidence, levels, narrative | `recommendation.engine` |
 | Prices, volume, RSI, EMAs, VWAP, support/resistance, chart series | Market data provider (live) |
+| Live LTP price tag | Upstox provider (`priceSource: "ltp"`) when Upstox is primary |
 | Names, sectors, catalog membership, curated ranking reasons | Seed dataset |
+| Instrument-key resolution (Upstox) | Versioned `NSE_EQ` instrument master (`backend/data/`) |
 | Mapping to the API models | Routers, which add no logic of their own |
 
 `services/stock_decision.decide()` is the one place that turns a provider row
@@ -48,6 +50,29 @@ serve as-is:
 Anything not listed above is either live or engine-derived. A failed live fetch
 falls back to the **whole** seeded row, which is internally consistent — a seeded
 price alongside its own seeded VWAP — rather than a mix of eras.
+
+## MD-03: Upstox lineage
+
+When `MARKET_DATA_PROVIDER=upstox`, the authoritative data path changes shape
+but the single-source rule (ADR-001) is preserved:
+
+- The snapshot `price` is the live Upstox LTP quote and is flagged
+  `priceSource: "ltp"`; `changePct` is against the Upstox previous close.
+  A daily close is never presented as a live price.
+- Stock-detail responses expose `snapshotProvider`, `insightProvider`, and
+  `chartProvider` so provider fallback between independent reads cannot be
+  mistaken for one homogeneous source.
+- `rsi`, `ema20`, `ema50`, `ema200`, `vwap`, `support`, `resistance`, the
+  `aiInsight`, and the chart series all derive from the *same* Upstox OHLCV
+  history — no indicator is borrowed from a different provider.
+- Catalogue `name`, `sector`, `dayHigh`, `avgVolume`, `score`, `trend` stay
+  seeded.  Non-catalogue instruments resolved through the bundled `NSE_EQ`
+  instrument master get neutral metadata (`sector: "Equities"`,
+  `trend: "neutral"`, derived day-high / average volume).
+- The instrument master is a validated release artifact (≥1500 `NSE_EQ`
+  records) produced by `scripts/fetch_upstox_instruments.py` and gated by
+  `scripts/validate_upstox_instruments.py`; a placeholder or sample can never
+  pass that gate.
 
 ## Legacy fields
 

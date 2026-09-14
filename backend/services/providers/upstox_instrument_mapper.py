@@ -50,8 +50,25 @@ class UpstoxInstrumentMapper:
     MarketDataService fallback behaviour applies — the provider never guesses.
     """
 
-    def __init__(self, mapping: Mapping[str, str] | None = None):
-        seeded = dict(mapping or _instrument_keys_from_env())
+    def __init__(
+        self,
+        mapping: Mapping[str, str] | None = None,
+        *,
+        master_mapping: Mapping[str, str] | None = None,
+    ):
+        """Build the symbol-to-key table.
+
+        ``mapping`` is the legacy explicit seam: when provided it is used alone
+        (MD-02 behavior).  Otherwise the validated instrument master
+        (``master_mapping``) is merged in, and any ``UPSTOX_INSTRUMENT_KEYS``
+        environment pairs override it per-symbol so an operator can patch a few
+        entries without editing the master.
+        """
+        if mapping is not None:
+            seeded = dict(mapping)
+        else:
+            seeded = dict(master_mapping or {})
+            seeded.update(_instrument_keys_from_env())
         self._mapping = {
             symbol.strip().upper(): key for symbol, key in seeded.items()
         }

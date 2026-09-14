@@ -86,14 +86,15 @@ def test_successful_candle_response_converts_to_ohlcv_bars() -> None:
 
     bars = provider.get_historical_ohlcv("RELIANCE", period="1mo", interval="1d")
 
+    # MD-03: candles are returned ascending by timestamp regardless of wire order.
     assert len(bars) == 2
     first, second = bars
     assert isinstance(first, OHLCVBar)
-    assert first.timestamp.isoformat() == "2026-09-07T09:15:00+05:30"
-    assert (first.open, first.high, first.low, first.close) == (3000.5, 3010.0, 2995.0, 3008.25)
-    assert first.volume == 12500.0
-    assert (second.open, second.high, second.low, second.close) == (2980.0, 2990.0, 2975.0, 2985.1)
-    assert second.volume == 9000.0
+    assert first.timestamp.isoformat() == "2026-09-04T09:15:00+05:30"
+    assert (first.open, first.high, first.low, first.close) == (2980.0, 2990.0, 2975.0, 2985.1)
+    assert first.volume == 9000.0
+    assert (second.open, second.high, second.low, second.close) == (3000.5, 3010.0, 2995.0, 3008.25)
+    assert second.volume == 12500.0
 
 
 def test_candle_open_interest_column_is_ignored() -> None:
@@ -139,7 +140,8 @@ def test_correct_unit_interval_and_dates_are_sent() -> None:
     assert unit == "minutes"
     assert interval == "5"
     assert to_date == "2026-09-07"
-    assert from_date == "2026-08-07"
+    # MD-03: V3 caps 1-15 minute candles to a 28-day lookback (2026-08-10).
+    assert from_date == "2026-08-10"
 
 
 def test_period_translation_for_years_and_days() -> None:
@@ -300,8 +302,6 @@ def test_unsupported_operations_raise_not_implemented() -> None:
     provider = _provider(fetcher=_RecordingFetcher(_realistic_response(CANDLE)))
     for operation in (
         lambda: provider.get_market_summary(),
-        lambda: provider.get_stock("RELIANCE"),
-        lambda: provider.get_stock_insight("RELIANCE"),
         lambda: provider.search_stocks("RELIANCE"),
         lambda: provider.get_opportunities(),
         lambda: provider.get_all_stocks(),
@@ -309,6 +309,14 @@ def test_unsupported_operations_raise_not_implemented() -> None:
     ):
         with pytest.raises(NotImplementedError):
             operation()
+
+
+def test_get_stock_and_insight_are_implemented_for_upstox() -> None:
+    # MD-03: the snapshot/insight contract is complete for Upstox, so the
+    # structural-skip list above must stay limited to catalogue reads.
+    provider = _provider(fetcher=_RecordingFetcher(_realistic_response(CANDLE)))
+    assert callable(provider.get_stock)
+    assert callable(provider.get_stock_insight)
 
 
 # ---------------------------------------------------------------------------

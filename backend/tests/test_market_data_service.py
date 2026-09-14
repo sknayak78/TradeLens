@@ -117,7 +117,8 @@ def test_provider_error_falls_back_without_breaking_call(caplog):
 
     assert result.data["price"] == 99.0
     assert result.metadata.provider == "stub"
-    assert primary.stock_calls == 1
+    # MD-03 retries the first chain link once before falling through.
+    assert primary.stock_calls == 2
     assert fallback.stock_calls == 1
     assert "market_data.provider_failed_using_fallback" in caplog.text
 
