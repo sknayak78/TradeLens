@@ -333,8 +333,8 @@ def _why_not_stronger(action: Action, limits: Limits, score: int) -> Optional[st
         )
     if LIMIT_TREND_BEARISH in limits:
         return (
-            "It is not even a wait-and-see: until sellers lose control there is "
-            "nothing here worth tracking."
+            "The current technical setup is not suitable for a fresh entry until "
+            "the longer-term trend repairs and sellers lose control."
         )
     if LIMIT_OVERBOUGHT in limits:
         return (
@@ -475,7 +475,10 @@ def _verdict(
         return "Wait for a better entry before initiating a new position."
     # No Entry Yet
     if trend == "bearish":
-        return "This is not a stock to buy today."
+        return (
+            "The current technical setup is not suitable for a fresh entry while "
+            "the longer-term trend remains broken."
+        )
     return "Wait for a better entry before initiating a new position."
 
 

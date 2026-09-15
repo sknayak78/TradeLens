@@ -448,7 +448,10 @@ def test_a_downtrend_is_avoided_and_never_priced():
     assert recommendation.trend == "bearish"
     assert recommendation.action == "Avoid"
     assert recommendation.levels is None
-    assert recommendation.verdict == "This is not a stock to buy today."
+    assert recommendation.verdict == (
+        "The current technical setup is not suitable for a fresh entry while "
+        "the longer-term trend remains broken."
+    )
 
 
 def test_a_blocked_entry_never_becomes_a_position_management_verdict():

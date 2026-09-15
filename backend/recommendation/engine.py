@@ -410,7 +410,14 @@ class RecommendationEngine:
             if score >= ACTION_STRONG_BUY_MIN_SCORE:
                 return "Strong Buy"
             return "Buy"
-        if strategy in ("Breakout", "Pullback"):
+        if strategy == "Breakout":
+            # A breakout candidate with weaker evidence is a wait, not an
+            # investment verdict. Stronger evidence remains worth tracking for
+            # confirmation before an entry.
+            if score >= ACTION_BUY_MIN_SCORE:
+                return "Watch"
+            return "Wait"
+        if strategy == "Pullback":
             if score >= ACTION_WATCH_MIN_SCORE:
                 return "Watch"
             return "Wait"
