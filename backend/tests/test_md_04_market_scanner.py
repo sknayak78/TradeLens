@@ -65,6 +65,9 @@ def test_scanner_uses_broad_injected_universe_not_curated_catalogue() -> None:
 
     assert scanner.universe_symbols == ("PIDILITIND", "VOLTAS")
     assert result.metrics.universe_count == 2
+    assert result.metrics.eligible_count == 2
+    assert result.metrics.scanned_count == 2
+    assert result.metrics.candidate_count == 2
     assert (
         result.metrics.data_available_count
         >= result.metrics.liquidity_pass_count
@@ -78,6 +81,7 @@ def test_scanner_uses_broad_injected_universe_not_curated_catalogue() -> None:
         "VOLTAS", "PIDILITIND"
     }
     assert all(candidate.instrument_key.startswith("NSE_EQ|") for candidate in result.candidates)
+    assert all(candidate.reason_codes for candidate in result.candidates)
 
 
 @pytest.mark.parametrize(
@@ -93,6 +97,7 @@ def test_screening_rejection_reasons_are_transparent(overrides, reason: str) -> 
 
     assert result.metrics.final_candidate_count == 0
     assert reason in result.results[0].rejection_reasons
+    assert result.rejected_by_reason[reason] == 1
 
 
 def test_momentum_and_technical_filters_can_reject_independently() -> None:

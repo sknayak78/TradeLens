@@ -31,8 +31,14 @@ Watch, Wait, or Avoid decision.
 ## Funnel Metrics
 
 Each scan returns universe, data-available, liquidity, trend, momentum,
-technical, and final-candidate counts. Counts are sequential and deterministic,
-so later-stage counts cannot exceed earlier-stage counts.
+technical, and final-candidate counts. Compatibility aliases expose these as
+`universe_count`, `eligible_count`, `scanned_count`, and `candidate_count`.
+Counts are sequential and deterministic, so later-stage counts cannot exceed
+earlier-stage counts. `rejected_by_reason` aggregates symbol-level rejection
+codes.
+
+Eligible candidates carry structured `reason_codes` and raw signal values. They
+remain candidates only; no BUY, SELL, WATCH, WAIT, or AVOID decision is made.
 
 ## Deferred
 

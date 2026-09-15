@@ -40,6 +40,19 @@ class ScannerFunnelMetrics:
     technical_pass_count: int = 0
     final_candidate_count: int = 0
 
+    @property
+    def eligible_count(self) -> int:
+        """Universe instruments eligible to be attempted by this scan."""
+        return self.universe_count
+
+    @property
+    def scanned_count(self) -> int:
+        """Instruments for which usable historical data was obtained."""
+        return self.data_available_count
+
+    @property
+    def candidate_count(self) -> int:
+        return self.final_candidate_count
 
 @dataclass(frozen=True)
 class ScreeningResult:
@@ -48,6 +61,7 @@ class ScreeningResult:
     passed: bool
     score: int
     signals: Mapping[str, bool]
+    reason_codes: tuple[str, ...] = ()
     rejection_reasons: tuple[str, ...] = ()
     provider: str | None = None
     error: str | None = None
@@ -61,6 +75,14 @@ class ScanResult:
     @property
     def candidates(self) -> tuple[ScreeningResult, ...]:
         return tuple(result for result in self.results if result.passed)
+
+    @property
+    def rejected_by_reason(self) -> Mapping[str, int]:
+        counts: dict[str, int] = {}
+        for result in self.results:
+            for reason in result.rejection_reasons:
+                counts[reason] = counts.get(reason, 0) + 1
+        return counts
 
 
 @dataclass(frozen=True)
@@ -222,6 +244,11 @@ class MarketScanner:
         )
         stages = ("liquidity", "trend", "momentum", "technical")
         reasons = tuple(f"failed_{stage}" for stage in stages if not signals[stage])
+        qualifying = tuple(
+            f"{signal}_signal"
+            for signal, passed in signals.items()
+            if passed and signal != "technical"
+        )
         score = sum(20 for key in stages if signals[key])
         passed = not reasons
         return ScreeningResult(
@@ -230,6 +257,7 @@ class MarketScanner:
             passed=passed,
             score=score,
             signals=signals,
+            reason_codes=qualifying,
             rejection_reasons=reasons,
             provider=provider,
         )
