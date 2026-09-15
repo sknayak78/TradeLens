@@ -37,10 +37,16 @@ class RankedOpportunity:
     overall_score: float | None
     available_weight: float
     component_scores: Mapping[str, float | None]
+    weighted_components: Mapping[str, float | None]
     strengths: tuple[str, ...]
     cautions: tuple[str, ...]
     provider: str | None
     scanner_result: ScreeningResult
+
+    @property
+    def opportunity_score(self) -> float | None:
+        """MD-05 public terminology; ``overall_score`` remains compatible."""
+        return self.overall_score
 
 
 @dataclass(frozen=True)
@@ -99,6 +105,7 @@ class OpportunityRanker:
                 overall_score=opportunity.overall_score,
                 available_weight=opportunity.available_weight,
                 component_scores=opportunity.component_scores,
+                weighted_components=opportunity.weighted_components,
                 strengths=opportunity.strengths,
                 cautions=opportunity.cautions,
                 provider=opportunity.provider,
@@ -150,6 +157,14 @@ class OpportunityRanker:
             if available_weight == 0
             else round(weighted_total / available_weight, 2)
         )
+        weighted_components = {
+            component: (
+                None
+                if score is None or available_weight == 0
+                else round(score * weights[component] / available_weight, 2)
+            )
+            for component, score in component_scores.items()
+        }
         return RankedOpportunity(
             rank=0,
             symbol=candidate.symbol,
@@ -157,6 +172,7 @@ class OpportunityRanker:
             overall_score=overall_score,
             available_weight=available_weight,
             component_scores=component_scores,
+            weighted_components=weighted_components,
             strengths=tuple(strengths),
             cautions=tuple(cautions),
             provider=candidate.provider,

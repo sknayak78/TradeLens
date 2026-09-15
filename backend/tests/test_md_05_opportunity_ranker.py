@@ -48,6 +48,8 @@ def test_basic_ranking_descends_by_weighted_score() -> None:
 
     assert [item.symbol for item in result.opportunities] == ["VOLTAS", "PIDILITIND"]
     assert result.opportunities[0].overall_score == 100.0
+    assert result.opportunities[0].opportunity_score == 100.0
+    assert sum(result.opportunities[0].weighted_components.values()) == pytest.approx(100.0)
     assert result.opportunities[1].overall_score == 50.0
 
 

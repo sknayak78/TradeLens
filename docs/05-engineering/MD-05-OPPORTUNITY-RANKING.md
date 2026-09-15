@@ -36,7 +36,9 @@ those values.
 Each available `True` signal scores 100 and each available `False` signal
 scores 0. Missing signals are unavailable, not failed: their weights are
 removed and the remaining weighted score is renormalized. If every component
-is unavailable, the score is `None`.
+is unavailable, the score is `None`. `opportunity_score` is the public name;
+`overall_score` remains as a compatibility alias. `weighted_components` exposes
+the normalized contribution of each available component and sums to the total.
 
 ## Ordering and Explainability
 
