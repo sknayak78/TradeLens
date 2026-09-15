@@ -69,12 +69,27 @@ export default function OpportunityCard({
         testId={`card-action-${ranking.symbol}`}
       />
 
+      {(ranking.analysisPriority || ranking.opportunityScore != null) && (
+        <div className="flex items-center gap-2 text-[10px] font-mono text-[#667085]">
+          {ranking.analysisPriority && <span>{ranking.analysisPriority}</span>}
+          {ranking.opportunityScore != null && (
+            <span>Priority score {ranking.opportunityScore.toFixed(0)}</span>
+          )}
+        </div>
+      )}
+
       {explanation && (
         <p
           className="text-[12px] text-[#667085] leading-relaxed"
           data-testid={`card-explanation-${ranking.symbol}`}
         >
           {explanation}
+        </p>
+      )}
+
+      {ranking.explanation?.cautions?.[0] && (
+        <p className="text-[11px] text-[#667085]" data-testid={`card-caution-${ranking.symbol}`}>
+          Caution: {ranking.explanation.cautions[0]}
         </p>
       )}
 
@@ -141,6 +156,15 @@ export default function OpportunityCard({
           </div>
         )}
       </div>
+
+      <a
+        href={`/learning?symbol=${encodeURIComponent(ranking.symbol)}`}
+        onClick={(event) => event.stopPropagation()}
+        className="text-[10px] uppercase tracking-wider text-[#2962ff] hover:underline"
+        data-testid={`card-guided-research-${ranking.symbol}`}
+      >
+        Open Guided Research
+      </a>
     </article>
   );
 }

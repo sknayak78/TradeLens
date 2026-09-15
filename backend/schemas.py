@@ -393,6 +393,11 @@ class Ranking(MarketMetadata):
         default=None,
         description="Authoritative Mentor recommendation for this featured row.",
     )
+    # MD-08 additive discovery/deep-analysis fields.
+    opportunityScore: Optional[float] = None
+    analysisPriority: Optional[str] = None
+    explanation: Optional[Dict[str, Any]] = None
+    deepAnalysisProvider: Optional[str] = None
 
 
 class OpportunitiesResponse(MarketMetadata):
@@ -403,6 +408,16 @@ class OpportunitiesResponse(MarketMetadata):
         ...,
         description="Count of each Mentor action across all eligible candidates.",
     )
+    sourceMode: Literal["discovery", "curated_fallback"] = "curated_fallback"
+    universeCount: Optional[int] = None
+    eligibleCount: Optional[int] = None
+    scannedCount: Optional[int] = None
+    candidateCount: Optional[int] = None
+    rankedCount: Optional[int] = None
+    deepAnalysisLimit: Optional[int] = None
+    analysedCount: Optional[int] = None
+    finalOpportunityCount: Optional[int] = None
+    pipelineError: Optional[str] = None
 
 
 class WatchlistAnalysis(MarketMetadata):

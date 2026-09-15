@@ -1,7 +1,7 @@
 """Market-data endpoints backed by the cached provider service."""
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -29,8 +29,13 @@ from services.chart_timeframe import normalize_timeframe
 from services.market_data_service import market_data_service
 from services.opportunity_selection import select_opportunities
 from services.stock_decision import decide
+from services.market_data.session import current_market_status
+from services.today_opportunities import TodayOpportunitiesService
 
 logger = logging.getLogger("tradelens.market")
+
+_DEFAULT_MARKET_DATA_SERVICE = market_data_service
+_DEFAULT_SELECT_OPPORTUNITIES = select_opportunities
 
 # Short-lived response cache so repeated Dashboard loads do not re-enrich the universe.
 _OPPORTUNITIES_CACHE_TTL_SECONDS = 30.0
@@ -115,12 +120,7 @@ def clear_opportunities_cache() -> None:
 
 @router.get("/opportunities", response_model=OpportunitiesResponse)
 def opportunities() -> OpportunitiesResponse:
-    """Today's Rankings — featured rows from the screened market universe.
-
-    Candidates are drawn from the configured STOCKS catalogue, filtered by
-  screening, evaluated by the Mentor Engine, bucketed by
-  ``recommendation.action``, and featured by ``recommendation.score``.
-    """
+    """Today's Opportunities from broad discovery with explicit fallback."""
     now = time.monotonic()
     cached = _opportunities_cache.get("response")
     if cached is not None and now < _opportunities_cache["expires_at"]:
@@ -128,38 +128,137 @@ def opportunities() -> OpportunitiesResponse:
         return cached
 
     started = time.perf_counter()
-    selection, metadata = select_opportunities(market_data_service)
+    # Custom provider/selector substitutions are used by existing isolated
+    # endpoint tests and development adapters; keep those explicit fallback
+    # paths from accidentally scanning the production master.
+    if (
+        market_data_service is not _DEFAULT_MARKET_DATA_SERVICE
+        or select_opportunities is not _DEFAULT_SELECT_OPPORTUNITIES
+        or any(
+            name in vars(market_data_service)
+            for name in ("get_all_stocks", "get_stock", "get_stock_insight")
+        )
+    ):
+        fallback, fallback_metadata = select_opportunities(market_data_service)
+        from services.today_opportunities import TodayOpportunitiesResult
 
+        pipeline_result = TodayOpportunitiesResult(
+            source_mode="curated_fallback",
+            scan=None,
+            ranking=None,
+            discovered=(),
+            fallback=fallback,
+            fallback_metadata=fallback_metadata,
+            error=None,
+        )
+    else:
+        pipeline = TodayOpportunitiesService(market_data_service)
+        pipeline_result = pipeline.run()
     rankings: List[Ranking] = []
-    for idx, row in enumerate(selection.rows, start=1):
-        analysis = row.analysis
-        rankings.append(Ranking(
-            **metadata,
-            rank=idx,
-            symbol=row.symbol,
-            name=row.name,
-            price=row.price,
-            changePct=row.change_pct,
-            strengthScore=analysis.strength_score,
-            stars=analysis.stars,
-            classification=analysis.classification,
-            trend=row.trend,
-            tradeSetup=analysis.trade_setup,
-            riskLevel=analysis.risk_level,
-            suggestedAction=analysis.suggested_action,
-            insight=analysis.insight,
-            reason=row.reason,
-            recommendation=(
-                None
-                if row.recommendation is None
-                else _recommendation_out(row.recommendation)
-            ),
-        ))
+
+    if pipeline_result.source_mode == "discovery":
+        successful = [
+            item for item in pipeline_result.discovered if item.deep_analysis is not None
+        ]
+        providers = {item.deep_analysis.snapshot_provider for item in successful}
+        metadata = _discovery_metadata(next(iter(providers)) if len(providers) == 1 else "mixed")
+        for item in successful:
+            deep = item.deep_analysis
+            analysis = deep.legacy_analysis
+            decision = deep.decision
+            explanation = item.explanation
+            explanation_payload = {
+                "summary": explanation.summary,
+                "strengths": list(explanation.strengths),
+                "cautions": list(explanation.cautions),
+                "scoreBreakdown": {
+                    key: {
+                        "score": value.score,
+                        "weightedContribution": value.weighted_contribution,
+                        "available": value.available,
+                    }
+                    for key, value in explanation.score_breakdown.items()
+                },
+                "signalEvidence": dict(explanation.signal_evidence),
+                "rankingFactors": list(explanation.ranking_factors),
+                "provider": explanation.provider,
+            }
+            snapshot = deep.snapshot
+            rankings.append(Ranking(
+                **metadata,
+                rank=item.ranked.rank,
+                symbol=item.ranked.symbol,
+                name=snapshot.get("name", item.ranked.symbol),
+                price=snapshot["price"],
+                changePct=snapshot["changePct"],
+                strengthScore=analysis.strength_score,
+                stars=analysis.stars,
+                classification=analysis.classification,
+                trend=decision.trend,
+                tradeSetup=analysis.trade_setup,
+                riskLevel=analysis.risk_level,
+                suggestedAction=analysis.suggested_action,
+                insight=analysis.insight,
+                reason=explanation.summary,
+                recommendation=(
+                    None
+                    if decision.recommendation is None
+                    else _recommendation_out(decision.recommendation)
+                ),
+                opportunityScore=item.ranked.opportunity_score,
+                analysisPriority=explanation.priority,
+                explanation=explanation_payload,
+                deepAnalysisProvider=deep.snapshot_provider,
+            ))
+        metrics = _discovery_metrics(pipeline_result, len(pipeline_result.discovered), len(rankings))
+        action_counts = _action_counts(rankings)
+    else:
+        selection = pipeline_result.fallback
+        assert selection is not None
+        metadata = pipeline_result.fallback_metadata or _discovery_metadata("seed")
+        for idx, row in enumerate(selection.rows, start=1):
+            analysis = row.analysis
+            rankings.append(Ranking(
+                **metadata,
+                rank=idx,
+                symbol=row.symbol,
+                name=row.name,
+                price=row.price,
+                changePct=row.change_pct,
+                strengthScore=analysis.strength_score,
+                stars=analysis.stars,
+                classification=analysis.classification,
+                trend=row.trend,
+                tradeSetup=analysis.trade_setup,
+                riskLevel=analysis.risk_level,
+                suggestedAction=analysis.suggested_action,
+                insight=analysis.insight,
+                reason=row.reason,
+                recommendation=(
+                    None
+                    if row.recommendation is None
+                    else _recommendation_out(row.recommendation)
+                ),
+            ))
+        metrics = {
+            "sourceMode": "curated_fallback",
+            "universeCount": selection.screening.universe_size,
+            "eligibleCount": selection.screening.eligible_count,
+            "scannedCount": selection.screening.eligible_count,
+            "candidateCount": selection.analysed_count,
+            "rankedCount": len(rankings),
+            "deepAnalysisLimit": None,
+            "analysedCount": selection.analysed_count,
+            "finalOpportunityCount": len(rankings),
+            "pipelineError": pipeline_result.error,
+        }
+        action_counts = selection.action_counts
 
     response = OpportunitiesResponse(
         **metadata,
+        **metrics,
         rankings=rankings,
-        actionCounts=selection.action_counts,
+        actionCounts=action_counts,
     )
     elapsed_ms = (time.perf_counter() - started) * 1000
     logger.info(
@@ -170,6 +269,41 @@ def opportunities() -> OpportunitiesResponse:
     _opportunities_cache["response"] = response
     _opportunities_cache["expires_at"] = now + _OPPORTUNITIES_CACHE_TTL_SECONDS
     return response
+
+
+def _discovery_metadata(provider: str) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    return {
+        "provider": provider,
+        "cached": False,
+        "asOf": now,
+        "marketStatus": current_market_status(now).status,
+    }
+
+
+def _discovery_metrics(result: Any, analysed_count: int, final_count: int) -> dict[str, Any]:
+    metrics = result.scan.metrics
+    return {
+        "sourceMode": "discovery",
+        "universeCount": metrics.universe_count,
+        "eligibleCount": metrics.eligible_count,
+        "scannedCount": metrics.scanned_count,
+        "candidateCount": metrics.candidate_count,
+        "rankedCount": len(result.ranking.opportunities),
+        "deepAnalysisLimit": 20,
+        "analysedCount": analysed_count,
+        "finalOpportunityCount": final_count,
+        "pipelineError": result.error,
+    }
+
+
+def _action_counts(rankings: List[Ranking]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rankings:
+        if row.recommendation is not None:
+            action = row.recommendation.action
+            counts[action] = counts.get(action, 0) + 1
+    return counts
 
 
 @router.get("/stock/{symbol}", response_model=StockDetail)

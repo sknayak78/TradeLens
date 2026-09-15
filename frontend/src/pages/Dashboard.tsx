@@ -38,7 +38,7 @@ export default function Dashboard() {
             Dashboard
           </h1>
           <p className="text-xs text-[#667085] mt-1">
-            Study curated opportunities, inspect evidence, and learn how the Mentor reads the market.
+             Study market-discovered opportunities, inspect evidence, and learn how the Mentor reads the market.
           </p>
         </div>
         <div className="flex items-center gap-2 text-[10px] font-mono tabular-nums text-[#667085]">

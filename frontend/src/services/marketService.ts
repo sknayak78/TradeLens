@@ -24,6 +24,16 @@ export interface OpportunitiesResponse {
   cached: boolean;
   asOf: string;
   marketStatus: "OPEN" | "PRE_OPEN" | "CLOSED" | "WEEKEND";
+  sourceMode?: "discovery" | "curated_fallback";
+  universeCount?: number | null;
+  eligibleCount?: number | null;
+  scannedCount?: number | null;
+  candidateCount?: number | null;
+  rankedCount?: number | null;
+  deepAnalysisLimit?: number | null;
+  analysedCount?: number | null;
+  finalOpportunityCount?: number | null;
+  pipelineError?: string | null;
 }
 
 export interface StockDetail extends Stock {

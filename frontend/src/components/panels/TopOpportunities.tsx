@@ -16,12 +16,20 @@ export default function TopOpportunities({
 }: TopOpportunitiesProps) {
   const { data, isLoading, isError, refetch } = useRankings();
   const items = data?.rankings ?? [];
+  const discovery = data?.sourceMode === "discovery";
+  const funnel = data && data.scannedCount != null
+    ? `${data.scannedCount.toLocaleString("en-IN")} scanned · ${data.candidateCount ?? 0} candidates · ${data.analysedCount ?? 0} deeply analysed`
+    : null;
 
   return (
     <PanelCard
       id="learning-opportunities"
       title="Today's Learning Opportunities"
-      subtitle="Curated stocks to study with the TradeLens Mentor."
+      subtitle={
+        discovery
+          ? `Discovered from the broader NSE market${funnel ? ` · ${funnel}` : ""}`
+          : "Curated fallback to study with the TradeLens Mentor."
+      }
       testId="card-top-opportunities"
     >
       {isLoading && <OpportunitiesSkeleton />}

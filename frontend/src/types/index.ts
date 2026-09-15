@@ -88,6 +88,22 @@ export interface Ranking {
   insight: string;
   reason: string;
   recommendation?: Recommendation | null;
+  opportunityScore?: number | null;
+  analysisPriority?: string | null;
+  explanation?: {
+    summary: string;
+    strengths: string[];
+    cautions: string[];
+    scoreBreakdown: Record<string, {
+      score: number | null;
+      weightedContribution: number | null;
+      available: boolean;
+    }>;
+    signalEvidence: Record<string, unknown>;
+    rankingFactors: string[];
+    provider?: string | null;
+  } | null;
+  deepAnalysisProvider?: string | null;
 }
 
 // Kept for legacy usage — Opportunity is now the Ranking payload.
