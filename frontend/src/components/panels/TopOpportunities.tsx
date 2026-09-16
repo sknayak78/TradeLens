@@ -17,6 +17,7 @@ export default function TopOpportunities({
   const { data, isLoading, isError, refetch } = useRankings();
   const items = data?.rankings ?? [];
   const discovery = data?.sourceMode === "discovery";
+  const discoveryFailed = data?.sourceMode === "discovery_failed";
   const funnelMetrics = data
     ? ([
         ["Universe", data.universeCount],
@@ -37,7 +38,9 @@ export default function TopOpportunities({
       subtitle={
         discovery
           ? "Discovered from the broader NSE market"
-          : "Curated fallback to study with the TradeLens Mentor."
+          : discoveryFailed
+            ? "Broad-market discovery is unavailable right now; no stale opportunity list was substituted."
+            : "Curated fallback to study with the TradeLens Mentor."
       }
       testId="card-top-opportunities"
     >

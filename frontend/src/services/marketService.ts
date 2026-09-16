@@ -24,7 +24,7 @@ export interface OpportunitiesResponse {
   cached: boolean;
   asOf: string;
   marketStatus: "OPEN" | "PRE_OPEN" | "CLOSED" | "WEEKEND";
-  sourceMode?: "discovery" | "curated_fallback";
+  sourceMode?: "discovery" | "curated_fallback" | "discovery_failed";
   universeCount?: number | null;
   eligibleCount?: number | null;
   scannedCount?: number | null;

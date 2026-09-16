@@ -212,7 +212,7 @@ def opportunities() -> OpportunitiesResponse:
             ))
         metrics = _discovery_metrics(pipeline_result, len(pipeline_result.discovered), len(rankings))
         action_counts = _action_counts(rankings)
-    else:
+    elif pipeline_result.source_mode == "curated_fallback":
         selection = pipeline_result.fallback
         assert selection is not None
         metadata = pipeline_result.fallback_metadata or _discovery_metadata("seed")
@@ -253,6 +253,21 @@ def opportunities() -> OpportunitiesResponse:
             "pipelineError": pipeline_result.error,
         }
         action_counts = selection.action_counts
+    else:
+        metadata = _discovery_metadata("unavailable")
+        metrics = {
+            "sourceMode": "discovery_failed",
+            "universeCount": None,
+            "eligibleCount": None,
+            "scannedCount": None,
+            "candidateCount": None,
+            "rankedCount": 0,
+            "deepAnalysisLimit": 20,
+            "analysedCount": 0,
+            "finalOpportunityCount": 0,
+            "pipelineError": pipeline_result.error,
+        }
+        action_counts = {}
 
     response = OpportunitiesResponse(
         **metadata,

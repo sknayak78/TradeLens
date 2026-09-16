@@ -13,6 +13,11 @@ an explicit `curated_fallback` when discovery cannot produce a successfully
 analysed shortlist. Discovery responses expose `sourceMode` so fallback is
 never presented as broad-market discovery.
 
+Broad discovery and curated fallback are both execution-bounded. If the
+scanner or fallback cannot complete within its service deadline, the response
+uses `discovery_failed` with an empty opportunity list and an explicit error;
+it does not fabricate counts or wait indefinitely on a provider call.
+
 ## Response
 
 The existing opportunities response remains backward-compatible and gains

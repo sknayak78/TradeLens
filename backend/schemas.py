@@ -408,7 +408,7 @@ class OpportunitiesResponse(MarketMetadata):
         ...,
         description="Count of each Mentor action across all eligible candidates.",
     )
-    sourceMode: Literal["discovery", "curated_fallback"] = "curated_fallback"
+    sourceMode: Literal["discovery", "curated_fallback", "discovery_failed"] = "curated_fallback"
     universeCount: Optional[int] = None
     eligibleCount: Optional[int] = None
     scannedCount: Optional[int] = None

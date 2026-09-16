@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from dataclasses import dataclass
 from typing import Any, Callable, Literal
 
@@ -21,7 +22,7 @@ logger = logging.getLogger("tradelens.today_opportunities")
 
 @dataclass(frozen=True)
 class TodayOpportunitiesResult:
-    source_mode: Literal["discovery", "curated_fallback"]
+    source_mode: Literal["discovery", "curated_fallback", "discovery_failed"]
     scan: ScanResult | None
     ranking: RankingResult | None
     discovered: tuple[DiscoveredOpportunity, ...]
@@ -34,6 +35,8 @@ class TodayOpportunitiesService:
     """Run discovery once and return the ranked/deep-analysed shortlist."""
 
     DEFAULT_LIMIT = 20
+    SCAN_TIMEOUT_SECONDS = 60.0
+    FALLBACK_TIMEOUT_SECONDS = 15.0
 
     def __init__(
         self,
@@ -54,7 +57,7 @@ class TodayOpportunitiesService:
 
     def run(self, *, limit: int = DEFAULT_LIMIT) -> TodayOpportunitiesResult:
         try:
-            scan = self._scanner.scan()
+            scan = self._run_bounded(self._scanner.scan, self.SCAN_TIMEOUT_SECONDS)
             ranking = self._ranker.rank(scan.candidates, limit=limit)
             contexts = tuple(
                 RankedCandidate(
@@ -76,6 +79,14 @@ class TodayOpportunitiesService:
                 scan=scan,
                 error="discovery produced no successfully analysed opportunities",
             )
+        except TimeoutError:
+            return TodayOpportunitiesResult(
+                source_mode="discovery_failed",
+                scan=None,
+                ranking=None,
+                discovered=(),
+                error="broad-market discovery exceeded its execution deadline",
+            )
         except Exception as exc:
             logger.warning("today_opportunities.discovery_failed", exc_info=True)
             return self._curated_fallback(error=str(exc))
@@ -86,7 +97,19 @@ class TodayOpportunitiesService:
         scan: ScanResult | None = None,
         error: str | None = None,
     ) -> TodayOpportunitiesResult:
-        fallback, metadata = self._fallback_selector(self._market_data_service)
+        try:
+            fallback, metadata = self._run_bounded(
+                lambda: self._fallback_selector(self._market_data_service),
+                self.FALLBACK_TIMEOUT_SECONDS,
+            )
+        except TimeoutError:
+            return TodayOpportunitiesResult(
+                source_mode="discovery_failed",
+                scan=scan,
+                ranking=None,
+                discovered=(),
+                error="discovery and curated fallback exceeded their execution deadlines",
+            )
         return TodayOpportunitiesResult(
             source_mode="curated_fallback",
             scan=scan,
@@ -96,3 +119,16 @@ class TodayOpportunitiesService:
             fallback_metadata=metadata,
             error=error,
         )
+
+    @staticmethod
+    def _run_bounded(function: Callable[[], Any], timeout: float) -> Any:
+        executor = ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(function)
+        try:
+            return future.result(timeout=timeout)
+        except TimeoutError:
+            future.cancel()
+            executor.shutdown(wait=False, cancel_futures=True)
+            raise
+        else:
+            executor.shutdown(wait=True)

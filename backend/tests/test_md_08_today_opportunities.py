@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+import time
 
 from services.deep_analysis_pipeline import DeepAnalysisPipeline, DeepAnalysisResult
 from services.market_scanner import ScanResult, ScannerFunnelMetrics, ScreeningResult
@@ -124,3 +125,24 @@ def test_discovery_failure_has_explicit_curated_fallback(monkeypatch) -> None:
     assert result.source_mode == "curated_fallback"
     assert result.fallback is fallback
     assert result.error == "scanner unavailable"
+
+
+def test_slow_discovery_is_bounded_without_fabricating_results() -> None:
+    class SlowScanner:
+        def scan(self):
+            time.sleep(0.2)
+            raise RuntimeError("slow scanner")
+
+    service = TodayOpportunitiesService(
+        MarketDataService(SeedProvider(), SeedProvider()),
+        scanner=SlowScanner(),
+    )
+    service.SCAN_TIMEOUT_SECONDS = 0.01
+    started = time.monotonic()
+
+    result = service.run()
+
+    assert time.monotonic() - started < 0.1
+    assert result.source_mode == "discovery_failed"
+    assert result.discovered == ()
+    assert result.error == "broad-market discovery exceeded its execution deadline"
