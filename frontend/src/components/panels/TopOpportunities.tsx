@@ -17,9 +17,18 @@ export default function TopOpportunities({
   const { data, isLoading, isError, refetch } = useRankings();
   const items = data?.rankings ?? [];
   const discovery = data?.sourceMode === "discovery";
-  const funnel = data && data.scannedCount != null
-    ? `${data.scannedCount.toLocaleString("en-IN")} scanned · ${data.candidateCount ?? 0} candidates · ${data.analysedCount ?? 0} deeply analysed`
-    : null;
+  const funnelMetrics = data
+    ? ([
+        ["Universe", data.universeCount],
+        ["Eligible", data.eligibleCount],
+        ["Scanned", data.scannedCount],
+        ["Candidates", data.candidateCount],
+        ["Ranked", data.rankedCount],
+        ["Deep limit", data.deepAnalysisLimit],
+        ["Analysed", data.analysedCount],
+        ["Final", data.finalOpportunityCount],
+      ].filter(([, value]) => value != null) as [string, number][])
+    : [];
 
   return (
     <PanelCard
@@ -27,11 +36,24 @@ export default function TopOpportunities({
       title="Today's Learning Opportunities"
       subtitle={
         discovery
-          ? `Discovered from the broader NSE market${funnel ? ` · ${funnel}` : ""}`
+          ? "Discovered from the broader NSE market"
           : "Curated fallback to study with the TradeLens Mentor."
       }
       testId="card-top-opportunities"
     >
+      {funnelMetrics.length > 0 && (
+        <div
+          className="mb-3 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-mono tabular-nums text-[#667085]"
+          data-testid="opportunities-funnel"
+          aria-label={discovery ? "Broad-market discovery funnel" : "Curated fallback funnel"}
+        >
+          {funnelMetrics.map(([label, value]) => (
+            <span key={label}>
+              {label} {value.toLocaleString("en-IN")}
+            </span>
+          ))}
+        </div>
+      )}
       {isLoading && <OpportunitiesSkeleton />}
       {isError && (
         <ErrorState
