@@ -18,7 +18,7 @@ P0
 
 ### Status
 
-Ready
+IMPLEMENTED
 
 ### Business Goal
 
@@ -47,7 +47,7 @@ P0
 
 ### Status
 
-Planned
+IMPLEMENTED
 
 ### Deliverables
 
@@ -55,9 +55,9 @@ Planned
 - EMA50
 - EMA200
 - RSI
-- MACD
+- MACD (PLANNED — not in Phase 1)
 - ATR
-- Bollinger Bands
+- Bollinger Bands (PLANNED — not in Phase 1)
 
 ---
 
@@ -73,17 +73,17 @@ P1
 
 ### Status
 
-Planned
+IMPLEMENTED (as Recommendation Engine v1.1)
 
 ### Deliverables
 
 Generate:
 
 - Trend
-- Strength Score
-- Risk Level
-- Suggested Action
-- AI Explanation
+- Strength Score (→ TradeLens Score)
+- Risk Level (→ Conviction + Levels)
+- Suggested Action (→ Action)
+- AI Explanation (→ AI Synthesis)
 
 ---
 
