@@ -144,6 +144,32 @@ Every AI interaction should leave users more knowledgeable than before.
 
 ---
 
+# Principle 11
+## User Owns Credentials & Infrastructure
+
+TradeLens is self-hosted. Users own their infrastructure, their data, and their broker credentials.
+
+Credentials never leave the user's backend runtime. They are never sent to frontend clients, never logged, never committed to Git, and never appear in API responses.
+
+This is not a configuration option — it is an architectural invariant.
+
+---
+
+# Principle 12
+## Provider-Neutral Intelligence
+
+The intelligence engine (discovery, ranking, analysis, scoring) knows nothing of specific brokers.
+
+All provider-specific logic lives in adapters behind a normalized market-data contract.
+
+This ensures:
+- Equal treatment of all data sources
+- No vendor lock-in
+- Deterministic, auditable analytics regardless of provider
+- New providers added without touching intelligence code
+
+---
+
 # Product Decision Framework
 
 Before building any feature, ask:

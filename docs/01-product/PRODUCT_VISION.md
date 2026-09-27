@@ -46,6 +46,19 @@ It combines market analysis, structured trading insights, educational guidance a
 
 ---
 
+# Platform Direction
+
+TradeLens is an **open-source, self-hosted market-intelligence and investment-research platform**.
+
+- **Self-hosted:** Users run TradeLens on their own infrastructure
+- **Bring your own credentials:** Users provide their own broker/data-provider entitlements
+- **Provider adapters:** Upstox (IMPLEMENTED), Yahoo (IMPLEMENTED), HDFC (PLANNED), Zerodha, Groww, Angel One, ICICI (PLANNED)
+- **Read-only intelligence:** Initial integrations are for market research only; no order execution
+- **Deterministic intelligence:** TradeLens Score is computed from market evidence; AI explains, never scores
+- **Yahoo standalone:** Works without any broker credentials
+
+---
+
 # Target Audience
 
 Primary Audience

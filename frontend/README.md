@@ -1,70 +1,160 @@
-# Getting Started with Create React App
+# TradeLens Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+React + TypeScript frontend for the TradeLens market-intelligence platform.
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## Quick Start
 
-### `npm start`
+```bash
+cd frontend
+npm install
+npm start
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+Runs on `http://localhost:3000` (configured via `REACT_APP_BACKEND_URL` in `.env.development` at repo root).
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+---
 
-### `npm test`
+## Tech Stack
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+| Layer | Technology |
+|-------|------------|
+| Framework | React 18 + TypeScript |
+| Build | Create React App (react-scripts) |
+| State/Data | React Query (TanStack Query) |
+| Routing | React Router v6 |
+| Styling | TailwindCSS |
+| Charts | Recharts |
+| Icons | Lucide React |
+| HTTP | Fetch API (via React Query) |
 
-### `npm run build`
+---
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Project Structure
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+```
+frontend/
+├── public/
+├── src/
+│   ├── components/       # Reusable UI components
+│   │   ├── chart/        # ChartCard, CandlestickChart, indicators
+│   │   ├── common/       # Button, Card, Badge, Loading, ErrorBoundary
+│   │   ├── layout/       # Sidebar, Header, PageContainer
+│   │   └── recommendation/ # RecommendationCard, LevelsDisplay, AIInsight
+│   ├── hooks/            # Custom React hooks (useStock, useWatchlist, etc.)
+│   ├── pages/            # Route-level page components
+│   │   ├── Dashboard.tsx
+│   │   ├── StockDetail.tsx
+│   │   ├── GuidedResearch.tsx
+│   │   ├── Watchlist.tsx
+│   │   ├── TradeJournal.tsx
+│   │   └── Settings.tsx
+│   ├── services/         # API client, query keys, types
+│   │   ├── api.ts        # Fetch wrappers, endpoint definitions
+│   │   ├── queries.ts    # React Query hooks and keys
+│   │   └── types.ts      # TypeScript interfaces for API responses
+│   ├── utils/            # Formatters, helpers, constants
+│   ├── App.tsx           # Routes, providers
+│   ├── main.tsx          # Entry point
+│   └── index.css         # Tailwind imports + global styles
+├── package.json
+├── tsconfig.json
+├── tailwind.config.js
+└── .env.development      # Not committed; copied from root .env.development
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+---
 
-### `npm run eject`
+## Key Architectural Patterns
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### API Layer (`src/services/`)
+- Centralized `api.ts` with typed fetch wrappers
+- React Query hooks in `queries.ts` for caching, deduping, retries
+- TypeScript interfaces mirror backend OpenAPI schema
+- No business logic in components — all data fetching via hooks
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### Chart Components (`src/components/chart/`)
+- `CandlestickChart` — shared across Dashboard, StockDetail, GuidedResearch
+- Timeframe switching: 1D, 1W, 1M, 3M, 1Y
+- EMA overlays (20/50/200), Support/Resistance lines, Volume pane
+- X-axis: epoch-millisecond timestamps; 1Y uses actual calendar time
+- Tooltip: OHLCV + EMA values at hover point
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### Recommendation Display (`src/components/recommendation/`)
+- `RecommendationCard` — renders authoritative `recommendation` block
+- `LevelsDisplay` — entry zone, stop, targets (only for level strategies)
+- `AIInsight` — separate AI synthesis panel (loads async, non-blocking)
+- Legacy fields (`suggestedAction`, `strengthScore`, etc.) still consumed where `recommendation` not yet adopted
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+### State Management
+- **Server state:** React Query (cache, background refetch, deduping)
+- **Client state:** React `useState`/`useContext` (UI toggles, form inputs)
+- **No global state library** — kept simple intentionally
 
-## Learn More
+### Routing
+```
+/
+├── /                    → Dashboard
+├── /stock/:symbol       → StockDetail
+├── /research/:symbol    → Guided Research (Study → Decide → Compare → Learn)
+├── /watchlist           → Watchlist
+├── /journal             → Trade Journal
+└── /settings            → Settings
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+---
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## Development
 
-### Code Splitting
+### Environment Variables
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+Create `frontend/.env.development` (not committed):
 
-### Analyzing the Bundle Size
+```bash
+REACT_APP_BACKEND_URL=http://localhost:8001
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+The root `.env.development` is the source of truth; `scripts/dev.sh` copies relevant vars.
 
-### Making a Progressive Web App
+### Commands
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+| Command | Description |
+|---------|-------------|
+| `npm start` | Dev server with hot reload |
+| `npm test` | Jest + React Testing Library (watch mode) |
+| `npm run build` | Production build to `build/` |
+| `npm run lint` | ESLint + Prettier check |
 
-### Advanced Configuration
+### Adding a New Page
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+1. Create `src/pages/NewPage.tsx`
+2. Add route in `App.tsx`
+3. Add sidebar link in `src/components/layout/Sidebar.tsx`
+4. Add API hooks in `src/services/queries.ts` if needed
 
-### Deployment
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+## Testing
 
-### `npm run build` fails to minify
+- Unit tests: `src/**/*.test.tsx` (Jest + RTL)
+- Run: `npm test` or `./scripts/test.sh frontend`
+- Target: Critical paths (recommendation display, chart interactions, journal forms)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+---
+
+## Production Build
+
+```bash
+npm run build
+```
+
+Outputs to `frontend/build/` — served by backend in production or deployed separately.
+
+---
+
+## Documentation References
+
+- Backend API: `docs/architecture/` (provider adapters, intelligence pipeline, scoring)
+- Regression suite: `docs/docs/06-testing/TradeLens_Regression_Suite.md`
+- Engineering roadmap: `docs/05-engineering/ENGINEERING_ROADMAP.md`

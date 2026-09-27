@@ -114,23 +114,39 @@ Do not claim completion if validation failed.
 
 ## 8. TradeLens Product Context
 
-TradeLens is an investment research, learning, market-analysis and trading
-journal application focused initially on Indian equities/securities.
+TradeLens is an **open-source, self-hosted market-intelligence and
+investment-research platform** for Indian markets.
+
+TradeLens is the **intelligence layer**, not the broker. Users run TradeLens
+on their own infrastructure and bring their own broker/data-provider
+entitlements and credentials.
+
+Initial provider integrations are **READ-ONLY** for market research and
+intelligence. Order execution is **NOT** part of the initial scope.
 
 Major capabilities include:
 
-- Market data
-- Stock charts
-- Technical indicators
-- Learning opportunities
-- Investment education
-- Mentor/insight narratives
+- Market data (provider-neutral via adapters)
+- Stock charts (candlestick, multi-timeframe)
+- Technical indicators (EMA, RSI, VWAP, Support/Resistance, ATR)
+- Market intelligence: discovery, ranking, deep analysis
+- Deterministic TradeLens Score (authoritative, no LLM in scoring path)
+- AI synthesis/explanation layer (separate from scoring)
 - Watchlists
-- Trading Journal
-- Trade thesis and lifecycle tracking
+- Trading Journal (trade thesis and lifecycle tracking)
+- Guided Research / Mentor education flow
 
 Prioritize reliability, explainability, educational value, and disciplined
 investment decision support.
+
+### Key Architectural Boundaries (Non-Negotiable)
+
+1. **Credentials never leave backend** — Provider secrets stay on user's runtime
+2. **No LLM in scoring path** — TradeLens Score is deterministic
+3. **Read-only initial scope** — No order execution in provider adapters
+4. **Provider neutrality** — Intelligence engine knows nothing of specific brokers
+5. **Self-hosted** — User owns infrastructure and data
+6. **Yahoo standalone** — Works without any broker credentials
 
 ## 9. Architecture
 
@@ -138,9 +154,19 @@ Backend:
 - FastAPI
 - SQLAlchemy
 - SQLite
-- Market-data provider abstraction
-- Yahoo Finance integration with seed fallback
-- Recommendation/opportunity engine
+- Provider/Broker Adapter architecture (ADR-003)
+- Upstox integration (IMPLEMENTED / VALIDATED — live bulk snapshot, forming-bar overlay)
+- Yahoo Finance standalone/fallback mode (IMPLEMENTED)
+- HDFC Securities / InvestRight (PLANNED — next)
+- Zerodha / Kite, Groww, Angel One, ICICI Direct (PLANNED)
+- Normalized market data contract (DailyBar, LiveQuote, Instrument)
+- Persistent daily-bar store (Phase 1 — IMPLEMENTED)
+- Phase 2 live snapshot + forming-bar overlay (IMPLEMENTED / VALIDATED)
+- Market Intelligence pipeline (ADR-004)
+- Deterministic scoring engine (TradeLens Score)
+- AI synthesis/explanation layer (ADR-005)
+- Recommendation Engine v1.1 (single source of truth, ADR-001)
+- Strategy-driven recommendations (ADR-002, ER-0016)
 - Market, watchlist, settings and trade APIs
 
 Frontend:
@@ -158,7 +184,11 @@ Major surfaces include:
 - Watchlist
 - Trading Journal
 - Settings
-- Education
+- Guided Research (Education)
+
+Future client (PLANNED):
+- React Native / Expo mobile app
+- Backend APIs remain client-independent
 
 ## 10. Verified ER History
 
@@ -245,6 +275,24 @@ Branch:
 
 Do not change branches unless explicitly instructed.
 
+### Documentation Alignment (Phase 1 + Phase 2)
+
+The following documents reflect the currently approved product and architecture direction:
+
+- `docs/05-engineering/ENGINEERING_ROADMAP.md` — IMPLEMENTED/ACCEPTED/PLANNED status
+- `README.md` — Self-hosted intelligence platform framing
+- `docs/05-engineering/ARCHITECTURE_DECISIONS.md` — ADR-001 through ADR-006
+- `docs/architecture/PROVIDER_ADAPTER_ARCHITECTURE.md` — Adapter pattern, credentials, roadmap
+- `docs/architecture/MARKET_INTELLIGENCE_ARCHITECTURE.md` — Pipeline, Phase 1/2 status
+- `docs/architecture/TRADELENS_SCORE_INTELLIGENCE_MODEL.md` — Deterministic scoring, AI boundary
+- `docs/01-product/PRODUCT_VISION.md` — Platform direction added
+- `docs/01-product/PRODUCT_PRINCIPLES.md` — Principles 11-12 added
+- `docs/02-product-design/MENTOR_ENGINE_SPEC.md` — Stage 1-2 IMPLEMENTED status
+
+Future coding agents must not mistake ACCEPTED/PLANNED functionality for IMPLEMENTED.
+
+Phase 1: IMPLEMENTED. Phase 2: IMPLEMENTED / VALIDATED. Phase 3+: PLANNED.
+
 ## 12. Market Search Direction
 
 TradeLens is intended to support discovery of Indian equities/securities
@@ -260,6 +308,10 @@ A Yahoo Finance discovery spike established:
 - Corporate rename/alias handling is required.
 
 Do not implement this capability unless explicitly assigned.
+
+**Provider-Neutral Discovery (ACCEPTED):** Future discovery must work across
+all configured providers via the normalized instrument master, not via
+provider-specific search.
 
 ## 13. Development Philosophy
 
