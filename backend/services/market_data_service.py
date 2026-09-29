@@ -5,10 +5,11 @@ import hashlib
 import json
 import logging
 import os
+import time
 from dataclasses import dataclass
-from datetime import datetime, time, timezone
+from datetime import datetime, time as wall_time, timezone
 from time import perf_counter
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 from zoneinfo import ZoneInfo
 
 from services.cache import CACHE_MISS, InMemoryTTLCache
@@ -16,11 +17,29 @@ from services.market_data.diagnostic_logging import (
     classify_error,
     subject_of,
 )
-from services.market_data_provider import MarketDataProvider
+from services.market_data_provider import MarketDataProvider, ProviderRateLimitedError
 from services.providers.seed_provider import SeedProvider
 from services.providers.yahoo_finance_provider import YahooFinanceProvider
 
 logger = logging.getLogger("tradelens.market_data")
+
+#: Production cap on how long a read may honor a provider's ``Retry-After``.
+#:
+#: Deliberately conservative.  Stage-2 screening runs up to 16 concurrent
+#: workers, so a larger cap would let many workers sleep at once and push the
+#: 60s discovery deadline.  Kept as a constructor value so it can be raised
+#: later without redesign.  This is a policy guard, not a claim about Upstox's
+#: actual limit.
+DEFAULT_MAX_RETRY_AFTER_SECONDS = 5.0
+
+#: Operations for which waiting on a rate limit is permitted.
+#:
+#: ``get_historical_ohlcv`` is the Stage-2 screening read.  Deep analysis
+#: resolves through ``get_stock`` / ``get_stock_insight`` instead, so it is
+#: excluded structurally rather than via caller-side state: it runs after
+#: screening, is already the slowest phase, and tolerates partial failure, so
+#: sleeping there would turn a working fallback into a timeout.
+_RETRY_AFTER_WAIT_OPERATIONS = frozenset({"get_historical_ohlcv"})
 
 
 def _event(event: str, **fields: Any) -> str:
@@ -67,6 +86,11 @@ class MarketDataService:
     ``NotImplementedError`` is skipped without a retry or a health flip, and an
     empty OHLCV result falls through to the next provider.  The first chain
     link receives two attempts before the service moves on.
+
+    A provider that reports temporary throttling (``ProviderRateLimitedError``)
+    changes how that second attempt is spent, never how many are available:
+    a short advisory wait is honored, an absent/long one skips the retry
+    outright and falls back.  Non-rate-limit errors are unaffected.
     """
 
     def __init__(
@@ -76,6 +100,8 @@ class MarketDataService:
         cache: InMemoryTTLCache | None = None,
         *,
         chain: Sequence[MarketDataProvider] | None = None,
+        max_retry_after_seconds: float = DEFAULT_MAX_RETRY_AFTER_SECONDS,
+        sleeper: Callable[[float], None] = time.sleep,
     ):
         self._primary = primary_provider
         self._fallback = fallback_provider
@@ -83,9 +109,14 @@ class MarketDataService:
         self._chain = list(chain) if chain is not None else [primary_provider, fallback_provider]
         if not self._chain:
             raise ValueError("market-data provider chain must not be empty")
+        self._max_retry_after_seconds = max(0.0, float(max_retry_after_seconds))
+        self._sleeper = sleeper
         self._last_successful_fetch: datetime | None = None
         self._active_provider_name: str | None = None
         self._primary_healthy = primary_provider.name == fallback_provider.name
+        self._rate_limit_waits = 0
+        self._rate_limit_skips = 0
+        self._last_rate_limit_at: datetime | None = None
 
     def _market_status(self, now: datetime | None = None) -> str:
         india_now = (now or datetime.now(timezone.utc)).astimezone(
@@ -94,11 +125,98 @@ class MarketDataService:
         if india_now.weekday() >= 5:
             return "WEEKEND"
         current_time = india_now.time()
-        if time(9, 0) <= current_time < time(9, 15):
+        if wall_time(9, 0) <= current_time < wall_time(9, 15):
             return "PRE_OPEN"
-        if time(9, 15) <= current_time < time(15, 30):
+        if wall_time(9, 15) <= current_time < wall_time(15, 30):
             return "OPEN"
         return "CLOSED"
+
+    def _rate_limit_pacing(
+        self,
+        exc: Exception,
+        *,
+        operation: str,
+        provider: MarketDataProvider,
+        retry_budget_available: bool,
+        countable: bool,
+    ) -> float | None:
+        """Apply the Retry-After policy for a throttled provider read.
+
+        Returns the number of seconds actually waited, or ``None`` when no wait
+        happened.  This never changes the attempt budget: it only decides
+        whether the already-allocated second attempt is spent immediately or
+        after a short, capped wait.
+        """
+        if not isinstance(exc, ProviderRateLimitedError):
+            return None
+
+        retry_after = exc.retry_after
+        if countable:
+            self._last_rate_limit_at = datetime.now(timezone.utc)
+        if not retry_budget_available:
+            # No further attempt will be made, so there is nothing to pace: a
+            # wait here would only add latency before falling back.
+            return self._log_rate_limit(
+                provider=provider,
+                operation=operation,
+                retry_after=retry_after,
+                countable=countable,
+                reason="no_retry_budget",
+            )
+        if operation not in _RETRY_AFTER_WAIT_OPERATIONS:
+            # This operation must not block (deep analysis): fall back rather
+            # than stall the slowest phase of the request.
+            return self._log_rate_limit(
+                provider=provider,
+                operation=operation,
+                retry_after=retry_after,
+                countable=countable,
+                reason="operation_not_waitable",
+            )
+        if retry_after is None or retry_after > self._max_retry_after_seconds:
+            # The advisory wait is too long to honor safely, or it was
+            # absent/unparseable so there is nothing to trust.  Never guess.
+            return self._log_rate_limit(
+                provider=provider,
+                operation=operation,
+                retry_after=retry_after,
+                countable=countable,
+                reason="no_usable_retry_after",
+            )
+
+        if countable:
+            self._rate_limit_waits += 1
+        self._sleeper(retry_after)
+        logger.info(_event(
+            "market_data.rate_limit_waited",
+            provider=provider.name,
+            operation=operation,
+            retry_after=retry_after,
+            max_retry_after_seconds=self._max_retry_after_seconds,
+        ))
+        return retry_after
+
+    def _log_rate_limit(
+        self,
+        *,
+        provider: MarketDataProvider,
+        operation: str,
+        retry_after: float | None,
+        countable: bool,
+        reason: str,
+    ) -> None:
+        """Record that a throttled read skipped its retry; returns ``None``."""
+        if countable:
+            self._rate_limit_skips += 1
+        logger.info(_event(
+            "market_data.rate_limit_skipped_retry",
+            provider=provider.name,
+            operation=operation,
+            retry_after=retry_after,
+            max_retry_after_seconds=self._max_retry_after_seconds,
+            reason=reason,
+        ))
+        return None
 
     def _metadata(self, provider: str, cached: bool) -> MarketDataMetadata:
         return MarketDataMetadata(
@@ -145,8 +263,20 @@ class MarketDataService:
                 except Exception as exc:
                     last_error = exc
                     if chain_index == 0:
-                        self._primary_healthy = False
                         primary_error = exc
+                        if not isinstance(exc, ProviderRateLimitedError):
+                            # A transient rate limit is not an unhealthy
+                            # provider, so the flip is skipped for it.  Every
+                            # other failure keeps the pre-existing behavior.
+                            self._primary_healthy = False
+                    classified = classify_error(exc)
+                    waited = self._rate_limit_pacing(
+                        exc,
+                        operation=operation,
+                        provider=provider,
+                        retry_budget_available=attempt < attempts,
+                        countable=chain_index == 0,
+                    )
                     # Diagnostic-only enrichment: extra fields, unchanged event
                     # name and unchanged error handling.  Makes the durable log
                     # sufficient to attribute every historical attempt.
@@ -159,9 +289,15 @@ class MarketDataService:
                         chain_index=chain_index,
                         elapsed_ms=round((perf_counter() - started) * 1000, 2),
                         **subject,
-                        **classify_error(exc),
+                        **classified,
+                        **(
+                            {"retry_after": exc.retry_after}
+                            if isinstance(exc, ProviderRateLimitedError) else {}
+                        ),
                     ), exc_info=True)
-                    if attempt < attempts:
+                    if attempt < attempts and not _skips_remaining_attempt(
+                        exc, waited, self._max_retry_after_seconds
+                    ):
                         continue
                     break
                 else:
@@ -322,6 +458,9 @@ class MarketDataService:
             "fallbackEnabled": self._primary.name != self._fallback.name,
             "chain": [provider.name for provider in self._chain],
             "activeProvider": self._active_provider_name,
+            "rateLimitWaits": self._rate_limit_waits,
+            "rateLimitRetrySkips": self._rate_limit_skips,
+            "lastRateLimitAt": self._last_rate_limit_at,
         }
 
 
@@ -331,6 +470,24 @@ def _cache_ttl_from_environment() -> float:
     except ValueError:
         logger.warning(_event("market_data.invalid_cache_ttl_using_default"))
         return 30
+
+
+def _skips_remaining_attempt(
+    exc: Exception,
+    waited: float | None,
+    max_retry_after_seconds: float,
+) -> bool:
+    """Whether a throttled read should abandon its remaining attempt.
+
+    A rate limit only earns an immediate retry when a short advisory wait was
+    actually honored.  Otherwise the provider has explicitly asked us to back
+    off, so re-issuing the request instantly would be a guaranteed-futile call
+    that deepens the penalty.  Non-rate-limit errors return ``False``, which
+    preserves the original immediate-retry behavior.
+    """
+    if not isinstance(exc, ProviderRateLimitedError):
+        return False
+    return waited is None or waited > max_retry_after_seconds
 
 
 def _is_empty_ohlcv(value: Any) -> bool:

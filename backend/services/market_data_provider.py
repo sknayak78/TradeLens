@@ -8,6 +8,23 @@ if TYPE_CHECKING:
     from services.market_data.models import MarketQuote, OHLCVBar
 
 
+class ProviderRateLimitedError(RuntimeError):
+    """Provider signalled temporary throttling and advised a delay before retry.
+
+    Deliberately provider-neutral: it carries no HTTP or vendor concept, so the
+    consuming service can apply a pacing policy without knowing which provider
+    (or which edge/CDN in front of it) produced the response.
+
+    ``retry_after`` is the server-advised wait in seconds when the provider could
+    parse one.  ``None`` means the signal was absent or unparseable, which is
+    itself actionable: the caller must not guess a wait duration.
+    """
+
+    def __init__(self, message: str, *, retry_after: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
 class MarketDataProvider(ABC):
     """Read-only source of market data.
 

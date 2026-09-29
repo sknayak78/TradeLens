@@ -58,7 +58,7 @@ from services.market_data.snapshot_builder import (
     build_legacy_insight_dict,
     build_legacy_stock_from_quote,
 )
-from services.market_data_provider import MarketDataProvider
+from services.market_data_provider import MarketDataProvider, ProviderRateLimitedError
 from services.providers.upstox_instrument_mapper import UpstoxInstrumentMapper
 from services.symbol_mapper import SymbolMapper
 
@@ -66,6 +66,8 @@ logger = logging.getLogger("tradelens.market_data.upstox")
 
 _DEFAULT_BASE_URL = "https://api.upstox.com"
 _DEFAULT_TIMEOUT_SECONDS = 10.0
+
+_HTTP_TOO_MANY_REQUESTS = 429
 
 _ACCESS_TOKEN_ENV = "UPSTOX_ACCESS_TOKEN"
 _BASE_URL_ENV = "UPSTOX_BASE_URL"
@@ -111,10 +113,57 @@ def _base_url_from_env() -> str:
     return os.environ.get(_BASE_URL_ENV, "").strip() or _DEFAULT_BASE_URL
 
 
+def _parse_retry_after(value: Any) -> float | None:
+    """Parse an HTTP ``Retry-After`` header value into a non-negative float.
+
+    Returns ``None`` when the header is absent or not a plain number, so a
+    malformed value can never crash a read or be mistaken for a real delay.
+    """
+    if value is None:
+        return None
+    try:
+        parsed = float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if parsed != parsed or parsed < 0:  # NaN check plus negative rejection
+        return None
+    return parsed
+
+
+def _rate_limited_error(response: Any) -> ProviderRateLimitedError | None:
+    """Build a rate-limit error for a 429 response, or ``None`` if not 429.
+
+    Called at the only point where the response headers are still reachable.
+    """
+    status = getattr(response, "status_code", None)
+    if status != _HTTP_TOO_MANY_REQUESTS:
+        return None
+    headers = getattr(response, "headers", None) or {}
+    try:
+        raw_retry_after = headers.get("Retry-After")
+    except AttributeError:
+        raw_retry_after = None
+    retry_after = _parse_retry_after(raw_retry_after)
+    suffix = "unspecified" if retry_after is None else f"{retry_after:g}s"
+    return ProviderRateLimitedError(
+        f"Upstox rate limited the request (Retry-After: {suffix})",
+        retry_after=retry_after,
+    )
+
+
 def _default_fetch(url: str, headers: dict[str, str], timeout: float) -> Any:
     """Default HTTP GET for the Upstox Historical Candle V3 endpoint."""
     response = requests.get(url, headers=headers, timeout=timeout)
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        # 429 is intercepted while the response headers are still reachable so
+        # the advisory Retry-After survives.  Chaining the original HTTPError
+        # keeps the existing status-based diagnostic classification intact.
+        rate_limited = _rate_limited_error(response)
+        if rate_limited is not None:
+            raise rate_limited from exc
+        raise
     return response
 
 
@@ -672,12 +721,24 @@ class UpstoxMarketDataProvider(MarketDataProvider):
     def _fetch_json(self, url: str, headers: dict[str, str]) -> dict[str, Any]:
         try:
             body = self._fetcher(url, headers, self._request_timeout)
+        except ProviderRateLimitedError:
+            # Carries the parsed Retry-After; must not be flattened into a
+            # plain RuntimeError or the pacing signal is lost.
+            raise
         except RuntimeError:
             raise
         except Exception as exc:
+            # A custom/injected fetcher may raise HTTPError directly instead of
+            # routing through _default_fetch, so normalize a 429 here too.
+            rate_limited = _rate_limited_error(getattr(exc, "response", None))
+            if rate_limited is not None:
+                raise rate_limited from exc
             raise RuntimeError(
                 f"Upstox historical candle request failed for {url}: {exc}"
             ) from exc
+        rate_limited = _rate_limited_error(body)
+        if rate_limited is not None:
+            raise rate_limited
         return _as_payload(body)
 
     @staticmethod
