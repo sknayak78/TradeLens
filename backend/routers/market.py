@@ -1,5 +1,6 @@
 """Market-data endpoints backed by the cached provider service."""
 import logging
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -40,6 +41,63 @@ _DEFAULT_SELECT_OPPORTUNITIES = select_opportunities
 # Short-lived response cache so repeated Dashboard loads do not re-enrich the universe.
 _OPPORTUNITIES_CACHE_TTL_SECONDS = 30.0
 _opportunities_cache: dict[str, Any] = {"expires_at": 0.0, "response": None}
+
+# A cold-cache compute can occupy the discovery budget for up to the 60s
+# discovery deadline, so concurrent misses are coalesced onto one flight instead
+# of each launching its own scan.  The lock guards only the flight pointer; the
+# scan always runs outside it.
+_OPPORTUNITIES_FLIGHT_WAIT_SECONDS = 90.0
+
+
+class _OpportunitiesFlight:
+    """One in-progress opportunities compute, awaited by its concurrent waiters."""
+
+    __slots__ = ("done", "response", "error")
+
+    def __init__(self) -> None:
+        self.done = threading.Event()
+        self.response: Optional[OpportunitiesResponse] = None
+        self.error: Optional[BaseException] = None
+
+    def resolve(self, timeout: float) -> Optional[OpportunitiesResponse]:
+        """Await the owner; return its response, or None if it overran."""
+        if not self.done.wait(timeout):
+            return None
+        if self.error is not None:
+            raise self.error
+        return self.response
+
+
+_opportunities_flight_lock = threading.Lock()
+_opportunities_flight: Optional[_OpportunitiesFlight] = None
+
+
+def _begin_opportunities_flight() -> tuple[_OpportunitiesFlight, bool]:
+    """Claim the flight as owner, or join the compute already in progress."""
+    global _opportunities_flight
+    with _opportunities_flight_lock:
+        flight = _opportunities_flight
+        if flight is not None:
+            return flight, False
+        flight = _OpportunitiesFlight()
+        _opportunities_flight = flight
+        return flight, True
+
+
+def _end_opportunities_flight(
+    flight: _OpportunitiesFlight,
+    response: Optional[OpportunitiesResponse],
+    error: Optional[BaseException],
+) -> None:
+    """Publish the outcome, release waiters, and drop the flight either way."""
+    global _opportunities_flight
+    flight.response = response
+    flight.error = error
+    flight.done.set()
+    with _opportunities_flight_lock:
+        if _opportunities_flight is flight:
+            _opportunities_flight = None
+
 
 router = APIRouter(tags=["market"])
 
@@ -118,15 +176,8 @@ def clear_opportunities_cache() -> None:
     _opportunities_cache["expires_at"] = 0.0
 
 
-@router.get("/opportunities", response_model=OpportunitiesResponse)
-def opportunities() -> OpportunitiesResponse:
-    """Today's Opportunities from broad discovery with explicit fallback."""
-    now = time.monotonic()
-    cached = _opportunities_cache.get("response")
-    if cached is not None and now < _opportunities_cache["expires_at"]:
-        logger.debug("market.opportunities.cache_hit")
-        return cached
-
+def _build_opportunities_response(now: float) -> OpportunitiesResponse:
+    """Run the opportunities compute and refresh the short-lived response cache."""
     started = time.perf_counter()
     # Custom provider/selector substitutions are used by existing isolated
     # endpoint tests and development adapters; keep those explicit fallback
@@ -283,6 +334,36 @@ def opportunities() -> OpportunitiesResponse:
     )
     _opportunities_cache["response"] = response
     _opportunities_cache["expires_at"] = now + _OPPORTUNITIES_CACHE_TTL_SECONDS
+    return response
+
+
+@router.get("/opportunities", response_model=OpportunitiesResponse)
+def opportunities() -> OpportunitiesResponse:
+    """Today's Opportunities from broad discovery with explicit fallback."""
+    now = time.monotonic()
+    cached = _opportunities_cache.get("response")
+    if cached is not None and now < _opportunities_cache["expires_at"]:
+        logger.debug("market.opportunities.cache_hit")
+        return cached
+
+    flight, is_owner = _begin_opportunities_flight()
+    if not is_owner:
+        shared = flight.resolve(_OPPORTUNITIES_FLIGHT_WAIT_SECONDS)
+        if shared is not None:
+            logger.debug("market.opportunities.single_flight_reuse")
+            return shared
+        # The owner is wedged; serve this request independently rather than
+        # failing it.  Only the owner publishes the flight outcome, so a stuck
+        # owner is never overwritten here.
+        logger.warning("market.opportunities.single_flight_timeout")
+        return _build_opportunities_response(now)
+
+    try:
+        response = _build_opportunities_response(now)
+    except BaseException as exc:
+        _end_opportunities_flight(flight, None, exc)
+        raise
+    _end_opportunities_flight(flight, response, None)
     return response
 
 
