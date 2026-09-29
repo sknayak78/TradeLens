@@ -22,6 +22,15 @@ class SymbolMapper:
         "ZOMATO": "ETERNAL",
     }
 
+    #: Provider-neutral listing symbols for application symbols whose current
+    #: exchange listing differs from the TradeLens canonical symbol.  Tata Motors
+    #: demerged into ``TMCV``/``TMPV``, so the canonical ``TATAMOTORS`` no longer
+    #: matches any NSE trading symbol.  Keys stay provider-agnostic: instrument
+    #: keys and provider tickers are resolved by the individual provider layers.
+    _LISTING_SYMBOLS = {
+        "TATAMOTORS": "TMPV",
+    }
+
     _REVERSE_YAHOO = {
         v: k for k, v in _YAHOO_SYMBOLS.items()
     }
@@ -30,6 +39,18 @@ class SymbolMapper:
         """Resolve corporate renames/aliases (e.g. Zomato -> Eternal)."""
         normalized = symbol_or_query.strip().upper()
         return self._ALIASES.get(normalized, symbol_or_query.strip())
+
+    def to_listing_symbol(self, symbol: str) -> str:
+        """Return the current exchange trading symbol for a canonical symbol.
+
+        Applies :meth:`resolve_alias` first, so corporate renames such as
+        ``ZOMATO`` -> ``ETERNAL`` and demergers such as ``TATAMOTORS`` -> ``TMPV``
+        are handled by one mechanism.  Symbols without a rename or demerger are
+        returned unchanged, so identity symbols keep resolving exactly.  The
+        canonical TradeLens symbol is never modified by this step.
+        """
+        resolved = self.resolve_alias(symbol).upper()
+        return self._LISTING_SYMBOLS.get(resolved, resolved)
 
     def to_yahoo(self, symbol: str) -> str:
         """Return the Yahoo NSE ticker for a normalized application symbol."""

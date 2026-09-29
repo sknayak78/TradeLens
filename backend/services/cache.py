@@ -1,7 +1,6 @@
 """Small, thread-safe in-memory TTL cache for market-provider reads."""
 from __future__ import annotations
 
-from copy import deepcopy
 from dataclasses import dataclass
 from threading import RLock
 from time import monotonic
@@ -18,7 +17,13 @@ class _CacheEntry:
 
 
 class InMemoryTTLCache:
-    """A process-local cache which never exposes mutable cached values."""
+    """A process-local cache which owns every value it stores.
+
+    The cache never copies values on the way in or out, so a hit returns the
+    very object that was stored.  Cached values are owned by the cache and
+    consumers MUST treat returned cached values as immutable; a consumer that
+    needs to mutate a value must take its own copy first.
+    """
 
     def __init__(self, ttl_seconds: float = 30, clock: Callable[[], float] = monotonic):
         self.ttl_seconds = ttl_seconds
@@ -34,13 +39,14 @@ class InMemoryTTLCache:
             if entry.expires_at <= self._clock():
                 del self._entries[key]
                 return CACHE_MISS
-            return deepcopy(entry.value)
+            return entry.value
 
-    def set(self, key: str, value: Any) -> None:
+    def set(self, key: str, value: Any, *, ttl_seconds: float | None = None) -> None:
+        effective_ttl = self.ttl_seconds if ttl_seconds is None else ttl_seconds
         with self._lock:
             self._entries[key] = _CacheEntry(
-                expires_at=self._clock() + self.ttl_seconds,
-                value=deepcopy(value),
+                expires_at=self._clock() + effective_ttl,
+                value=value,
             )
 
     def clear(self) -> None:

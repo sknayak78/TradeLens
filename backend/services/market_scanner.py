@@ -3,10 +3,17 @@ from __future__ import annotations
 
 import logging
 import math
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from statistics import mean
 from typing import Any, Mapping
 
+from services.market_data.broad_market_prefilter import (
+    DEFAULT_MAXIMUM_STAGE_TWO_CANDIDATES,
+    DEFAULT_YEAR_HIGH_PROXIMITY_PCT,
+    apply_stage_one_gates,
+    select_stage_two_candidates,
+)
 from services.market_data.indicators import calculate_latest_ema, calculate_latest_rsi
 from services.market_data.models import OHLCVBar
 from services.market_data_service import MarketDataService
@@ -28,6 +35,12 @@ class ScannerConfig:
     maximum_daily_move_pct: float = 15.0
     minimum_momentum_rsi: float = 50.0
     maximum_momentum_rsi: float = 80.0
+    #: Stage-1 bulk prefilter (MD-10).  These only narrow *which* instruments
+    #: get a historical fetch; they never change technical screening.
+    bulk_prefilter_enabled: bool = True
+    year_high_proximity_pct: float = DEFAULT_YEAR_HIGH_PROXIMITY_PCT
+    maximum_stage_two_candidates: int = DEFAULT_MAXIMUM_STAGE_TWO_CANDIDATES
+    historical_fetch_concurrency: int = 16
 
 
 @dataclass(frozen=True)
@@ -39,10 +52,21 @@ class ScannerFunnelMetrics:
     momentum_pass_count: int = 0
     technical_pass_count: int = 0
     final_candidate_count: int = 0
+    #: Stage-1 / Stage-2 funnel (MD-10).  ``historical_candidate_count`` are
+    #: inputs to technical screening, *not* technical candidates.
+    bulk_snapshot_requested: int = 0
+    bulk_snapshot_returned: int = 0
+    stage_one_eligible_count: int = 0
+    stage_two_selected_count: int = 0
+    stage_two_cap: int = 0
+    bulk_prefilter_applied: bool = False
+    bulk_prefilter_fallback_reason: str | None = None
 
     @property
     def eligible_count(self) -> int:
         """Universe instruments eligible to be attempted by this scan."""
+        if self.bulk_prefilter_applied:
+            return self.stage_two_selected_count
         return self.universe_count
 
     @property
@@ -114,39 +138,23 @@ class MarketScanner:
         return tuple(instrument.symbol for instrument in self._instruments)
 
     def scan(self) -> ScanResult:
-        """Scan every master instrument, isolating failures to one symbol."""
+        """Scan the master universe, isolating failures to one symbol.
+
+        Broad-market runs (MD-10) are two-stage: one bulk live-quote snapshot
+        prefilters the universe down to a bounded set of historical-screening
+        inputs, which are then fetched with bounded concurrency.  When the active
+        provider has no bulk capability the full universe is still scanned, so
+        non-Upstox providers behave exactly as before.
+        """
+        targets, prefilter = self._resolve_stage_two_targets()
+
         results: list[ScreeningResult] = []
         data_available = liquidity = trend = momentum = technical = candidates = 0
 
-        for instrument in self._instruments:
-            try:
-                market_data = self._market_data_service.get_historical_ohlcv(
-                    instrument.symbol,
-                    period=self._config.period,
-                    interval=self._config.interval,
-                )
-                bars = tuple(market_data.data)
-                if not bars:
-                    raise ValueError("empty historical OHLCV")
-                data_available += 1
-                result = self._screen(instrument, bars, market_data.metadata.provider)
-            except Exception as exc:
-                logger.warning(
-                    "market_scanner.symbol_failed symbol=%s",
-                    instrument.symbol,
-                    exc_info=True,
-                )
-                result = ScreeningResult(
-                    symbol=instrument.symbol,
-                    instrument_key=instrument.instrument_key,
-                    passed=False,
-                    score=0,
-                    signals={},
-                    rejection_reasons=("data_unavailable",),
-                    error=str(exc),
-                )
-
+        for result in self._screen_instruments(targets):
             results.append(result)
+            if result.rejection_reasons != ("data_unavailable",):
+                data_available += 1
             liquidity_passed = result.signals.get("liquidity", False)
             trend_passed = liquidity_passed and result.signals.get("trend", False)
             momentum_passed = trend_passed and result.signals.get("momentum", False)
@@ -170,14 +178,193 @@ class MarketScanner:
             momentum_pass_count=momentum,
             technical_pass_count=technical,
             final_candidate_count=candidates,
+            bulk_snapshot_requested=prefilter.snapshot_requested,
+            bulk_snapshot_returned=prefilter.snapshot_returned,
+            stage_one_eligible_count=prefilter.eligible_count,
+            stage_two_selected_count=prefilter.selected_count,
+            stage_two_cap=prefilter.cap,
+            bulk_prefilter_applied=prefilter.applied,
+            bulk_prefilter_fallback_reason=prefilter.fallback_reason,
         )
         logger.info(
-            "market_scanner.completed universe=%d data=%d candidates=%d",
+            "market_scanner.completed universe=%d attempted=%d data=%d candidates=%d "
+            "prefilter_applied=%s stage_two_selected=%d stage_two_cap=%d",
             metrics.universe_count,
+            len(results),
             metrics.data_available_count,
             metrics.final_candidate_count,
+            metrics.bulk_prefilter_applied,
+            metrics.stage_two_selected_count,
+            metrics.stage_two_cap,
         )
         return ScanResult(results=tuple(results), metrics=metrics)
+
+    @dataclass(frozen=True)
+    class _PrefilterOutcome:
+        """Stage-1/Stage-2 funnel diagnostics for one scan."""
+
+        applied: bool = False
+        fallback_reason: str | None = None
+        snapshot_requested: int = 0
+        snapshot_returned: int = 0
+        eligible_count: int = 0
+        selected_count: int = 0
+        cap: int = 0
+
+    def _resolve_stage_two_targets(
+        self,
+    ) -> tuple[tuple[_Instrument, ...], MarketScanner._PrefilterOutcome]:
+        """Apply the Stage-1 prefilter and return Stage-2 historical targets.
+
+        Any failure of the optional bulk path (provider without the capability,
+        a transport error, or a short snapshot that cannot safely narrow the
+        universe) falls back to the full universe, which is exactly the previous
+        behavior.  Fallbacks are explicit in diagnostics so a run is never
+        silently reported as prefiltered.
+        """
+        full_universe = self._instruments
+        if not self._config.bulk_prefilter_enabled:
+            return full_universe, self._PrefilterOutcome(
+                fallback_reason="bulk_prefilter_disabled"
+            )
+
+        instrument_keys = [instrument.instrument_key for instrument in self._instruments]
+        if not getattr(self._market_data_service, "supports_bulk_market_quotes", False):
+            logger.info(
+                "market_scanner.bulk_prefilter_unavailable provider=%s",
+                type(self._market_data_service).__name__,
+            )
+            return full_universe, self._PrefilterOutcome(
+                fallback_reason="provider_unsupported"
+            )
+
+        try:
+            market_data = self._market_data_service.get_bulk_market_quotes(
+                instrument_keys
+            )
+        except NotImplementedError:
+            logger.info(
+                "market_scanner.bulk_prefilter_unavailable provider=%s",
+                getattr(self._market_data_service, "name", "unknown"),
+            )
+            return full_universe, self._PrefilterOutcome(
+                fallback_reason="provider_unsupported"
+            )
+        except Exception as exc:
+            logger.warning(
+                "market_scanner.bulk_prefilter_failed symbols=%d",
+                len(instrument_keys),
+                exc_info=True,
+            )
+            return full_universe, self._PrefilterOutcome(
+                fallback_reason=f"bulk_snapshot_error:{type(exc).__name__}"
+            )
+
+        quotes = tuple(market_data.data)
+        if not quotes:
+            logger.warning(
+                "market_scanner.bulk_prefilter_empty symbols=%d", len(instrument_keys)
+            )
+            return full_universe, self._PrefilterOutcome(
+                snapshot_requested=len(instrument_keys),
+                fallback_reason="empty_bulk_snapshot",
+            )
+
+        stage_one = apply_stage_one_gates(
+            quotes,
+            year_high_proximity_pct=self._config.year_high_proximity_pct,
+        )
+        selection = select_stage_two_candidates(
+            stage_one,
+            cap=self._config.maximum_stage_two_candidates,
+        )
+        if not selection.selected:
+            logger.warning(
+                "market_scanner.bulk_prefilter_no_candidates returned=%d proximity_pct=%.1f",
+                stage_one.snapshot_returned,
+                self._config.year_high_proximity_pct,
+            )
+            return full_universe, self._PrefilterOutcome(
+                snapshot_requested=len(instrument_keys),
+                snapshot_returned=stage_one.snapshot_returned,
+                eligible_count=stage_one.eligible_count,
+                cap=selection.cap,
+                fallback_reason="no_stage_one_candidates",
+            )
+
+        by_key = {instrument.instrument_key: instrument for instrument in self._instruments}
+        # Join on the normalized master key.  A snapshot key with no universe
+        # entry is dropped rather than screened against nothing.
+        targets = tuple(
+            by_key[quote.instrument_key]
+            for quote in selection.selected
+            if quote.instrument_key in by_key
+        )
+        logger.info(
+            "market_scanner.bulk_prefilter_applied universe=%d returned=%d "
+            "stage_one_eligible=%d stage_two_selected=%d cap=%d proximity_pct=%.1f",
+            len(self._instruments),
+            stage_one.snapshot_returned,
+            stage_one.eligible_count,
+            len(targets),
+            selection.cap,
+            self._config.year_high_proximity_pct,
+        )
+        return targets, self._PrefilterOutcome(
+            applied=True,
+            snapshot_requested=len(instrument_keys),
+            snapshot_returned=stage_one.snapshot_returned,
+            eligible_count=stage_one.eligible_count,
+            selected_count=len(targets),
+            cap=selection.cap,
+        )
+
+    def _screen_instruments(
+        self, targets: tuple[_Instrument, ...]
+    ) -> tuple[ScreeningResult, ...]:
+        """Fetch and screen Stage-2 targets with bounded concurrency.
+
+        Concurrency changes only *when* historical data is fetched, never what
+        is computed: each target goes through the identical ``_screen()`` path
+        and a per-symbol failure is still isolated to that one symbol.  Results
+        keep the input order so a scan is deterministic.
+        """
+        if not targets:
+            return ()
+        max_workers = max(1, min(self._config.historical_fetch_concurrency, len(targets)))
+        if max_workers == 1:
+            return tuple(self._screen_one(instrument) for instrument in targets)
+        with ThreadPoolExecutor(
+            max_workers=max_workers, thread_name_prefix="market_scanner"
+        ) as executor:
+            return tuple(executor.map(self._screen_one, targets))
+
+    def _screen_one(self, instrument: _Instrument) -> ScreeningResult:
+        try:
+            market_data = self._market_data_service.get_historical_ohlcv(
+                instrument.symbol,
+                period=self._config.period,
+                interval=self._config.interval,
+            )
+            bars = tuple(market_data.data)
+            if not bars:
+                raise ValueError("empty historical OHLCV")
+            return self._screen(instrument, bars, market_data.metadata.provider)
+        except Exception as exc:
+            logger.warning(
+                "market_scanner.symbol_failed symbol=%s",
+                instrument.symbol,
+                exc_info=True,
+            )
+            return ScreeningResult(
+                symbol=instrument.symbol,
+                instrument_key=instrument.instrument_key,
+                passed=False,
+                score=0,
+                signals={},
+                rejection_reasons=("data_unavailable",),
+                error=str(exc),
+            )
 
     def _screen(
         self,

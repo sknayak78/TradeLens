@@ -1,15 +1,21 @@
 """Cached, fault-tolerant facade for market data providers."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, time, timezone
+from time import perf_counter
 from typing import Any, Sequence
 from zoneinfo import ZoneInfo
 
 from services.cache import CACHE_MISS, InMemoryTTLCache
+from services.market_data.diagnostic_logging import (
+    classify_error,
+    subject_of,
+)
 from services.market_data_provider import MarketDataProvider
 from services.providers.seed_provider import SeedProvider
 from services.providers.yahoo_finance_provider import YahooFinanceProvider
@@ -118,9 +124,14 @@ class MarketDataService:
             )
 
         last_error: Exception | None = None
+        subject = subject_of(args)
+        # Diagnostic-only: the failure raised by the primary during this read,
+        # used to classify the fallback event.  Never alters control flow.
+        primary_error: Exception | None = None
         for chain_index, provider in enumerate(self._chain):
             attempts = 2 if chain_index == 0 else 1
             for attempt in range(1, attempts + 1):
+                started = perf_counter()
                 try:
                     value = getattr(provider, operation)(*args, **kwargs)
                 except NotImplementedError:
@@ -128,28 +139,42 @@ class MarketDataService:
                         "market_data.provider_unsupported",
                         provider=provider.name,
                         operation=operation,
+                        **subject,
                     ))
                     break
                 except Exception as exc:
                     last_error = exc
                     if chain_index == 0:
                         self._primary_healthy = False
+                        primary_error = exc
+                    # Diagnostic-only enrichment: extra fields, unchanged event
+                    # name and unchanged error handling.  Makes the durable log
+                    # sufficient to attribute every historical attempt.
                     logger.warning(_event(
                         "market_data.provider_failed",
                         provider=provider.name,
                         operation=operation,
                         attempt=attempt,
                         attempts=attempts,
+                        chain_index=chain_index,
+                        elapsed_ms=round((perf_counter() - started) * 1000, 2),
+                        **subject,
+                        **classify_error(exc),
                     ), exc_info=True)
                     if attempt < attempts:
                         continue
                     break
                 else:
+                    elapsed_ms = round((perf_counter() - started) * 1000, 2)
                     if operation == "get_historical_ohlcv" and _is_empty_ohlcv(value):
                         logger.info(_event(
                             "market_data.provider_empty_result",
                             provider=provider.name,
                             operation=operation,
+                            attempt=attempt,
+                            chain_index=chain_index,
+                            elapsed_ms=elapsed_ms,
+                            **subject,
                         ))
                         break
                     reported_provider = provider.name
@@ -168,9 +193,12 @@ class MarketDataService:
                     logger.info(_event(
                         "market_data.provider_success",
                         provider=reported_provider,
+                        serving_provider=provider.name,
                         operation=operation,
                         attempt=attempt,
                         chain_index=chain_index,
+                        elapsed_ms=elapsed_ms,
+                        **subject,
                     ))
                     self._cache.set(
                         key, _CachedProviderValue(value, provider=reported_provider)
@@ -179,17 +207,29 @@ class MarketDataService:
                         value, self._metadata(provider=reported_provider, cached=False)
                     )
             if chain_index == 0 and len(self._chain) > 1 and last_error is not None:
+                # Explicit fallback attribution: names both providers, the
+                # attempt budget spent, and the classified failure (including an
+                # HTTP 429) so the durable log answers the attribution question
+                # without needing tracebacks.  The gating condition is unchanged.
                 logger.error(_event(
                     "market_data.provider_failed_using_fallback",
                     provider=provider.name,
+                    failed_provider=provider.name,
                     fallback=self._chain[1].name,
+                    fallback_provider=self._chain[1].name,
                     operation=operation,
+                    attempts=2 if len(self._chain) > 1 else 1,
+                    chain_index=chain_index,
+                    **subject,
+                    **classify_error(primary_error if primary_error is not None else last_error),
                 ))
 
         logger.error(_event(
             "market_data.all_providers_failed",
             operation=operation,
             chain=[provider.name for provider in self._chain],
+            **subject,
+            **classify_error(last_error),
         ))
         if last_error is not None:
             raise last_error
@@ -232,6 +272,45 @@ class MarketDataService:
             normalized,
             period=period,
             interval=interval,
+        )
+
+    @property
+    def supports_bulk_market_quotes(self) -> bool:
+        """Whether any provider in the chain overrides the optional bulk capability.
+
+        Checked before calling so a provider without the capability produces an
+        explicit ``provider_unsupported`` signal instead of a generic failure.
+        """
+        return any(
+            type(provider).get_bulk_market_quotes
+            is not MarketDataProvider.get_bulk_market_quotes
+            for provider in self._chain
+        )
+
+    def get_bulk_market_quotes(
+        self, instrument_keys: Sequence[str]
+    ) -> MarketDataResult:
+        """Bulk live snapshots for a whole instrument universe (MD-10).
+
+        Routed through the normal provider chain, so a provider without the
+        optional capability raises ``NotImplementedError`` here and the caller
+        keeps its existing per-instrument behavior.  The cache key carries a
+        digest of the requested keys because the same broad-market run always
+        asks for the same universe; this deliberately stays on the existing
+        short-TTL in-memory cache rather than adding a snapshot store.
+        """
+        keys = [str(key).strip() for key in instrument_keys if str(key).strip()]
+        if not keys:
+            raise ValueError("instrument_keys must not be empty")
+        if not self.supports_bulk_market_quotes:
+            raise NotImplementedError(
+                "no configured market-data provider supports bulk market quotes"
+            )
+        digest = hashlib.sha1("|".join(keys).encode("utf-8")).hexdigest()[:16]
+        return self._read(
+            f"bulk_quotes:{len(keys)}:{digest}",
+            "get_bulk_market_quotes",
+            keys,
         )
 
     def provider_status(self) -> dict[str, Any]:

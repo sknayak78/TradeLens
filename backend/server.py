@@ -32,6 +32,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger("tradelens")
 
+# Mirror provider-chain events into a durable rotating file. basicConfig above
+# only writes to the console, so a completed broad-discovery run leaves no
+# inspectable record of which provider served each symbol. Observability only:
+# console output and all provider/fallback behavior are unchanged.
+try:
+    from services.market_data.diagnostic_logging import (
+        configure_diagnostic_logging,
+    )
+
+    _DIAGNOSTIC_LOG_PATH = configure_diagnostic_logging()
+    logger.info("market_data.diagnostic_log_configured path=%s", _DIAGNOSTIC_LOG_PATH)
+except Exception as _diagnostic_error:  # pragma: no cover - must never block boot
+    logger.warning(
+        "market_data.diagnostic_log_unavailable error=%s", _diagnostic_error
+    )
+
 
 def _seed_default_watchlist() -> None:
     """On first run, seed the default watchlist so the UI has data immediately."""

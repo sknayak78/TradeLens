@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Sequence
 
 if TYPE_CHECKING:
-    from services.market_data.models import OHLCVBar
+    from services.market_data.models import MarketQuote, OHLCVBar
 
 
 class MarketDataProvider(ABC):
@@ -16,6 +16,22 @@ class MarketDataProvider(ABC):
     """
 
     name: str
+
+    def get_bulk_market_quotes(
+        self, instrument_keys: Sequence[str]
+    ) -> Sequence[MarketQuote]:
+        """Return normalized live snapshots for many instruments in one round trip.
+
+        Optional capability (MD-10).  Providers that cannot serve the whole
+        universe in bulk leave this as ``NotImplementedError``; callers treat
+        that as "no bulk prefilter available" and keep their existing
+        per-instrument path unchanged.  Implementations must return only the
+        records they actually received - a short list is valid, because some
+        instruments are legitimately absent from a provider response.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support bulk market quotes"
+        )
 
     @abstractmethod
     def get_historical_ohlcv(

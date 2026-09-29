@@ -80,11 +80,7 @@ class TodayOpportunitiesService:
                 error="discovery produced no successfully analysed opportunities",
             )
         except TimeoutError:
-            return TodayOpportunitiesResult(
-                source_mode="discovery_failed",
-                scan=None,
-                ranking=None,
-                discovered=(),
+            return self._curated_fallback(
                 error="broad-market discovery exceeded its execution deadline",
             )
         except Exception as exc:

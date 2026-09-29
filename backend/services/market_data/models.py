@@ -58,6 +58,38 @@ class Quote:
 
 
 @dataclass(frozen=True)
+class MarketQuote:
+    """Normalized live market snapshot for one instrument in a bulk quote batch.
+
+    Provider-neutral: no Upstox response keys, colon-form identifiers, or HTTP
+    shapes reach this type.  ``instrument_key`` keeps the normalized master key so
+    a bulk batch can be joined back onto the scanner's instrument universe.
+
+    All numeric fields except ``price``/``volume`` are optional because providers
+    legitimately omit them (and malformed values must fail Stage 1 silently
+    rather than raise).  Consumers are expected to treat ``None`` as "not
+    available", never as zero.
+    """
+
+    instrument_key: str
+    symbol: str
+    price: float
+    volume: int | None = None
+    prev_close: float | None = None
+    year_high: float | None = None
+    year_low: float | None = None
+    upper_circuit: float | None = None
+    lower_circuit: float | None = None
+    observed_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        if not self.instrument_key.strip():
+            raise ValueError("instrument_key must not be empty")
+        if not self.symbol.strip():
+            raise ValueError("symbol must not be empty")
+
+
+@dataclass(frozen=True)
 class OHLCVBar:
     """One completed OHLCV bar."""
 

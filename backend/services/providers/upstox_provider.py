@@ -47,13 +47,20 @@ from services.market_data.indicators import (
     calculate_latest_rsi,
     calculate_rolling_vwap,
 )
-from services.market_data.models import Instrument, OHLCVBar, Quote, StockInsight
+from services.market_data.models import (
+    Instrument,
+    MarketQuote,
+    OHLCVBar,
+    Quote,
+    StockInsight,
+)
 from services.market_data.snapshot_builder import (
     build_legacy_insight_dict,
     build_legacy_stock_from_quote,
 )
 from services.market_data_provider import MarketDataProvider
 from services.providers.upstox_instrument_mapper import UpstoxInstrumentMapper
+from services.symbol_mapper import SymbolMapper
 
 logger = logging.getLogger("tradelens.market_data.upstox")
 
@@ -68,6 +75,15 @@ _IST = ZoneInfo("Asia/Kolkata")
 #: Intraday lookback caps imposed by Upstox's Historical Candle V3 API.
 _MAX_LOOKBACK_DAYS_MINUTE = 28
 _MAX_LOOKBACK_DAYS_HOURLY = 90
+
+#: Maximum ``instrument_key`` values per Full Market Quotes request.
+#:
+#: Upstox's documentation permits 500 keys, but the runtime proxy in front of
+#: api.upstox.com rejects a 500-key query string with HTTP 414 (Request-URI Too
+#: Long) while 250 succeeds with margin.  Verified live: 500 -> 414, and
+#: 250/200/150/100/50 -> 200.  This is a measured runtime limit, not a
+#: documented one, so it must not be raised to 500 without re-measuring.
+_MAX_QUOTE_BATCH_SIZE = 250
 
 #: Daily OHLCV window used to derive snapshot indicators for one symbol.
 #: Two years gives ~500 daily bars so EMA20/50/200 and RSI14 are all supported,
@@ -139,6 +155,7 @@ class UpstoxMarketDataProvider(MarketDataProvider):
         access_token: str | None = None,
         base_url: str | None = None,
         instrument_mapper: UpstoxInstrumentMapper | None = None,
+        symbol_mapper: SymbolMapper | None = None,
         fetcher: CandleFetcher | None = None,
         quote_fetcher: CandleFetcher | None = None,
         request_timeout: float = _DEFAULT_TIMEOUT_SECONDS,
@@ -150,6 +167,7 @@ class UpstoxMarketDataProvider(MarketDataProvider):
         )
         self._base_url = (base_url or _base_url_from_env()).rstrip("/")
         self._instrument_mapper = instrument_mapper or UpstoxInstrumentMapper()
+        self._symbol_mapper = symbol_mapper or SymbolMapper()
         self._fetcher = fetcher or _default_fetch
         self._quote_fetcher = quote_fetcher or _default_fetch
         self._request_timeout = request_timeout
@@ -164,7 +182,9 @@ class UpstoxMarketDataProvider(MarketDataProvider):
         interval: str = "1d",
     ) -> Sequence[OHLCVBar]:
         normalized = symbol.strip().upper()
-        instrument_key = self._instrument_mapper.to_instrument_key(normalized)
+        instrument_key = self._instrument_mapper.to_instrument_key(
+            self._symbol_mapper.to_listing_symbol(normalized)
+        )
         unit, candle_interval = self._translate_interval(interval)
         from_date, to_date = self._translate_period(period, unit, candle_interval)
         url = self._build_url(instrument_key, unit, candle_interval, from_date, to_date)
@@ -184,12 +204,141 @@ class UpstoxMarketDataProvider(MarketDataProvider):
         )
         return bars
 
+    def get_bulk_market_quotes(
+        self, instrument_keys: Sequence[str]
+    ) -> Sequence[MarketQuote]:
+        """Fetch Full Market Quotes V3 for many instruments in bounded batches.
+
+        The Upstox response keys each record in *colon* form (``NSE_EQ:EIEL``),
+        which does not match the master's ``instrument_key``.  Records are
+        therefore joined by the record's own ``instrument_token``; the response
+        dictionary key is never used for identity.  Missing records are simply
+        absent from the result (a live 2,656-key sweep returned 2,655) rather
+        than being fabricated or raising.
+        """
+        keys = [str(key).strip() for key in instrument_keys if str(key).strip()]
+        if not keys:
+            return []
+        headers = self._build_headers()
+        quotes: dict[str, MarketQuote] = {}
+        for start in range(0, len(keys), _MAX_QUOTE_BATCH_SIZE):
+            batch = keys[start : start + _MAX_QUOTE_BATCH_SIZE]
+            quotes.update(self._bulk_quotes_from_batch(batch, headers))
+        logger.info(
+            "fetched %d Upstox bulk quotes for %d requested instruments "
+            "(batch_size=%d, batches=%d, missing=%d)",
+            len(quotes),
+            len(keys),
+            _MAX_QUOTE_BATCH_SIZE,
+            -(-len(keys) // _MAX_QUOTE_BATCH_SIZE),
+            len(keys) - len(quotes),
+        )
+        return list(quotes.values())
+
+    def _bulk_quotes_from_batch(
+        self, batch: Sequence[str], headers: dict[str, str]
+    ) -> dict[str, MarketQuote]:
+        encoded = "&".join(
+            f"instrument_key={quote(key, safe='')}" for key in batch
+        )
+        url = f"{self._base_url}/v3/market-quote/quotes?{encoded}"
+        try:
+            body = self._quote_fetcher(url, headers, self._request_timeout)
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            raise RuntimeError(
+                f"Upstox bulk market quote request failed for {len(batch)} "
+                f"instruments: {exc}"
+            ) from exc
+        return self._bulk_quotes_from_payload(_as_payload(body))
+
+    @staticmethod
+    def _bulk_quotes_from_payload(payload: dict[str, Any]) -> dict[str, MarketQuote]:
+        if payload.get("status") == "error":
+            errors = payload.get("errors")
+            message = None
+            if isinstance(errors, list) and errors and isinstance(errors[0], dict):
+                message = errors[0].get("message")
+            raise RuntimeError(
+                f"Upstox bulk quote API error: {message or payload.get('message', 'unknown error')}"
+            )
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise RuntimeError("Upstox bulk quote response is missing the 'data' object")
+
+        quotes: dict[str, MarketQuote] = {}
+        for record in data.values():
+            if not isinstance(record, dict):
+                continue
+            # Identity comes from instrument_token, never from the response key.
+            token = record.get("instrument_token")
+            if not isinstance(token, str) or not token.strip():
+                continue
+            quote = UpstoxMarketDataProvider._market_quote_from_record(token, record)
+            if quote is not None:
+                quotes[token] = quote
+        return quotes
+
+    @staticmethod
+    def _market_quote_from_record(
+        token: str, record: Mapping[str, Any]
+    ) -> MarketQuote | None:
+        def optional_number(name: str) -> float | None:
+            raw = record.get(name)
+            if raw is None:
+                return None
+            try:
+                number = float(raw)
+            except (TypeError, ValueError):
+                return None
+            return number if math.isfinite(number) else None
+
+        price = optional_number("last_price")
+        if price is None:
+            logger.info("skipping Upstox bulk quote with unusable last_price token=%s", token)
+            return None
+
+        volume: int | None = None
+        raw_volume = record.get("volume")
+        if raw_volume is not None:
+            try:
+                parsed = int(float(raw_volume))
+            except (TypeError, ValueError):
+                parsed = -1
+            if parsed >= 0:
+                volume = parsed
+
+        symbol = record.get("symbol")
+        observed_at: datetime | None = None
+        raw_timestamp = record.get("timestamp")
+        if isinstance(raw_timestamp, str) and raw_timestamp.strip():
+            try:
+                observed_at = datetime.fromisoformat(raw_timestamp)
+            except ValueError:
+                observed_at = None
+
+        return MarketQuote(
+            instrument_key=token,
+            symbol=str(symbol).strip() if isinstance(symbol, str) and symbol.strip() else token,
+            price=round(price, 2),
+            volume=volume,
+            prev_close=optional_number("prev_close_price"),
+            year_high=optional_number("year_high"),
+            year_low=optional_number("year_low"),
+            upper_circuit=optional_number("upper_circuit_limit"),
+            lower_circuit=optional_number("lower_circuit_limit"),
+            observed_at=observed_at,
+        )
+
     def get_market_summary(self) -> dict[str, Any]:
         return self._unsupported("get_market_summary")
 
     def get_stock(self, symbol: str) -> dict[str, Any] | None:
         normalized = symbol.strip().upper()
-        instrument_key = self._instrument_mapper.to_instrument_key(normalized)
+        instrument_key = self._instrument_mapper.to_instrument_key(
+            self._symbol_mapper.to_listing_symbol(normalized)
+        )
         bars = list(
             self.get_historical_ohlcv(normalized, period=_SNAPSHOT_PERIOD, interval="1d")
         )
