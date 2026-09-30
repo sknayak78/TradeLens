@@ -14,13 +14,10 @@ set -a
 source "$ENV_FILE"
 set +a
 
-if [[ -x "$BACKEND_DIR/venv/bin/python" ]]; then
-  PYTHON_BIN="$BACKEND_DIR/venv/bin/python"
-elif [[ -x "$ROOT_DIR/venv/bin/python" ]]; then
-  PYTHON_BIN="$ROOT_DIR/venv/bin/python"
-else
-  PYTHON_BIN="$(command -v python3)"
-fi
+# shellcheck source=scripts/_python.sh
+source "$ROOT_DIR/scripts/_python.sh"
+PYTHON_BIN="$(tradelens_resolve_python "$ROOT_DIR")"
+tradelens_require_supported_python "$PYTHON_BIN"
 
 cd "$BACKEND_DIR"
 exec "$PYTHON_BIN" -m uvicorn server:app --reload --host 0.0.0.0 --port "$BACKEND_PORT"

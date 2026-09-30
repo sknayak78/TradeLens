@@ -5,10 +5,54 @@ repository contains a FastAPI/SQLite backend and a React/TypeScript frontend.
 
 ## Prerequisites
 
-- macOS with Bash, Python 3, Node.js, and npm available on `PATH`
+- macOS with Bash, **Python 3.12**, Node.js, and npm available on `PATH`
 - Backend dependencies installed in `backend/venv` (or the repository-root
   `venv`)
 - Frontend dependencies installed with `npm install` in `frontend/`
+
+## Python runtime
+
+Supported backend interpreter: **`>=3.12,<3.14`**. Python **3.12** is the
+validated development runtime and the version the repository defaults to
+(`.python-version`).
+
+**Python 3.14 is not supported.** `backend/requirements.txt` pins
+`SQLAlchemy==2.0.36`, and that release is incompatible with Python 3.14. It
+calls `typing.Union.__getitem__` unbound; under Python 3.14 `typing.Union`
+became a class whose `__getitem__` is a descriptor, so the call fails while
+mapping `backend/models.py`:
+
+```text
+TypeError: descriptor '__getitem__' requires a 'typing.Union' object
+           but received a 'tuple'
+```
+
+Create the backend virtual environment with Python 3.12 explicitly. Do **not**
+use a bare `python3 -m venv`, because a default `python3` on current macOS
+installs is 3.13+ and will reproduce the failure above:
+
+```bash
+python3.12 -m venv backend/venv
+source backend/venv/bin/activate
+```
+
+If a specific interpreter lives outside `PATH`, use its full path, for example
+on Homebrew/macOS:
+
+```bash
+/usr/local/bin/python3.12 -m venv backend/venv   # Intel Homebrew prefix
+/opt/homebrew/bin/python3.12 -m venv backend/venv # Apple Silicon Homebrew prefix
+```
+
+Then install the pinned dependencies:
+
+```bash
+./backend/venv/bin/pip install -r backend/requirements.txt
+```
+
+`./scripts/backend.sh` and `./scripts/test.sh backend` verify the interpreter
+version before running and fail fast with an explanatory message when it is
+outside the supported range, instead of surfacing the SQLAlchemy traceback.
 
 ## Developer toolkit
 

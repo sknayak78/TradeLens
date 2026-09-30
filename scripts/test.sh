@@ -4,17 +4,17 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCOPE="${1:-backend}"
 
-if [[ -x "$ROOT_DIR/backend/venv/bin/python" ]]; then
-  PYTHON_BIN="$ROOT_DIR/backend/venv/bin/python"
-elif [[ -x "$ROOT_DIR/venv/bin/python" ]]; then
-  PYTHON_BIN="$ROOT_DIR/venv/bin/python"
-else
-  PYTHON_BIN="$(command -v python3)"
-fi
+# shellcheck source=scripts/_python.sh
+source "$ROOT_DIR/scripts/_python.sh"
 
 run_backend() {
+  # Guarded here rather than at the top so the `frontend` scope keeps working
+  # without a supported Python interpreter.
+  local python_bin
+  python_bin="$(tradelens_resolve_python "$ROOT_DIR")"
+  tradelens_require_supported_python "$python_bin"
   cd "$ROOT_DIR/backend"
-  exec "$PYTHON_BIN" -m pytest "$@"
+  exec "$python_bin" -m pytest "$@"
 }
 
 case "$SCOPE" in
