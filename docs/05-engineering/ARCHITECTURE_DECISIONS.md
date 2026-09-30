@@ -171,8 +171,88 @@ Trade-offs
 
 ---
 
+## ADR-004: MD-11 Daily-Bar Read Path — One Compute, Live Close, Reuse Completed Bars
+
+**Status:** Accepted (Phases 1–2 implemented; Phase 3 planned)
+
+**Date:** 30-Sep-2026
+
+**Request:** MD-10, MD-11
+
+### Context
+
+MD-10 made broad-market discovery affordable: one batched Stage-1 quote call
+across the universe, a bounded 300-symbol Stage-2 cap, and bounded parallel
+historical screening inside the existing 60s deadline. That left three
+independent correctness and cost problems in the daily-bar read path that
+Stage-2 screening consumes.
+
+1. **Duplicate concurrent computes.** With a cold cache, simultaneous
+   `GET /api/opportunities` requests each launched their own full discovery
+   scan, competing for the same provider budget and the same deadline.
+2. **A stale close during OPEN.** The daily series ends with a *forming bar*
+   whose close is a stale first print, so RSI and EMA read a close the market
+   has already moved past and screening disagrees with the live quote.
+3. **Completed bars are re-fetched.** `DailyBarStore` already exists in
+   `services/market_data/daily_store.py` with per-entry TTL, session gating and
+   a restart-safe flat-file layer, but nothing in production reads it.
+
+An earlier exploration also considered a parallel `LiveSnapshot` type with its
+own provider bulk method. That was **rejected**: it would have created a second
+quote type and a second bulk-quote path, duplicating the market-data boundary
+that MD-10 already defines with `MarketQuote` and `get_bulk_market_quotes`.
+
+### Decision
+
+Build on the MD-10 canonical path. `MarketQuote` stays the only normalized quote
+type and `get_bulk_market_quotes` the only bulk-quote method.
+
+- **Phase 1 — single-flight (`3c18845`).** An in-flight guard in
+  `routers/market.py` makes one request the owner of the discovery compute;
+  followers wait and receive the same response object. The scan runs outside the
+  synchronization lock, which guards only the flight pointer. This
+  **complements** the `MarketDataService` TTL cache — it prevents *concurrent*
+  redundant scans of a cold key — and changes no cache semantics, response
+  shape, or discovery/fallback deadline.
+- **Phase 2 — forming-bar overlay (`a96240f`).** `overlay_forming_bar` in
+  `services/market_scanner.py` overlays the live quote onto today's forming
+  daily bar before indicators are computed, reusing the `MarketQuote` Stage 1
+  already fetched. No additional provider call, no second bulk method. Daily
+  indicators therefore move while the market is OPEN; that is intentional, and
+  no smoothing or freezing is applied.
+- **Phase 3 — `DailyBarStore` integration (planned, not started).** Wire the
+  existing store into the historical daily-bar read path as a production
+  consumer, preserving its per-entry TTL, session gating, and immutable-borrow
+  contract, and preserving `MarketDataService` provider/fallback/retry
+  behaviour. It is an integration, not a new cache, and introduces no duplicate
+  market-data abstraction.
+
+### Consequences
+
+Benefits
+
+- One cold-cache burst produces one discovery compute instead of N.
+- Stage-2 indicators see today's live close during OPEN, so screening and the
+  published chart agree with the live quote.
+- Completed daily bars can be reused without inventing new caching semantics.
+- A single quote type and a single bulk-quote method remain on the boundary.
+
+Trade-offs
+
+- Phase 2 makes daily indicators move intraday. This is a visible product
+  behaviour change, not a bug, and is documented in the MD-11 spec.
+- Followers share the owner's latency; a wedged owner is bounded by the existing
+  deadline rather than failing followers.
+- The store is only trustworthy outside the OPEN session, when every stored bar
+  is final, so it cannot serve today's forming bar.
+
+See `docs/05-engineering/MD-10-BULK-MARKET-DISCOVERY.md` and
+`docs/05-engineering/MD-11-DAILY-BAR-READ-PATH.md`.
+
+---
+
 ## Future ADRs
 
-- ADR-004 Technical Indicator Engine
-- ADR-005 AI Decision Engine
-- ADR-006 Paper Trading Architecture
+- ADR-005 Technical Indicator Engine
+- ADR-006 AI Decision Engine
+- ADR-007 Paper Trading Architecture

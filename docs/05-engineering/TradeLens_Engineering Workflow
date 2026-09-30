@@ -92,6 +92,19 @@ BASELINE
 Branch: main
 Commit: b9c1ae0
 Working tree: clean
+
+Runtime prerequisite:
+The backend supports Python >=3.12,<3.14, with 3.12 as the validated default.
+Create the venv with an explicit interpreter, not a bare python3:
+  python3.12 -m venv backend/venv
+  ./backend/venv/bin/pip install -r backend/requirements.txt
+Python 3.14 is not supported: SQLAlchemy 2.0.36 is pinned in
+backend/requirements.txt and cannot be imported there, which fails while mapping
+backend/models.py.
+scripts/backend.sh and scripts/test.sh verify the interpreter version before
+running and fail fast with an explanatory message rather than surfacing the
+SQLAlchemy traceback.
+The frontend test scope does not require a supported Python interpreter.
 ________________________________________
 6. Branching
 Each story gets a dedicated branch.
@@ -175,6 +188,12 @@ For TradeLens, the minimum relevant areas generally include:
 •	Relevant frontend tests 
 •	API tests where applicable 
 Known pre-existing failures must be explicitly documented and never silently classified as new failures.
+Run backend regressions through the version-guarded script so the runtime
+baseline is enforced as part of the gate:
+  ./scripts/test.sh backend
+Record the pass/fail/error totals and compare them against the previous
+baseline. An unchanged total set means the story introduced no regression, even
+when that baseline already contains known failures.
 ________________________________________
 12. Worktrees
 Worktrees are allowed and useful, but their purpose must always be explicit.

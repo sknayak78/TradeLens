@@ -116,6 +116,20 @@ These are mandatory before considering a build release-ready.
 - **CHART-024:** Indicator labels and displayed values use the same snapshot.
 - **CHART-025:** No future candle is used in a historical indicator calculation.
 
+## 4.4 Forming Daily Bar (MD-11 Phase 2)
+
+During the OPEN session the daily series ends with a *forming bar*. These cases
+guard the `overlay_forming_bar` behaviour. Automated in
+`backend/tests/test_md_11_forming_bar_overlay.py`.
+
+- **CHART-030:** During OPEN, RSI/EMA reflect the live close, not the stale first print of the forming bar.
+- **CHART-031:** The overlay is skipped when the Stage-1 bulk quote provider does not match the historical read provider.
+- **CHART-032:** The overlay is skipped when the last stored bar is not today in IST.
+- **CHART-033:** The overlay is skipped outside the session conditions where the forming bar is the most recent information; the original series is returned unchanged.
+- **CHART-034:** The overlay introduces **no additional provider call** — Stage-1 quotes are reused.
+- **CHART-035:** Daily indicators moving during the OPEN session is expected behaviour, not a defect. No smoothing or freezing is applied.
+- **CHART-036:** No `LiveSnapshot` type or second bulk-quote method is introduced by the overlay; `MarketQuote` is the only quote type.
+
 ---
 
 # 5. P0 — Timeframe & X-Axis Regression
@@ -281,6 +295,18 @@ The product name is **Guided Research**. Internal route/file names may remain `L
 - **API-008:** Watchlist duplicate behavior remains deterministic.
 - **API-009:** Trade CRUD endpoints remain backward compatible.
 - **API-010:** Guided Research decision/reveal endpoints enforce the intended gate.
+- **API-011:** Concurrent cold-cache `/api/opportunities` requests trigger exactly **one** discovery compute (MD-11 Phase 1 single-flight). Automated in `backend/tests/test_opportunities_single_flight.py`.
+- **API-012:** Single-flight waiters receive the **same response object** the owner built, not an independent re-computation.
+- **API-013:** The discovery scan runs outside the synchronization lock; the lock guards only the flight pointer.
+- **API-014:** A wedged owner past the deadline does not fail followers and is never overwritten, because only the owner publishes the flight outcome.
+- **API-015:** Single-flight does not replace or alter the `MarketDataService` TTL cache; later reads within the TTL are still served from cache.
+- **API-016:** The MD-10 Stage-2 cap is enforced and truncation is deterministic — the same universe and inputs always select the same set.
+- **API-017:** A capped shortlist is reported as capped and never presented as a complete one.
+- **API-018:** A prefilter that is unavailable, fails, or returns empty records an explicit `fallback_reason` and is never reported as a successful prefilter.
+- **API-019:** Bulk quotes use deterministic batches of at most 250 instruments and the repeated-parameter wire format `?instrument_key=a&instrument_key=b`.
+- **API-020:** `MarketQuote` optional fields are treated as *not available* (`None`), never as zero.
+- **API-021:** `get_bulk_market_quotes` is the only bulk-quote method; no `LiveSnapshot` or alternative quote type is reintroduced.
+- **API-022:** Discovery past its deadline returns `discovery_failed` with an empty list and an explicit error rather than fabricating counts.
 
 ---
 
@@ -310,6 +336,10 @@ Current application limitation: persistence is global rather than user-scoped.
 - **SEC-006:** User decision endpoints validate input server-side.
 - **SEC-007:** Future auth implementation must include session/logout behavior.
 - **SEC-008:** Error messages do not expose internal secrets or database details.
+- **SEC-009:** The backend interpreter is within the supported range `>=3.12,<3.14`; Python 3.12 is the validated default. Established in `39996e1`.
+- **SEC-010:** `scripts/backend.sh` and `scripts/test.sh backend` fail fast with an explanatory message on an unsupported interpreter instead of surfacing a SQLAlchemy traceback.
+- **SEC-011:** The `frontend` test scope does not require a supported Python interpreter.
+- **SEC-012:** The ignored `backend/venv` is never staged or committed.
 
 ---
 
