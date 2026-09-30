@@ -5,8 +5,10 @@ import logging
 import math
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from datetime import date, datetime, timezone
 from statistics import mean
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
+from zoneinfo import ZoneInfo
 
 from services.market_data.broad_market_prefilter import (
     DEFAULT_MAXIMUM_STAGE_TWO_CANDIDATES,
@@ -15,11 +17,52 @@ from services.market_data.broad_market_prefilter import (
     select_stage_two_candidates,
 )
 from services.market_data.indicators import calculate_latest_ema, calculate_latest_rsi
-from services.market_data.models import OHLCVBar
+from services.market_data.models import MarketQuote, OHLCVBar
+from services.market_data.session import market_session_status
 from services.market_data_service import MarketDataService
 from services.providers.upstox_instrument_source import load_instrument_master
 
 logger = logging.getLogger("tradelens.market_scanner")
+
+_IST = ZoneInfo("Asia/Kolkata")
+
+
+def overlay_forming_bar(
+    bars: Sequence[OHLCVBar],
+    quote: MarketQuote | None,
+    today: date,
+) -> Sequence[OHLCVBar]:
+    """Overlay a live quote onto today's forming daily bar.
+
+    Only the *last* bar is considered, and only when it belongs to the supplied
+    ``today`` IST trading date; historical bars are never touched and a quote
+    for a day that is not represented as the forming bar is ignored.  The input
+    sequence is returned unchanged when no overlay applies.
+
+    A ``MarketQuote`` carries no intraday high/low, so today's high/low are
+    widened to include the live price.  This keeps ``low <= close <= high``
+    (and therefore the bar usable by RSI/EMA) even when the provider's daily
+    candle has not yet absorbed a large move.  ``open`` and every completed bar
+    are preserved: the live quote is not authoritative for them.
+    """
+    if quote is None or not bars:
+        return bars
+    latest = bars[-1]
+    if latest.timestamp.astimezone(_IST).date() != today:
+        return bars
+    close = quote.price
+    if not math.isfinite(close) or close <= 0:
+        return bars
+    volume = float(quote.volume) if quote.volume is not None else latest.volume
+    overlaid = OHLCVBar(
+        timestamp=latest.timestamp,
+        open=latest.open,
+        high=max(latest.high, close),
+        low=min(latest.low, close),
+        close=round(close, 2),
+        volume=volume,
+    )
+    return (*bars[:-1], overlaid)
 
 
 @dataclass(frozen=True)
@@ -151,7 +194,7 @@ class MarketScanner:
         results: list[ScreeningResult] = []
         data_available = liquidity = trend = momentum = technical = candidates = 0
 
-        for result in self._screen_instruments(targets):
+        for result in self._screen_instruments(targets, prefilter):
             results.append(result)
             if result.rejection_reasons != ("data_unavailable",):
                 data_available += 1
@@ -210,6 +253,13 @@ class MarketScanner:
         eligible_count: int = 0
         selected_count: int = 0
         cap: int = 0
+        #: Live quotes keyed by instrument key, carried from the Stage-1 bulk
+        #: call so the forming-bar overlay reuses that single fetch instead of
+        #: issuing one more request per symbol.
+        quotes_by_key: Mapping[str, MarketQuote] = field(default_factory=dict)
+        #: Provider attribution of the Stage-1 bulk call.  The overlay only
+        #: applies when this matches the historical read's provider.
+        quote_provider: str | None = None
 
     def _resolve_stage_two_targets(
         self,
@@ -317,10 +367,16 @@ class MarketScanner:
             eligible_count=stage_one.eligible_count,
             selected_count=len(targets),
             cap=selection.cap,
+            quotes_by_key={
+                quote.instrument_key: quote for quote in selection.selected
+            },
+            quote_provider=market_data.metadata.provider,
         )
 
     def _screen_instruments(
-        self, targets: tuple[_Instrument, ...]
+        self,
+        targets: tuple[_Instrument, ...],
+        prefilter: MarketScanner._PrefilterOutcome | None = None,
     ) -> tuple[ScreeningResult, ...]:
         """Fetch and screen Stage-2 targets with bounded concurrency.
 
@@ -333,13 +389,24 @@ class MarketScanner:
             return ()
         max_workers = max(1, min(self._config.historical_fetch_concurrency, len(targets)))
         if max_workers == 1:
-            return tuple(self._screen_one(instrument) for instrument in targets)
+            return tuple(
+                self._screen_one(instrument, prefilter) for instrument in targets
+            )
         with ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="market_scanner"
         ) as executor:
-            return tuple(executor.map(self._screen_one, targets))
+            return tuple(
+                executor.map(
+                    lambda instrument: self._screen_one(instrument, prefilter),
+                    targets,
+                )
+            )
 
-    def _screen_one(self, instrument: _Instrument) -> ScreeningResult:
+    def _screen_one(
+        self,
+        instrument: _Instrument,
+        prefilter: MarketScanner._PrefilterOutcome | None = None,
+    ) -> ScreeningResult:
         try:
             market_data = self._market_data_service.get_historical_ohlcv(
                 instrument.symbol,
@@ -349,7 +416,11 @@ class MarketScanner:
             bars = tuple(market_data.data)
             if not bars:
                 raise ValueError("empty historical OHLCV")
-            return self._screen(instrument, bars, market_data.metadata.provider)
+            provider = market_data.metadata.provider
+            bars = self._apply_forming_bar_overlay(
+                instrument, bars, provider, prefilter
+            )
+            return self._screen(instrument, bars, provider)
         except Exception as exc:
             logger.warning(
                 "market_scanner.symbol_failed symbol=%s",
@@ -365,6 +436,57 @@ class MarketScanner:
                 rejection_reasons=("data_unavailable",),
                 error=str(exc),
             )
+
+    def _apply_forming_bar_overlay(
+        self,
+        instrument: _Instrument,
+        bars: tuple[OHLCVBar, ...],
+        provider: str,
+        prefilter: MarketScanner._PrefilterOutcome | None,
+    ) -> tuple[OHLCVBar, ...]:
+        """Overlay today's live quote onto today's forming daily bar (MD-11).
+
+        Reuses the Stage-1 MD-10 bulk fetch, so this adds no provider call.  The
+        overlay is skipped unless every gate holds:
+
+        * the session is OPEN, so a completed bar is never rewritten;
+        * the interval is daily, so intraday series are untouched;
+        * the Stage-1 quote was served by the same provider that served the
+          historical bars, so a cross-provider quote is never mixed in.
+
+        While the market is OPEN this deliberately makes daily indicators
+        (RSI/EMA) move with the live close.  That is intended, not smoothed
+        away: the forming bar is the most recent information available.
+        """
+        if prefilter is None or not prefilter.quotes_by_key:
+            return bars
+        if self._config.interval.strip().lower() != "1d":
+            return bars
+        now = datetime.now(timezone.utc)
+        if market_session_status(now) != "OPEN":
+            return bars
+        if prefilter.quote_provider != provider:
+            logger.info(
+                "market_scanner.forming_bar_overlay_skipped symbol=%s reason=provider_mismatch "
+                "quote_provider=%s historical_provider=%s",
+                instrument.symbol,
+                prefilter.quote_provider,
+                provider,
+            )
+            return bars
+        quote = prefilter.quotes_by_key.get(instrument.instrument_key)
+        if quote is None:
+            return bars
+        overlaid = overlay_forming_bar(bars, quote, now.astimezone(_IST).date())
+        if len(overlaid) == len(bars) and overlaid[-1] is bars[-1]:
+            return bars
+        logger.info(
+            "market_scanner.forming_bar_overlay_applied symbol=%s close=%s->%s",
+            instrument.symbol,
+            bars[-1].close,
+            overlaid[-1].close,
+        )
+        return tuple(overlaid)
 
     def _screen(
         self,
